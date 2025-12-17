@@ -1,44 +1,56 @@
-# SmartDoc AI
+# SmartDoc AI – Prototype
 
-Property document analysis platform built with Next.js, TypeScript, and Tailwind CSS.
+## Beschrijving
+SmartDoc AI is een prototype voor het automatiseren van vastgoeddocumenten
+(EPC, Asbest, Elektrische keuring) met AI.
 
-## Getting Started
+Het systeem laat toe om PDF-documenten te uploaden, automatisch te registreren
+en een eerste risico-analyse (“Red Flags”) uit te voeren.
 
-First, install the dependencies:
+## Doel van het prototype
+- Aantonen van architectuur en workflow
+- Testen van AI-ondersteunde documentanalyse
+- Geen afgewerkt product, maar een functioneel MVP
 
-```bash
-npm install
-```
+## Functionaliteiten
+- Upload van PDF-documenten
+- Opslag in Supabase Storage
+- Documentregistratie in database
+- Analyse pipeline (queued → done)
+- Status: Green / Orange / Red (prototype)
 
-Set up your environment variables. Create a `.env.local` file with:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-```
-
-Make sure to:
-1. Run the SQL schema from `supabase/schema.sql` in your Supabase project
-2. Create a private storage bucket named "documents" in Supabase Storage
-3. Create a property with a UUID (or update the URL to use an existing property UUID)
-
-Then, run the development server:
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-## Tech Stack
-
+## Technologie
 - Next.js 14 (App Router)
 - TypeScript
-- Tailwind CSS
-- shadcn/ui
-- Supabase
-- Zod
+- Supabase (Database + Storage)
+- Zod (validatie)
+- Prototype AI-analyse (regels / mock)
 
+## Hoe testen (lokaal)
+1. Open de property-pagina (demo property)
+2. Upload een PDF-document
+3. Bekijk de documentstatus
+4. Start analyse en bekijk resultaat
 
+(In het prototype imiteren we de werker met een knop (“Run Analysis”) voor we echte cron/edge jobs doen.) 
 
+(voorlopig simpele Red Flag rules (nog geen geimplementeerd) met LLM backup als confidence laag is of summary empty.) 
+
+Database = (https://supabase.com/dashboard/project/aqtwnyesdztiyitedykt ) 
+
+Hoe prototype testen : 
+
+http://localhost:3000/ 			(home page) 
+
+http://localhost:3000/properties/[een valid uuid]     hier upload knoppen voor dat pand 
+
+geen valid id ingevuld? het programma gebruikt het demo id en voegt het geuploade document hieraan toe (enkel voor prototype) 
+
+“4b97af99-251a-4410-9a06-6edf0d03a2d1" (demo id) 
+
+Demo pand bekijken (reeds dummy file geupload naar supabase voor ASBESTOS): 
+
+http://localhost:3000/properties/4b97af99-251a-4410-9a06-6edf0d03a2d1  
+
+Hier zie je de knop “run alalysis” en die controleert het bestand en toont resultaat 
+(voorlopig niet veel echte controle) 
