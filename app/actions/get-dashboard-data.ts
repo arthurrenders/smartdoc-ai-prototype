@@ -9,6 +9,7 @@ import {
   type DocumentWithAnalysis,
   type PropertyStatusResult,
 } from "@/lib/property-status"
+import { getCurrentDocumentsByType } from "@/lib/current-documents"
 
 export type DocumentTypeRow = { id: string; name: string }
 
@@ -33,7 +34,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     supabase
       .from("documents")
       .select(
-        "id, property_id, document_type_id, document_types(id, name), analysis_runs(id, status, result_json)"
+        "id, property_id, document_type_id, created_at, document_types(id, name), analysis_runs(id, status, result_json)"
       )
       .in("property_id", properties.map((p) => p.id)),
   ])
@@ -49,9 +50,10 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   for (const prop of properties) {
     const propDocs = documents.filter((d) => d.property_id === prop.id)
+    const currentDocs = getCurrentDocumentsByType(propDocs)
     const byType = new Map<string, DocumentWithAnalysis>()
-    for (const doc of propDocs) {
-      if (!doc.document_type_id || byType.has(doc.document_type_id)) continue
+    for (const doc of currentDocs) {
+      if (!doc.document_type_id) continue
       const run = (doc as any).analysis_runs?.[0]
       byType.set(doc.document_type_id, {
         documentTypeId: doc.document_type_id,
@@ -90,5 +92,6 @@ type DocumentWithRelations = {
   id: string
   property_id: string
   document_type_id: string | null
+  created_at?: string | null
   analysis_runs?: Array<{ id: string; status: string; result_json?: { status?: string; expiry_date?: string } }>
 }

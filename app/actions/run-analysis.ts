@@ -135,14 +135,12 @@ export async function runAnalysis(formData: FormData) {
       console.log("=== PDF EXTRACTION START ===")
       console.log("PDF buffer size:", buffer.length, "bytes")
 
-      // Try pdfjs-dist first (more reliable)
       try {
         extractionInfo = await extractTextFromPDF(buffer)
         extractedText = extractionInfo.text
-        console.log("Successfully extracted using pdfjs-dist")
+        console.log("Successfully extracted PDF text")
       } catch (pdfjsError) {
-        console.warn("pdfjs-dist extraction failed, trying fallback:", pdfjsError)
-        // Fallback to pdf-parse
+        console.warn("PDF extraction failed, trying fallback:", pdfjsError)
         extractionInfo = await extractTextFromPDFFallback(buffer)
         extractedText = extractionInfo.text
         console.log("Using fallback extraction (pdf-parse)")

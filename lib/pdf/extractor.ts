@@ -1,96 +1,21 @@
 import "server-only"
 
 /**
- * Improved PDF text extraction using pdfjs-dist (legacy build)
- * Extracts text per page for better reliability
+ * PDF text extraction. In Node.js (Next.js server), pdfjs-dist requires a worker URL
+ * that cannot be satisfied in the bundle ("No GlobalWorkerOptions.workerSrc specified"),
+ * so we use pdf-parse directly. Same return shape for callers.
  */
 export async function extractTextFromPDF(buffer: Buffer): Promise<{
   text: string
   pages: Array<{ pageNumber: number; text: string; length: number }>
   totalLength: number
 }> {
-  const pages: Array<{ pageNumber: number; text: string; length: number }> = []
-  let fullText = ""
-
-  try {
-    // Dynamic import for pdfjs-dist legacy build (ESM)
-    const pdfjsModule = await import("pdfjs-dist/legacy/build/pdf.mjs")
-    const pdfjs = (pdfjsModule as any).default || (pdfjsModule as any)
-
-    // Disable worker in Node.js to avoid ESM/URL loader issues and remote HTTPS workers
-    if (pdfjs.GlobalWorkerOptions) {
-      pdfjs.GlobalWorkerOptions.workerSrc = null
-    }
-
-    // Load the PDF document
-    const loadingTask = pdfjs.getDocument({
-      data: new Uint8Array(buffer),
-      useSystemFonts: true,
-      verbosity: 0, // Reduce console output
-    })
-
-    const pdfDocument = await loadingTask.promise
-    const numPages = pdfDocument.numPages
-
-    console.log(`PDF has ${numPages} pages`)
-
-    // Extract text from each page
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      const page = await pdfDocument.getPage(pageNum)
-      const textContent = await page.getTextContent()
-
-      // Combine all text items from the page
-      let pageText = ""
-      for (const item of textContent.items) {
-        if ("str" in item && typeof item.str === "string") {
-          pageText += item.str + " "
-        }
-      }
-
-      // Clean up the text
-      pageText = pageText.trim().replace(/\s+/g, " ")
-
-      pages.push({
-        pageNumber: pageNum,
-        text: pageText,
-        length: pageText.length,
-      })
-
-      fullText += pageText + "\n\n"
-
-      console.log(`Page ${pageNum}: ${pageText.length} characters`)
-      if (pageText.length > 0) {
-        console.log(`Page ${pageNum} text (first 200 chars):`, pageText.substring(0, 200))
-      } else {
-        console.log(`Page ${pageNum}: WARNING - No text extracted!`)
-      }
-    }
-
-    fullText = fullText.trim()
-
-    console.log(`Total extracted text length: ${fullText.length}`)
-    if (fullText.length > 0) {
-      console.log(`Full extracted text (first 1000 chars):`, fullText.substring(0, 1000))
-    } else {
-      console.log("WARNING: No text extracted from PDF!")
-    }
-
-    return {
-      text: fullText,
-      pages,
-      totalLength: fullText.length,
-    }
-  } catch (error) {
-    console.error("PDF extraction error:", error)
-    throw new Error(
-      `Failed to extract text from PDF: ${error instanceof Error ? error.message : "Unknown error"}`
-    )
-  }
+  return extractTextFromPDFFallback(buffer)
 }
 
 /**
- * Fallback PDF extraction using pdf-parse
- * Used if pdfjs-dist fails
+ * PDF extraction using pdf-parse (works in Node/Next.js server without worker setup).
+ * Also used as fallback from run-analysis if extractTextFromPDF throws.
  */
 export async function extractTextFromPDFFallback(buffer: Buffer): Promise<{
   text: string
@@ -110,8 +35,10 @@ export async function extractTextFromPDFFallback(buffer: Buffer): Promise<{
     length: text.length,
   })
 
-  console.log(`Fallback extraction: ${text.length} characters`)
-  console.log(`Fallback text (first 1000 chars):`, text.substring(0, 1000))
+  console.log(`PDF text extracted: ${text.length} characters`)
+  if (text.length > 0) {
+    console.log(`Preview (first 500 chars):`, text.substring(0, 500))
+  }
 
   return {
     text,

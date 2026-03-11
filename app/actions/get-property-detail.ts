@@ -8,12 +8,16 @@ import {
   type DocumentWithAnalysis,
   type PropertyStatusResult,
 } from "@/lib/property-status"
+import { aggregatePropertyFlags } from "@/lib/aggregate-property-flags"
+import { getCurrentDocumentsByType } from "@/lib/current-documents"
 
 export type FlagItem = {
   severity: "red" | "orange" | "green"
   title: string
   details: string
   documentTypeName?: string
+  /** When > 1, this flag was merged from multiple documents. */
+  occurrenceCount?: number
 }
 
 export type PropertySummaryCounts = {
@@ -55,7 +59,7 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
       supabase
         .from("documents")
         .select(
-          "id, property_id, document_type_id, document_types(id, name), analysis_runs(id, status, result_json)"
+          "id, property_id, document_type_id, created_at, document_types(id, name), analysis_runs(id, status, result_json)"
         )
         .eq("property_id", propertyId),
     ])
@@ -66,10 +70,11 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
       .filter((dt) => requiredNamesSet.has(dt.name))
       .map((dt) => dt.id)
     const documents = (docsRes.data as DocumentWithRelations[]) || []
+    const currentDocuments = getCurrentDocumentsByType(documents)
 
     const byType = new Map<string, DocumentWithAnalysis>()
-    for (const doc of documents) {
-      if (!doc.document_type_id || byType.has(doc.document_type_id)) continue
+    for (const doc of currentDocuments) {
+      if (!doc.document_type_id) continue
       const run = (doc as any).analysis_runs?.[0]
       byType.set(doc.document_type_id, {
         documentTypeId: doc.document_type_id,
@@ -79,11 +84,11 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
     const documentsWithAnalysis = [...byType.values()]
     const stats = computePropertyStatus(requiredTypeIds, documentsWithAnalysis)
 
-    const flags: FlagItem[] = []
     const summaryParts: string[] = []
     const manualReviewTypeIds = new Set<string>()
+    const perDocumentFlags: Array<{ documentTypeName: string; documentId: string; flags: Array<{ severity: "red" | "orange" | "green"; title: string; details: string }> }> = []
 
-    for (const doc of documents) {
+    for (const doc of currentDocuments) {
       const run = (doc as any).analysis_runs?.[0]
       const result = run?.result_json
       const typeName = (doc as any).document_types?.name ?? "Document"
@@ -99,20 +104,27 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
         }
       }
       const resultFlags = result?.flags
+      const docFlags: Array<{ severity: "red" | "orange" | "green"; title: string; details: string }> = []
       if (Array.isArray(resultFlags)) {
         for (const f of resultFlags) {
-          flags.push({
+          docFlags.push({
             severity:
               f.severity === "red" || f.severity === "orange" || f.severity === "green"
                 ? f.severity
                 : "orange",
             title: f.title ?? "Issue",
             details: f.details ?? "",
-            documentTypeName: typeName,
           })
         }
       }
+      perDocumentFlags.push({
+        documentTypeName: typeName,
+        documentId: (doc as any).id,
+        flags: docFlags,
+      })
     }
+
+    const flags = aggregatePropertyFlags(perDocumentFlags)
 
     const executiveSummary =
       summaryParts.length > 0
@@ -245,6 +257,7 @@ type DocumentWithRelations = {
   id: string
   property_id: string
   document_type_id: string | null
+  created_at?: string | null
   document_types?: { id: string; name: string }
   analysis_runs?: Array<{ id: string; status: string; result_json?: { summary?: string; flags?: Array<{ severity?: string; title?: string; details?: string }> } }>
 }

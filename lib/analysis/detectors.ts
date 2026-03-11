@@ -206,10 +206,15 @@ export function analyzeAsbestos(text: string): AnalysisResult {
   const normalizedText = text.toLowerCase()
   const flags: Flag[] = []
 
-  // High-risk phrases for asbestos
+  // Only trigger high-risk when the document explicitly indicates elevated risk.
+  // Mere mention of "asbest" or "asbestos" is normal in asbestos certificates and should NOT flag.
   const highRiskPhrases = [
-    "asbest",
-    "asbestos",
+    "niet-asbestveilig",
+    "niet asbestveilig",
+    "verhoogd risico",
+    "high risk",
+    "high-risk",
+    "elevated risk",
     "gevaarlijk",
     "dangerous",
     "kankerverwekkend",
@@ -220,6 +225,8 @@ export function analyzeAsbestos(text: string): AnalysisResult {
     "serious risk",
     "acute blootstelling",
     "acute exposure",
+    "hazardous",
+    "immediate remediation",
   ]
 
   const foundPhrases: string[] = []
@@ -233,7 +240,7 @@ export function analyzeAsbestos(text: string): AnalysisResult {
     flags.push({
       severity: "red",
       title: "High-Risk Asbestos Content Detected",
-      details: `Document contains high-risk asbestos-related phrases: ${foundPhrases.join(", ")}. Immediate professional assessment required.`,
+      details: `Document indicates elevated asbestos risk: ${foundPhrases.join(", ")}. Immediate professional assessment required.`,
     })
     return {
       status: "red",
