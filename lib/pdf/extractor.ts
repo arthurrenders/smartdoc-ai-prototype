@@ -1,7 +1,7 @@
 import "server-only"
 
 /**
- * Improved PDF text extraction using pdfjs-dist
+ * Improved PDF text extraction using pdfjs-dist (legacy build)
  * Extracts text per page for better reliability
  */
 export async function extractTextFromPDF(buffer: Buffer): Promise<{
@@ -13,13 +13,14 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<{
   let fullText = ""
 
   try {
-    // Dynamic import for pdfjs-dist
+    // Dynamic import for pdfjs-dist legacy build (ESM)
     const pdfjsModule = await import("pdfjs-dist/legacy/build/pdf.mjs")
-    const pdfjs = pdfjsModule.default || pdfjsModule
+    const pdfjs = (pdfjsModule as any).default || (pdfjsModule as any)
 
-    // Configure PDF.js worker to avoid "No GlobalWorkerOptions.workerSrc specified" errors
-    pdfjs.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"
+    // Disable worker in Node.js to avoid ESM/URL loader issues and remote HTTPS workers
+    if (pdfjs.GlobalWorkerOptions) {
+      pdfjs.GlobalWorkerOptions.workerSrc = null
+    }
 
     // Load the PDF document
     const loadingTask = pdfjs.getDocument({

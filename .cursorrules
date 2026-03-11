@@ -1,0 +1,5 @@
+- Use TypeScript everywhere.
+- Never call LLM/OCR from the browser; server-only.
+- Build in small steps and STOP when asked.
+- Use Zod to validate any AI JSON output.
+- Prefer simple, working code over fancy abstractions.

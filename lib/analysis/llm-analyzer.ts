@@ -2,6 +2,10 @@ import "server-only"
 import { z } from "zod"
 import { LLMAnalysisResultSchema, type LLMAnalysisResult } from "./llm-schema"
 import { geminiClient, GEMINI_MODEL } from "@/lib/ai/gemini"
+import type { AnalysisResult } from "./detectors"
+import { analyzeEPCWithAI } from "./epc-analyzer"
+import { analyzeElectricalWithAI } from "./electrical-analyzer"
+import { analyzeAsbestosWithAI } from "./asbestos-analyzer"
 
 const PROMPT_VERSION = "1.0"
 
@@ -34,6 +38,36 @@ export async function analyzeWithLLM(
   documentType: string
 ): Promise<{ result: LLMAnalysisResult; modelName: string; promptVersion: string }> {
   const modelName = GEMINI_MODEL
+
+  // Route to specialized analyzers for known document types
+  const normalizedType = documentType.toLowerCase()
+
+  if (normalizedType === "epc") {
+    const { result, modelName: aiModelName, promptVersion } = await analyzeEPCWithAI(text)
+    return {
+      result: result as LLMAnalysisResult,
+      modelName: aiModelName,
+      promptVersion,
+    }
+  }
+
+  if (normalizedType === "electrical" || normalizedType === "electrical_inspection") {
+    const { result, modelName: aiModelName, promptVersion } = await analyzeElectricalWithAI(text)
+    return {
+      result: result as AnalysisResult,
+      modelName: aiModelName,
+      promptVersion,
+    }
+  }
+
+  if (normalizedType === "asbestos" || normalizedType === "asbestattest") {
+    const { result, modelName: aiModelName, promptVersion } = await analyzeAsbestosWithAI(text)
+    return {
+      result: result as AnalysisResult,
+      modelName: aiModelName,
+      promptVersion,
+    }
+  }
 
   try {
     const prompt = `${getSystemPrompt(documentType)}\n\n${getUserPrompt(documentType, text)}`

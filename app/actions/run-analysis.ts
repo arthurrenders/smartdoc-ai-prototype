@@ -7,14 +7,53 @@ import {
   extractTextFromPDF,
   extractTextFromPDFFallback,
 } from "@/lib/pdf/extractor"
-import {
-  analyzeElectrical,
-  analyzeEPC,
-  analyzeAsbestos,
-  calculateConfidence,
-} from "@/lib/analysis/detectors"
+import { analyzeElectrical, analyzeEPC, analyzeAsbestos, calculateConfidence } from "@/lib/analysis/detectors"
 import { analyzeWithLLM } from "@/lib/analysis/llm-analyzer"
 import { analyzeEPCWithAI } from "@/lib/analysis/epc-analyzer"
+import { analyzeElectricalWithAI } from "@/lib/analysis/electrical-analyzer"
+import { analyzeAsbestosWithAI } from "@/lib/analysis/asbestos-analyzer"
+
+function detectDocumentType(text: string): "epc" | "electrical" | "asbestos" | "unknown" {
+  const t = text.toLowerCase()
+
+  // EPC indicators
+  if (
+    t.includes("energieprestatiecertificaat") ||
+    t.includes("energielabel") ||
+    t.includes(" epc") ||
+    t.includes("kwh/(m² jaar)") ||
+    t.includes("kwh/(m2 jaar)") ||
+    t.includes("kwh/m²") ||
+    t.includes("kwh/m2")
+  ) {
+    return "epc"
+  }
+
+  // Electrical indicators
+  if (
+    t.includes("arei") ||
+    t.includes("elektrische installatie") ||
+    t.includes("elektrische keuring") ||
+    t.includes("elektrische keuring") ||
+    t.includes("elektrische installatie") ||
+    t.includes("niet-conform") ||
+    t.includes("niet conform")
+  ) {
+    return "electrical"
+  }
+
+  // Asbestos indicators
+  if (
+    t.includes("asbestattest") ||
+    t.includes("asbestveilig") ||
+    t.includes("niet-asbestveilig") ||
+    t.includes("niet asbestveilig")
+  ) {
+    return "asbestos"
+  }
+
+  return "unknown"
+}
 
 const runAnalysisSchema = z.object({
   analysisRunId: z.string().uuid(),
@@ -140,35 +179,141 @@ export async function runAnalysis(formData: FormData) {
     let modelName: string | null = null
     let promptVersion: string | null = null
 
+    const detectedType = detectDocumentType(extractedText)
+
     if (documentTypeName === "EPC") {
-      // Use specialized EPC AI analyzer
-      try {
-        console.log("=== EPC ANALYSIS START ===")
-        console.log("Full extracted PDF text for EPC analysis:")
-        console.log(extractedText)
-        console.log("=== END PDF TEXT ===")
-        console.log("Running EPC AI analysis")
-        const epcResult = await analyzeEPCWithAI(extractedText)
-        result = epcResult.result
-        modelName = epcResult.modelName
-        promptVersion = epcResult.promptVersion
-        console.log("EPC AI analysis result:", JSON.stringify(result, null, 2))
-      } catch (epcError) {
-        console.error("EPC AI analysis failed:", epcError)
-        // Fallback to rule-based analysis if AI fails
-        result = analyzeEPC(extractedText)
-        const confidence = calculateConfidence(result, extractedText)
-        result.confidence = confidence
-        console.log("Fell back to rule-based EPC analysis")
+      if (detectedType && detectedType !== "epc") {
+        result = {
+          status: "orange" as const,
+          summary: "Wrong document type uploaded.",
+          flags: [
+            {
+              severity: "orange" as const,
+              title: "Wrong document type",
+              details:
+                "This file does not appear to be an EPC certificate based on its contents. Please upload the correct document type.",
+            },
+          ],
+        }
+      } else {
+        // Use specialized EPC AI analyzer
+        try {
+          console.log("=== EPC ANALYSIS START ===")
+          console.log("Full extracted PDF text for EPC analysis:")
+          console.log(extractedText)
+          console.log("=== END PDF TEXT ===")
+          console.log("Running EPC AI analysis")
+          const epcResult = await analyzeEPCWithAI(extractedText)
+          result = epcResult.result
+          modelName = epcResult.modelName
+          promptVersion = epcResult.promptVersion
+          console.log("EPC AI analysis result:", JSON.stringify(result, null, 2))
+        } catch (epcError) {
+          console.error("EPC AI analysis failed:", epcError)
+          // Fallback to manual review if AI fails at this level
+          result = {
+            status: "orange" as const,
+            summary: "AI analysis failed. Manual review required.",
+            flags: [
+              {
+                severity: "orange" as const,
+                title: "Manual review required",
+                details: "Automatic AI analysis failed and the document must be checked manually.",
+              },
+            ],
+          }
+        }
       }
     } else if (documentTypeName === "ELECTRICAL") {
-      result = analyzeElectrical(extractedText)
-      const confidence = calculateConfidence(result, extractedText)
-      result.confidence = confidence
+      if (detectedType && detectedType !== "electrical") {
+        const detectedLabel =
+          detectedType === "epc"
+            ? "EPC document"
+            : detectedType === "asbestos"
+            ? "asbestos certificate"
+            : "different document type"
+        result = {
+          status: "orange" as const,
+          summary: "Wrong document type uploaded.",
+          flags: [
+            {
+              severity: "orange" as const,
+              title: "Wrong document type",
+              details: `This file appears to be an ${detectedLabel}, not an electrical inspection document.`,
+            },
+          ],
+        }
+      } else {
+        // Use specialized Electrical AI analyzer
+        try {
+          console.log("=== ELECTRICAL ANALYSIS START ===")
+          console.log("Running Electrical AI analysis")
+          const electricalResult = await analyzeElectricalWithAI(extractedText)
+          result = electricalResult.result
+          modelName = electricalResult.modelName
+          promptVersion = electricalResult.promptVersion
+          console.log("Electrical AI analysis result:", JSON.stringify(result, null, 2))
+        } catch (electricalError) {
+          console.error("Electrical AI analysis failed at pipeline level:", electricalError)
+          // Fallback to manual review if AI fails at this level
+          result = {
+            status: "orange" as const,
+            summary: "AI analysis failed. Manual review required.",
+            flags: [
+              {
+                severity: "orange" as const,
+                title: "Manual review required",
+                details: "Automatic AI analysis failed and the document must be checked manually.",
+              },
+            ],
+          }
+        }
+      }
     } else if (documentTypeName === "ASBESTOS") {
-      result = analyzeAsbestos(extractedText)
-      const confidence = calculateConfidence(result, extractedText)
-      result.confidence = confidence
+      if (detectedType && detectedType !== "asbestos") {
+        const detectedLabel =
+          detectedType === "epc"
+            ? "EPC document"
+            : detectedType === "electrical"
+            ? "electrical inspection document"
+            : "different document type"
+        result = {
+          status: "orange" as const,
+          summary: "Wrong document type uploaded.",
+          flags: [
+            {
+              severity: "orange" as const,
+              title: "Wrong document type",
+              details: `This file appears to be an ${detectedLabel}, not an asbestos certificate.`,
+            },
+          ],
+        }
+      } else {
+        // Use specialized Asbestos AI analyzer
+        try {
+          console.log("=== ASBESTOS ANALYSIS START ===")
+          console.log("Running Asbestos AI analysis")
+          const asbestosResult = await analyzeAsbestosWithAI(extractedText)
+          result = asbestosResult.result
+          modelName = asbestosResult.modelName
+          promptVersion = asbestosResult.promptVersion
+          console.log("Asbestos AI analysis result:", JSON.stringify(result, null, 2))
+        } catch (asbestosError) {
+          console.error("Asbestos AI analysis failed at pipeline level:", asbestosError)
+          // Fallback to manual review if AI fails at this level
+          result = {
+            status: "orange" as const,
+            summary: "AI analysis failed. Manual review required.",
+            flags: [
+              {
+                severity: "orange" as const,
+                title: "Manual review required",
+                details: "Automatic AI analysis failed and the document must be checked manually.",
+              },
+            ],
+          }
+        }
+      }
     } else {
       // Unknown document type - default to green
       result = {

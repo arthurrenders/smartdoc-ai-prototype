@@ -11,3 +11,4 @@ export const geminiClient = new GoogleGenAI({ apiKey })
 export const GEMINI_MODEL = "gemini-2.5-flash"
 
 
+
