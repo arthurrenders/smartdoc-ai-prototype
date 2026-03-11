@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Upload, Play } from "lucide-react"
+import { Upload, Play, FileQuestion } from "lucide-react"
 import { uploadDocument } from "@/app/actions/upload-document"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
 import { runAnalysis } from "@/app/actions/run-analysis"
@@ -43,7 +43,13 @@ type Document = {
   analysis_runs: AnalysisRun[] | null
 }
 
-export default function DocumentTable({ propertyId }: { propertyId: string }) {
+type DocumentTableProps = {
+  propertyId: string
+  /** When false, only the document list is rendered (no card or heading). Use when parent provides section layout. */
+  wrapInCard?: boolean
+}
+
+export default function DocumentTable({ propertyId, wrapInCard = true }: DocumentTableProps) {
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
@@ -143,6 +149,7 @@ export default function DocumentTable({ propertyId }: { propertyId: string }) {
     setUploading(documentTypeId)
 
     const formData = new FormData()
+    formData.append("propertyId", propertyId)
     formData.append("documentTypeId", documentTypeId)
     formData.append("file", file)
 
@@ -199,17 +206,26 @@ export default function DocumentTable({ propertyId }: { propertyId: string }) {
 
   if (loading) {
     return (
-      <div className="rounded-lg border bg-card p-6">
-        <p className="text-muted-foreground">Loading...</p>
+      <div className={wrapInCard ? "saas-card py-12" : "py-8"}>
+        <div className="flex flex-col items-center justify-center gap-3 text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden />
+          <p className="text-sm text-muted-foreground">Loading documents…</p>
+        </div>
       </div>
     )
   }
 
-  return (
-    <div className="rounded-lg border bg-card p-6">
-      <h2 className="text-xl font-semibold mb-6">Documents</h2>
-      <div className="space-y-4">
-        {documentTypes.map((docType) => {
+  const content = (
+    <div className="space-y-4">
+        {documentTypes.length === 0 ? (
+          <div className="saas-empty-state">
+            <FileQuestion className="h-12 w-12 sm:h-14 sm:w-14 saas-empty-state-icon" aria-hidden />
+            <p className="saas-empty-state-title">No document types configured</p>
+            <p className="saas-empty-state-description">
+              Document types will appear here once they are set up for this property.
+            </p>
+          </div>
+        ) : documentTypes.map((docType) => {
           const { status, document, analysisRun } = getDocumentData(docType.id)
           const isUploading = uploading === docType.id
           const isAnalyzing = analyzing === analysisRun?.id
@@ -219,25 +235,25 @@ export default function DocumentTable({ propertyId }: { propertyId: string }) {
           return (
             <div
               key={docType.id}
-              className="p-4 border rounded-lg space-y-3"
+              className="rounded-xl border border-[hsl(var(--card-border))] bg-card p-5 shadow-[var(--card-shadow)] space-y-4 transition-shadow hover:shadow-card-hover"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="font-medium">{docType.name}</h3>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-foreground">{docType.name}</h3>
                   <p className={`text-sm mt-1 ${getStatusColor(status)}`}>
                     Status: {status}
                   </p>
                   {showResults && analysisRun.result_json && (
-                    <div className="mt-2 space-y-2">
-                      <div className="p-2 bg-muted rounded text-sm">
-                        <p className="font-medium">Summary:</p>
-                        <p className="text-muted-foreground">
+                    <div className="mt-3 space-y-3">
+                      <div className="rounded-lg border border-[hsl(var(--border))] bg-muted/50 p-3 text-sm">
+                        <p className="font-medium text-foreground">Summary</p>
+                        <p className="mt-1 text-muted-foreground">
                           {analysisRun.result_json.summary}
                         </p>
                       </div>
                       {docType.name === "EPC" && (
-                        <div className="p-2 bg-muted rounded text-sm space-y-1">
-                          <p className="font-medium">EPC Details:</p>
+                        <div className="rounded-lg border border-[hsl(var(--border))] bg-muted/50 p-3 text-sm space-y-1">
+                          <p className="font-medium text-foreground">EPC Details</p>
                           {analysisRun.result_json.epc_score_letter && (
                             <p className="text-muted-foreground">
                               <span className="font-medium">EPC Score:</span> {analysisRun.result_json.epc_score_letter}
@@ -259,7 +275,7 @@ export default function DocumentTable({ propertyId }: { propertyId: string }) {
                             </p>
                           )}
                           {analysisRun.result_json.is_expired !== null && analysisRun.result_json.is_expired !== undefined && (
-                            <p className={`font-medium ${analysisRun.result_json.is_expired ? "text-red-600" : "text-green-600"}`}>
+                            <p className={`font-medium ${analysisRun.result_json.is_expired ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
                               <span className="font-medium">Expired Status:</span> {analysisRun.result_json.is_expired ? "EXPIRED" : "Valid"}
                             </p>
                           )}
@@ -268,17 +284,17 @@ export default function DocumentTable({ propertyId }: { propertyId: string }) {
                     </div>
                   )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-shrink-0 flex-wrap gap-2">
                   {showRunAnalysis && document && analysisRun && (
                     <button
                       onClick={() =>
                         handleRunAnalysis(document.id, analysisRun.id)
                       }
                       disabled={isAnalyzing}
-                      className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
                     >
-                      <Play className="w-4 h-4" />
-                      {isAnalyzing ? "Running..." : "Run Analysis"}
+                      <Play className="h-4 w-4" />
+                      {isAnalyzing ? "Running…" : "Run Analysis"}
                     </button>
                   )}
                   <input
@@ -294,17 +310,27 @@ export default function DocumentTable({ propertyId }: { propertyId: string }) {
                   <button
                     onClick={() => handleUploadClick(docType.id)}
                     disabled={isUploading}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="saas-btn-primary"
                   >
-                    <Upload className="w-4 h-4" />
-                    {isUploading ? "Uploading..." : "Upload"}
+                    <Upload className="h-4 w-4" />
+                    {isUploading ? "Uploading…" : "Upload"}
                   </button>
                 </div>
               </div>
             </div>
           )
         })}
-      </div>
     </div>
   )
+
+  if (wrapInCard) {
+    return (
+      <div className="saas-card">
+        <h2 className="saas-section-heading mb-6">Documents</h2>
+        {content}
+      </div>
+    )
+  }
+
+  return content
 }
