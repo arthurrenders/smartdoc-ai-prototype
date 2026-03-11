@@ -66,6 +66,60 @@ export function analyzeEPC(text: string): AnalysisResult {
   const normalizedText = text.toLowerCase()
   const flags: Flag[] = []
 
+  // Try to detect explicit expiry date phrases like:
+  // "geldig tot", "geldig tot en met", "valid until"
+  const expiryMatch = text.match(
+    /(geldig tot(?: en met)?|valid until)\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/i
+  )
+
+  if (expiryMatch) {
+    const day = parseInt(expiryMatch[2], 10)
+    const monthName = expiryMatch[3].toLowerCase()
+    const year = parseInt(expiryMatch[4], 10)
+
+    const monthMap: Record<string, number> = {
+      januari: 0,
+      january: 0,
+      februari: 1,
+      february: 1,
+      maart: 2,
+      march: 2,
+      april: 3,
+      mei: 4,
+      may: 4,
+      juni: 5,
+      june: 5,
+      juli: 6,
+      july: 6,
+      augustus: 7,
+      august: 7,
+      september: 8,
+      oktober: 9,
+      october: 9,
+      november: 10,
+      december: 11,
+    }
+
+    const monthIndex = monthMap[monthName]
+    if (monthIndex !== undefined) {
+      const expiryDate = new Date(year, monthIndex, day)
+      const today = new Date()
+
+      if (expiryDate.getTime() < today.setHours(0, 0, 0, 0)) {
+        flags.push({
+          severity: "red",
+          title: "Expired EPC certificate",
+          details: "The EPC certificate validity date has passed.",
+        })
+        return {
+          status: "red",
+          summary: "EPC certificate has expired",
+          flags,
+        }
+      }
+    }
+  }
+
   // Try to detect EPC class (A, B, C, D, E, F, G)
   const epcClassMatch = text.match(/\b(?:energielabel|epc|energy[-\s]?class)[\s:]*([a-g])\b/i)
   const epcClass = epcClassMatch ? epcClassMatch[1].toUpperCase() : null

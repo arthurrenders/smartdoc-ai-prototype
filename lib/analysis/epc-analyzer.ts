@@ -1,9 +1,9 @@
 import "server-only"
-import OpenAI from "openai"
 import { z } from "zod"
 import { EPCResponseSchema, type EPCResponse } from "./epc-schema"
 import { EPC_PROMPT } from "@/lib/ai/prompts/epc"
 import type { AnalysisResult, Flag } from "./detectors"
+import { geminiClient, GEMINI_MODEL } from "@/lib/ai/gemini"
 
 const PROMPT_VERSION = "2.0"
 
@@ -27,13 +27,7 @@ function normalizeText(text: string): string {
 export async function analyzeEPCWithAI(
   text: string
 ): Promise<{ result: AnalysisResult; epcData: EPCResponse; modelName: string; promptVersion: string }> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY environment variable is not set")
-  }
-
-  const openai = new OpenAI({ apiKey })
-  const modelName = "gpt-4o-mini"
+  const modelName = GEMINI_MODEL
 
   // Normalize text to handle formatting issues
   const normalizedText = normalizeText(text)
@@ -48,23 +42,14 @@ export async function analyzeEPCWithAI(
 
   try {
     console.log("Sending text to AI (length:", textToSend.length, isTruncated ? ", truncated)" : ", full)")
-    const response = await openai.chat.completions.create({
-      model: modelName,
-      messages: [
-        {
-          role: "system",
-          content: EPC_PROMPT,
-        },
-        {
-          role: "user",
-          content: `Extract information from this EPC document:\n\n${textToSend}${isTruncated ? "\n\n[Document truncated for length]" : ""}`,
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.3,
+    const prompt = `${EPC_PROMPT}\n\nExtract information from this EPC document:\n\n${textToSend}${
+      isTruncated ? "\n\n[Document truncated for length]" : ""
+    }`
+    const response = await geminiClient.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: prompt,
     })
-
-    const content = response.choices[0]?.message?.content
+    const content = response.text
     if (!content) {
       throw new Error("No content in LLM response")
     }
@@ -73,17 +58,31 @@ export async function analyzeEPCWithAI(
     console.log(content)
     console.log("=== END RAW AI RESPONSE ===")
 
-    // Parse JSON safely
+    // Clean and parse JSON safely (handles markdown code fences)
+    const cleanedContent = content
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim()
+
+    console.log("=== CLEANED AI RESPONSE ===")
+    console.log(cleanedContent)
+    console.log("=== END CLEANED AI RESPONSE ===")
+
     let parsed: unknown
     try {
-      parsed = JSON.parse(content)
+      parsed = JSON.parse(cleanedContent)
       console.log("=== PARSED JSON ===")
       console.log(JSON.stringify(parsed, null, 2))
       console.log("=== END PARSED JSON ===")
     } catch (parseError) {
       console.error("Failed to parse EPC AI JSON response:", parseError)
       console.error("Raw content that failed to parse:", content)
-      throw new Error(`Failed to parse EPC AI JSON response: ${parseError instanceof Error ? parseError.message : "Unknown error"}`)
+      console.error("Cleaned content that failed to parse:", cleanedContent)
+      throw new Error(
+        `Failed to parse EPC AI JSON response: ${
+          parseError instanceof Error ? parseError.message : "Unknown error"
+        }`
+      )
     }
 
     // Validate with Zod
@@ -102,6 +101,38 @@ export async function analyzeEPCWithAI(
       throw validationError
     }
 
+    // If the certificate is expired, immediately return a red status
+    if (epcData.is_expired === true) {
+      const expiredResult: AnalysisResult = {
+        status: "red",
+        summary: "EPC certificate expired",
+        flags: [
+          {
+            severity: "red",
+            title: "Expired EPC certificate",
+            details: `The EPC certificate expired on ${epcData.expiry_date}`,
+          },
+        ],
+        confidence: 0.9,
+        epc_score_letter: epcData.epc_score_letter,
+        energy_consumption_kwh_m2_year: epcData.energy_consumption_kwh_m2_year,
+        certificate_date: epcData.certificate_date,
+        expiry_date: epcData.expiry_date,
+        is_expired: epcData.is_expired,
+      }
+
+      console.log("=== FINAL ANALYSIS RESULT (EXPIRED) ===")
+      console.log(JSON.stringify(expiredResult, null, 2))
+      console.log("=== END FINAL ANALYSIS RESULT (EXPIRED) ===")
+
+      return {
+        result: expiredResult,
+        epcData,
+        modelName,
+        promptVersion: PROMPT_VERSION,
+      }
+    }
+
     // Transform EPC data into standard AnalysisResult format
     console.log("Transforming EPC data to analysis result...")
     const result = transformEPCToAnalysisResult(epcData)
@@ -117,7 +148,35 @@ export async function analyzeEPCWithAI(
     }
   } catch (error) {
     console.error("EPC AI analysis failed:", error)
-    throw error
+
+    const manualReviewResult: AnalysisResult = {
+      status: "orange",
+      summary: "AI analysis failed. Manual review required.",
+      flags: [
+        {
+          severity: "orange",
+          title: "Manual review required",
+          details: "Automatic AI analysis failed and the document must be checked manually.",
+        },
+      ],
+    }
+
+    const emptyEpcData: EPCResponse = {
+      document_type: "epc",
+      epc_score_letter: null,
+      energy_consumption_kwh_m2_year: null,
+      certificate_date: null,
+      expiry_date: null,
+      is_expired: null,
+      red_flags: [],
+    }
+
+    return {
+      result: manualReviewResult,
+      epcData: emptyEpcData,
+      modelName,
+      promptVersion: PROMPT_VERSION,
+    }
   }
 }
 

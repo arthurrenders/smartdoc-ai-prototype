@@ -22,7 +22,6 @@ export async function uploadDocument(formData: FormData) {
     const documentTypeIdRaw = formData.get("documentTypeId")
     const file = formData.get("file") as File | null
 
-
     console.log("raw propertyId from formData:", propertyIdRaw)
     console.log("process.env.DEMO_PROPERTY_ID:", process.env.DEMO_PROPERTY_ID)
 

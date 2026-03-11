@@ -1,6 +1,7 @@
-import OpenAI from "openai"
+import "server-only"
 import { z } from "zod"
 import { LLMAnalysisResultSchema, type LLMAnalysisResult } from "./llm-schema"
+import { geminiClient, GEMINI_MODEL } from "@/lib/ai/gemini"
 
 const PROMPT_VERSION = "1.0"
 
@@ -32,32 +33,15 @@ export async function analyzeWithLLM(
   text: string,
   documentType: string
 ): Promise<{ result: LLMAnalysisResult; modelName: string; promptVersion: string }> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY environment variable is not set")
-  }
-
-  const openai = new OpenAI({ apiKey })
-  const modelName = "gpt-4o-mini"
+  const modelName = GEMINI_MODEL
 
   try {
-    const response = await openai.chat.completions.create({
-      model: modelName,
-      messages: [
-        {
-          role: "system",
-          content: getSystemPrompt(documentType),
-        },
-        {
-          role: "user",
-          content: getUserPrompt(documentType, text),
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.3,
+    const prompt = `${getSystemPrompt(documentType)}\n\n${getUserPrompt(documentType, text)}`
+    const response = await geminiClient.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: prompt,
     })
-
-    const content = response.choices[0]?.message?.content
+    const content = response.text
     if (!content) {
       throw new Error("No content in LLM response")
     }

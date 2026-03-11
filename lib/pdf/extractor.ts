@@ -17,8 +17,9 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<{
     const pdfjsModule = await import("pdfjs-dist/legacy/build/pdf.mjs")
     const pdfjs = pdfjsModule.default || pdfjsModule
 
-    // Disable worker for server-side (not needed in Node.js)
-    pdfjs.GlobalWorkerOptions.workerSrc = ""
+    // Configure PDF.js worker to avoid "No GlobalWorkerOptions.workerSrc specified" errors
+    pdfjs.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"
 
     // Load the PDF document
     const loadingTask = pdfjs.getDocument({
