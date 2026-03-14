@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Upload, Play, FileQuestion } from "lucide-react"
+import { Upload, Play, FileQuestion, FileText, X } from "lucide-react"
 import { uploadDocument } from "@/app/actions/upload-document"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
 import { runAnalysis } from "@/app/actions/run-analysis"
@@ -56,6 +56,9 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   const [uploading, setUploading] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState<string | null>(null)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false)
+  const [driveImportingName, setDriveImportingName] = useState<string | null>(null)
+  const [selectedDriveId, setSelectedDriveId] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -81,6 +84,61 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     } finally {
       setLoading(false)
     }
+  }
+
+  const mockDriveFiles = [
+    {
+      id: "drive-epc-1",
+      name: "EPC Testdocument.pdf",
+      size: "1.2 MB",
+      owner: "me",
+      modifiedAt: "Feb 12, 2025",
+    },
+    {
+      id: "drive-electrical-1",
+      name: "electr testdocument.pdf",
+      size: "2.0 MB",
+      owner: "me",
+      modifiedAt: "Jan 5, 2025",
+    },
+    {
+      id: "drive-asbestos-1",
+      name: "asbest testbestand.pdf",
+      size: "980 KB",
+      owner: "me",
+      modifiedAt: "Nov 18, 2024",
+    },
+  ] as const
+
+  type MockDriveFile = (typeof mockDriveFiles)[number]
+
+  function inferDocumentTypeIdFromDriveFile(file: MockDriveFile): string | null {
+    if (documentTypes.length === 0) return null
+
+    const lowerName = file.name.toLowerCase()
+
+    const epc = documentTypes.find((t) =>
+      t.name.toLowerCase().includes("epc")
+    )
+    if (epc && (lowerName.includes("epc") || lowerName.includes("peb"))) {
+      return epc.id
+    }
+
+    const electrical = documentTypes.find((t) =>
+      t.name.toLowerCase().includes("electrical")
+    )
+    if (electrical && lowerName.includes("electr")) {
+      return electrical.id
+    }
+
+    const asbestos = documentTypes.find((t) =>
+      t.name.toLowerCase().includes("asbestos")
+    )
+    if (asbestos && lowerName.includes("asbest")) {
+      return asbestos.id
+    }
+
+    return documentTypes[0]?.id ?? null
   }
 
   function getDocumentData(documentTypeId: string) {
@@ -119,6 +177,53 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
 
   async function handleRunAnalysis(documentId: string, analysisRunId: string) {
     setAnalyzing(analysisRunId)
+
+    // For mocked Drive imports, simulate the analysis client-side
+    if (documentId.startsWith("mock-drive-")) {
+      // Set to processing immediately
+      setDocuments((prev) =>
+        prev.map((doc) => {
+          if (doc.id !== documentId || !doc.analysis_runs) return doc
+          return {
+            ...doc,
+            analysis_runs: doc.analysis_runs.map((run) =>
+              run.id === analysisRunId ? { ...run, status: "processing" } : run
+            ),
+          }
+        })
+      )
+
+      window.setTimeout(() => {
+        setDocuments((prev) =>
+          prev.map((doc) => {
+            if (doc.id !== documentId || !doc.analysis_runs) return doc
+
+            const mockedResult: AnalysisResult = {
+              status: "green",
+              summary: "Document imported from mocked Google Drive and marked as OK for this demo.",
+              flags: [],
+              epc_score_letter: null,
+              energy_consumption_kwh_m2_year: null,
+              certificate_date: null,
+              expiry_date: null,
+              is_expired: null,
+            }
+
+            return {
+              ...doc,
+              analysis_runs: doc.analysis_runs.map((run) =>
+                run.id === analysisRunId
+                  ? { ...run, status: "done", result_json: mockedResult }
+                  : run
+              ),
+            }
+          })
+        )
+        setAnalyzing(null)
+      }, 1500)
+
+      return
+    }
 
     const formData = new FormData()
     formData.append("analysisRunId", analysisRunId)
@@ -177,6 +282,41 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     }
   }
 
+  function handleDriveFileSelected(file: MockDriveFile) {
+    setIsDriveModalOpen(false)
+    setDriveImportingName(file.name)
+
+    const documentTypeId = inferDocumentTypeIdFromDriveFile(file)
+    if (!documentTypeId) {
+      return
+    }
+
+    const now = new Date().toISOString()
+
+    const newDocument: Document = {
+      id: `mock-drive-${Date.now()}`,
+      property_id: propertyId,
+      document_type_id: documentTypeId,
+      storage_path: `mock-drive/${file.id}`,
+      status: "uploaded",
+      created_at: now,
+      document_types: documentTypes.find((t) => t.id === documentTypeId) ?? null,
+      analysis_runs: [
+        {
+          id: `mock-analysis-${Date.now()}`,
+          status: "queued",
+          result_json: null,
+        },
+      ],
+    }
+
+    setDocuments((prev) => [newDocument, ...prev])
+
+    window.setTimeout(() => {
+      setDriveImportingName(null)
+    }, 2000)
+  }
+
   function handleUploadClick(documentTypeId: string) {
     fileInputRefs.current[documentTypeId]?.click()
   }
@@ -217,6 +357,37 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
 
   const content = (
     <div className="space-y-4">
+        <div className="flex flex-col gap-3 rounded-xl border border-dashed border-[hsl(var(--border))] bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">
+              Import from Google Drive (mocked)
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Simulate attaching existing PDFs from Google Drive to this property dossier. No real Google API calls are made.
+            </p>
+          </div>
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+            {driveImportingName && (
+              <p className="flex items-center gap-2 rounded-full bg-background px-3 py-1 text-xs text-muted-foreground">
+                <span className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent" />
+                Importing {driveImportingName}…
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedDriveId(null)
+                setIsDriveModalOpen(true)
+              }}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-foreground shadow-sm ring-1 ring-[hsl(var(--border))] hover:bg-muted"
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-sm bg-primary/10">
+                <FileText className="h-3.5 w-3.5 text-primary" />
+              </span>
+              <span>Import from Google Drive</span>
+            </button>
+          </div>
+        </div>
         {documentTypes.length === 0 ? (
           <div className="saas-empty-state">
             <FileQuestion className="h-12 w-12 sm:h-14 sm:w-14 saas-empty-state-icon" aria-hidden />
@@ -323,14 +494,115 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     </div>
   )
 
+  const driveModal = isDriveModalOpen ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Import from Google Drive"
+      onClick={() => {
+        setIsDriveModalOpen(false)
+        setSelectedDriveId(null)
+      }}
+    >
+      <div
+        className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-background shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Import from Google Drive
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Choose one of the test documents below to attach to this property.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsDriveModalOpen(false)
+              setSelectedDriveId(null)
+            }}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="max-h-[320px] overflow-y-auto bg-card">
+          <ul className="divide-y divide-border">
+            {mockDriveFiles.map((file) => {
+              const isSelected = file.id === selectedDriveId
+              return (
+                <li key={file.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDriveId(file.id)}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-muted ${
+                      isSelected ? "bg-muted" : ""
+                    }`}
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-md bg-red-50">
+                      <FileText className="h-4 w-4 text-red-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-foreground">
+                        {file.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {file.owner} · {file.modifiedAt} · {file.size}
+                      </p>
+                    </div>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t bg-muted/40 px-4 py-3">
+          <button
+            type="button"
+            onClick={() => {
+              setIsDriveModalOpen(false)
+              setSelectedDriveId(null)
+            }}
+            className="inline-flex items-center justify-center rounded-md border border-border px-4 py-1.5 text-sm font-medium text-muted-foreground hover:bg-background"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!selectedDriveId}
+            onClick={() => {
+              const file = mockDriveFiles.find((f) => f.id === selectedDriveId)
+              if (!file) return
+              handleDriveFileSelected(file)
+              setSelectedDriveId(null)
+            }}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+          >
+            Select
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
   if (wrapInCard) {
     return (
       <div className="saas-card">
         <h2 className="saas-section-heading mb-6">Documents</h2>
         {content}
+        {driveModal}
       </div>
     )
   }
 
-  return content
+  return (
+    <>
+      {content}
+      {driveModal}
+    </>
+  )
 }
