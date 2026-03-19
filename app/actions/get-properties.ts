@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server"
 export type PropertyRow = {
   id: string
   created_at?: string
+  display_name?: string | null
 }
 
 /**
@@ -28,7 +29,34 @@ export async function getProperties(): Promise<{ data: PropertyRow[]; error: str
       return fallbackProperties()
     }
 
-    return { data, error: null }
+    // Avoid Supabase-js schema cache issues by enriching display_name via PostgREST fetch.
+    const properties = data as PropertyRow[]
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+    try {
+      const idsPart = properties.map((p) => encodeURIComponent(p.id)).join(",")
+      const res = await fetch(
+        `${supabaseUrl}/rest/v1/properties?select=id,display_name&id=in.(${idsPart})`,
+        {
+          headers: {
+            apikey: serviceRoleKey,
+            Authorization: `Bearer ${serviceRoleKey}`,
+          },
+        }
+      )
+
+      if (res.ok) {
+        const displayRows = (await res.json()) as Array<{ id: string; display_name?: string | null }>
+        const byId = new Map(displayRows.map((r) => [r.id, r.display_name ?? null] as const))
+        const enriched = properties.map((p) => ({ ...p, display_name: byId.get(p.id) ?? null }))
+        return { data: enriched, error: null }
+      }
+    } catch {
+      // Ignore and fall back to missing display_name values.
+    }
+
+    return { data: properties.map((p) => ({ ...p, display_name: null })), error: null }
   } catch {
     return fallbackProperties()
   }

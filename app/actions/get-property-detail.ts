@@ -54,6 +54,40 @@ function formatPropertyDisplayName(id: string): string {
 export async function getPropertyDetail(propertyId: string): Promise<PropertyDetailData | null> {
   try {
     const supabase = createServerClient()
+
+    // Validate the property exists (RLS already ensures access for the current user).
+    // Property display name is optional; we fall back to a generated label.
+    const { data: propertyIdRow, error: propertyIdError } = await supabase
+      .from("properties")
+      .select("id")
+      .eq("id", propertyId)
+      .maybeSingle()
+
+    if (propertyIdError || !propertyIdRow) {
+      return null
+    }
+
+    let propertyDisplayName: string = formatPropertyDisplayName(propertyId)
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+      const res = await fetch(
+        `${supabaseUrl}/rest/v1/properties?select=display_name&id=eq.${encodeURIComponent(propertyId)}&limit=1`,
+        {
+          headers: {
+            apikey: serviceRoleKey,
+            Authorization: `Bearer ${serviceRoleKey}`,
+          },
+        }
+      )
+
+      if (res.ok) {
+        const body = (await res.json()) as Array<{ display_name?: string | null }>
+        propertyDisplayName = body?.[0]?.display_name ?? formatPropertyDisplayName(propertyId)
+      }
+    } catch {
+      // If the schema hasn't been migrated yet, ignore and fall back.
+    }
     const [typesRes, docsRes] = await Promise.all([
       supabase.from("document_types").select("id, name").order("name"),
       supabase
@@ -152,7 +186,7 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
 
     return {
       propertyId,
-      propertyDisplayName: formatPropertyDisplayName(propertyId),
+      propertyDisplayName,
       stats,
       documentTypes,
       executiveSummary,

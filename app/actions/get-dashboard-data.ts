@@ -16,7 +16,7 @@ export type DocumentTypeRow = { id: string; name: string }
 export type PropertyStats = PropertyStatusResult
 
 export type DashboardData = {
-  properties: { id: string; created_at?: string }[]
+  properties: { id: string; created_at?: string; display_name?: string | null }[]
   documentTypes: DocumentTypeRow[]
   propertyStats: Record<string, PropertyStats>
 }

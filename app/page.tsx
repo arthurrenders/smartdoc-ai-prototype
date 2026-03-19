@@ -1,8 +1,10 @@
+import Link from "next/link"
 import {
   Building2,
   AlertTriangle,
   FileQuestion,
   CalendarClock,
+  Plus,
 } from "lucide-react"
 import { getDashboardData } from "@/app/actions/get-dashboard-data"
 import { StatCard } from "@/components/ui/StatCard"
@@ -68,13 +70,20 @@ export default async function DashboardPage() {
 
       {/* Property grid */}
       <section aria-label="Properties">
-        <h2 className="saas-section-heading mb-4 sm:mb-6">Properties</h2>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="saas-section-heading">Properties</h2>
+          <Link href="/properties/new" className="saas-btn-primary inline-flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Add property
+          </Link>
+        </div>
         {properties.length === 0 ? (
           <div className="saas-empty-state">
             <Building2 className="h-12 w-12 sm:h-14 sm:w-14 saas-empty-state-icon" aria-hidden />
             <p className="saas-empty-state-title">No properties yet</p>
             <p className="saas-empty-state-description">
-              Add a property or set DEMO_PROPERTY_ID in .env to see a demo property.
+              Use the button above to add a property, or set DEMO_PROPERTY_ID
+              in .env to see a demo property.
             </p>
           </div>
         ) : (
@@ -83,8 +92,15 @@ export default async function DashboardPage() {
               <PropertyCard
                 key={prop.id}
                 id={prop.id}
-                nameOrAddress={formatPropertyName(prop.id)}
-                stats={propertyStats[prop.id] ?? { missingCount: 0, expiriesCount: 0, status: "red", documentCount: 0 }}
+                nameOrAddress={prop.display_name ?? formatPropertyName(prop.id)}
+                stats={
+                  propertyStats[prop.id] ?? {
+                    missingCount: 0,
+                    expiriesCount: 0,
+                    status: "red",
+                    documentCount: 0,
+                  }
+                }
               />
             ))}
           </div>

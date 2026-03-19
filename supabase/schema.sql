@@ -5,6 +5,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE properties (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- Human-friendly label shown in the UI (editable by the user).
+  display_name TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -58,6 +60,11 @@ CREATE TABLE red_flags (
 
 -- Indexes
 CREATE INDEX idx_properties_user_id ON properties(user_id);
+-- Property display names must be unique (case-insensitive).
+-- Multiple NULL values are allowed.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_properties_display_name_lower_unique
+  ON properties (lower(display_name))
+  WHERE display_name IS NOT NULL;
 CREATE INDEX idx_documents_property_id ON documents(property_id);
 CREATE INDEX idx_documents_document_type_id ON documents(document_type_id);
 CREATE INDEX idx_documents_status ON documents(status);
