@@ -26,6 +26,9 @@ en een eerste risico-analyse (“Red Flags”) uit te voeren.
 - Zod (validatie)
 - Prototype AI-analyse (regels / mock)
 
+## Google Drive-import
+Vul in `lib/google-drive/picker-flow.ts` bovenaan `apiKey`, `clientId` en `appId` (OAuth web client + projectnummer). Schakel **Google Picker API** en **Google Drive API** in en autoriseer je origin (bijv. `http://localhost:3000`). Commit geen echte secrets.
+
 ## Hoe testen (lokaal)
 1. Open de property-pagina (demo property)
 2. Upload een PDF-document
