@@ -15,7 +15,7 @@ function formatPropertyName(id: string): string {
 }
 
 export default async function DashboardPage() {
-  const { properties, propertyStats } = await getDashboardData()
+  const { properties, propertyStats, propertiesError } = await getDashboardData()
 
   const totalProperties = properties.length
   const propertiesWithIssues = properties.filter(
@@ -77,6 +77,14 @@ export default async function DashboardPage() {
             Add property
           </Link>
         </div>
+        {propertiesError && (
+          <div
+            className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            role="alert"
+          >
+            Could not load properties from Supabase: {propertiesError}
+          </div>
+        )}
         {properties.length === 0 ? (
           <div className="saas-empty-state">
             <Building2 className="h-12 w-12 sm:h-14 sm:w-14 saas-empty-state-icon" aria-hidden />

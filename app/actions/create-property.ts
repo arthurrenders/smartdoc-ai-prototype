@@ -5,71 +5,122 @@ import { revalidatePath } from "next/cache"
 import { createServerClient } from "@/lib/supabase/server"
 import { z } from "zod"
 
-export async function createProperty(formData: FormData) {
-  const supabase = createServerClient()
+const CreatePropertySchema = z.object({
+  displayName: z
+    .string()
+    .min(1, "Property name is required.")
+    .max(80, "Property name must be at most 80 characters.")
+    .transform((v) => v.trim()),
+})
 
-  // Validate required inputs.
-  // Current schema only requires `user_id` (and the FK must reference an existing auth user).
-  // This app currently has no explicit login flow, so we infer `user_id` from existing data.
+const DUPLICATE_NAME_MESSAGE =
+  "A property with this name already exists. Please choose a different name."
 
-  // 1) Try to use an authenticated user session (if present).
-  const maybeUser = await supabase.auth
-    .getUser()
-    .then((res) => ({ user: res.data.user, error: res.error }))
-    .catch((err) => ({ user: null, error: err as Error }))
+/** Escape % and _ so ilike is exact match, not a pattern. */
+function escapeForIlike(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")
+}
 
-  const authUserId =
-    maybeUser.user?.id && z.string().uuid().safeParse(maybeUser.user.id).success
-      ? maybeUser.user.id
-      : null
+/**
+ * Single-user tool: no login. Resolve owner UUID in order:
+ * 1) PROPERTIES_OWNER_USER_ID in .env.local (paste from properties.user_id in Supabase)
+ * 2) user_id on the row whose id is DEMO_PROPERTY_ID (if set)
+ * 3) user_id on any existing property row
+ */
+async function resolveOwnerUserId(
+  supabase: ReturnType<typeof createServerClient>
+): Promise<string> {
+  const fromEnv = process.env.PROPERTIES_OWNER_USER_ID?.trim()
+  const envParsed = fromEnv ? z.string().uuid().safeParse(fromEnv) : null
+  if (envParsed?.success) {
+    return envParsed.data
+  }
 
-  // 2) If no auth session, infer user_id from existing properties for this environment.
-  // Prefer DEMO_PROPERTY_ID so behaviour matches the demo dataset.
-  const demoId = process.env.DEMO_PROPERTY_ID
-  const { data: inferredUserRow, error: inferUserError } = await (async () => {
-    if (authUserId) return { data: { user_id: authUserId }, error: null as string | null }
+  const demoId = process.env.DEMO_PROPERTY_ID?.trim()
+  const demoParsed = demoId ? z.string().uuid().safeParse(demoId) : null
+  if (demoParsed?.success) {
+    const { data, error } = await supabase
+      .from("properties")
+      .select("user_id")
+      .eq("id", demoParsed.data)
+      .maybeSingle()
 
-    if (demoId) {
-      const res = await supabase
-        .from("properties")
-        .select("user_id")
-        .eq("id", demoId)
-        .maybeSingle()
-      return { data: res.data, error: res.error?.message ?? null }
+    if (!error && data?.user_id) {
+      const uid = z.string().uuid().safeParse(data.user_id)
+      if (uid.success) return uid.data
     }
-
-    const res = await supabase.from("properties").select("user_id").limit(1).maybeSingle()
-    return { data: res.data, error: res.error?.message ?? null }
-  })()
-
-  if (inferUserError) {
-    throw new Error(`Failed to infer user_id: ${inferUserError}`)
   }
 
-  const userIdFromDb = inferredUserRow?.user_id ?? null
-  const parsedUserId = userIdFromDb && z.string().uuid().safeParse(userIdFromDb).success
-    ? userIdFromDb
-    : null
+  const { data: row, error: rowError } = await supabase
+    .from("properties")
+    .select("user_id")
+    .limit(1)
+    .maybeSingle()
 
-  if (!parsedUserId) {
-    throw new Error(
-      "Not authenticated and could not infer user_id from existing properties. Ensure DEMO_PROPERTY_ID points to an existing property row."
-    )
+  if (!rowError && row?.user_id) {
+    const uid = z.string().uuid().safeParse(row.user_id)
+    if (uid.success) return uid.data
   }
 
+  throw new Error(
+    "Could not resolve owner user id. Set PROPERTIES_OWNER_USER_ID in .env.local to the UUID in properties.user_id (Supabase), " +
+      "or set DEMO_PROPERTY_ID to an existing property id so user_id can be read from that row."
+  )
+}
+
+export async function createProperty(formData: FormData) {
+  const rawName = formData.get("displayName")
+  const parsedName = CreatePropertySchema.safeParse({
+    displayName: typeof rawName === "string" ? rawName : "",
+  })
+
+  if (!parsedName.success) {
+    throw new Error(parsedName.error.issues[0]?.message ?? "Invalid property name.")
+  }
+
+  const displayName = parsedName.data.displayName
+
+  const supabase = createServerClient()
+  const ownerUserId = await resolveOwnerUserId(supabase)
+
+  const { data: existingDup, error: dupError } = await supabase
+    .from("properties")
+    .select("id")
+    .ilike("display_name", escapeForIlike(displayName))
+    .limit(1)
+
+  if (dupError) {
+    throw new Error(dupError.message ?? "Could not validate property name.")
+  }
+
+  if (existingDup && existingDup.length > 0) {
+    throw new Error(DUPLICATE_NAME_MESSAGE)
+  }
+
+  const now = new Date().toISOString()
   const { data, error } = await supabase
     .from("properties")
-    .insert({ user_id: parsedUserId })
+    .insert({
+      user_id: ownerUserId,
+      display_name: displayName,
+      updated_at: now,
+    })
     .select("id")
     .single()
 
-  if (error || !data) {
-    throw new Error(error?.message ?? "Failed to create property")
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error(DUPLICATE_NAME_MESSAGE)
+    }
+    throw new Error(error.message ?? "Failed to create property")
+  }
+
+  if (!data) {
+    throw new Error("Failed to create property")
   }
 
   const newId = data.id as string
 
-  // Ensure listing and detail views update immediately.
   revalidatePath("/")
   revalidatePath(`/properties/${newId}`)
 

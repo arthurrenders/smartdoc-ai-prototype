@@ -1,7 +1,5 @@
 "use server"
 
-import { createServerClient } from "@/lib/supabase/server"
-
 export type PropertyRow = {
   id: string
   created_at?: string
@@ -9,63 +7,49 @@ export type PropertyRow = {
 }
 
 /**
- * Fetches all properties for the current user.
- * Returns fallback list with DEMO_PROPERTY_ID if the table is empty or RLS returns no rows,
- * so the dashboard always shows at least one property when configured.
+ * Loads every row from public.properties — no user_id or auth filter.
+ * Uses PostgREST + service role (bypasses RLS) like other actions in this app.
  */
 export async function getProperties(): Promise<{ data: PropertyRow[]; error: string | null }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return { data: [], error: "Missing Supabase environment variables." }
+  }
+
   try {
-    const supabase = createServerClient()
-    const { data, error } = await supabase
-      .from("properties")
-      .select("id, created_at")
-      .order("created_at", { ascending: false })
+    const base = supabaseUrl.replace(/\/$/, "")
+    const url = new URL(`${base}/rest/v1/properties`)
+    url.searchParams.set("select", "id,created_at,display_name")
+    url.searchParams.set("order", "created_at.desc")
 
-    if (error) {
-      return fallbackProperties()
-    }
+    const res = await fetch(url.toString(), {
+      cache: "no-store",
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        Accept: "application/json",
+      },
+    })
 
-    if (!data || data.length === 0) {
-      return fallbackProperties()
-    }
-
-    // Avoid Supabase-js schema cache issues by enriching display_name via PostgREST fetch.
-    const properties = data as PropertyRow[]
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
-    try {
-      const idsPart = properties.map((p) => encodeURIComponent(p.id)).join(",")
-      const res = await fetch(
-        `${supabaseUrl}/rest/v1/properties?select=id,display_name&id=in.(${idsPart})`,
-        {
-          headers: {
-            apikey: serviceRoleKey,
-            Authorization: `Bearer ${serviceRoleKey}`,
-          },
-        }
-      )
-
-      if (res.ok) {
-        const displayRows = (await res.json()) as Array<{ id: string; display_name?: string | null }>
-        const byId = new Map(displayRows.map((r) => [r.id, r.display_name ?? null] as const))
-        const enriched = properties.map((p) => ({ ...p, display_name: byId.get(p.id) ?? null }))
-        return { data: enriched, error: null }
+    if (!res.ok) {
+      let message = `Could not load properties (HTTP ${res.status}).`
+      try {
+        const body = (await res.json()) as { message?: string; details?: string }
+        message = body.message ?? body.details ?? message
+      } catch {
+        // ignore
       }
-    } catch {
-      // Ignore and fall back to missing display_name values.
+      return { data: [], error: message }
     }
 
-    return { data: properties.map((p) => ({ ...p, display_name: null })), error: null }
-  } catch {
-    return fallbackProperties()
+    const rows = (await res.json()) as PropertyRow[]
+    return { data: Array.isArray(rows) ? rows : [], error: null }
+  } catch (err) {
+    return {
+      data: [],
+      error: err instanceof Error ? err.message : "Failed to load properties.",
+    }
   }
-}
-
-function fallbackProperties(): { data: PropertyRow[]; error: string | null } {
-  const demoId = process.env.DEMO_PROPERTY_ID
-  if (demoId) {
-    return { data: [{ id: demoId }], error: null }
-  }
-  return { data: [], error: null }
 }

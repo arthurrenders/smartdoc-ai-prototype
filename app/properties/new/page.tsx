@@ -9,17 +9,17 @@ export default function NewPropertyPage() {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [displayName, setDisplayName] = useState("")
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
     setSubmitting(true)
     try {
-      // Properties are created with just the user_id; you can rename the
-      // human-friendly display name later from the property page.
-      const formData = new FormData()
+      const formData = new FormData(event.currentTarget)
       const result = await createProperty(formData)
       router.push(`/properties/${result.id}`)
+      router.refresh()
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to create property. Please try again."
@@ -37,7 +37,7 @@ export default function NewPropertyPage() {
               Add Property
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Create a new property listing. It will immediately appear in your dashboard.
+              Create a new property. It will appear on your dashboard right away.
             </p>
           </div>
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -46,10 +46,25 @@ export default function NewPropertyPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="rounded-md bg-muted/60 p-4 text-sm text-muted-foreground">
-            Currently, properties do not have any additional editable fields beyond their
-            automatically generated ID. A new property will be created for your account and
-            will behave exactly like your existing properties.
+          <div className="space-y-1.5">
+            <label htmlFor="displayName" className="text-sm font-medium text-foreground">
+              Property name
+            </label>
+            <input
+              id="displayName"
+              name="displayName"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              disabled={submitting}
+              required
+              maxLength={80}
+              placeholder="e.g. 123 Main Street"
+              className="w-full rounded-md border border-[hsl(var(--border))] bg-background px-3 py-2 text-sm shadow-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-ring focus:ring-offset-0 disabled:opacity-50"
+            />
+            <p className="text-xs text-muted-foreground">
+              Required. Names must be unique (case-insensitive). Up to 80 characters.
+            </p>
           </div>
 
           {error && (
@@ -80,4 +95,3 @@ export default function NewPropertyPage() {
     </div>
   )
 }
-

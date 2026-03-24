@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react"
 import { StatusBadge } from "@/components/ui/StatusBadge"
 import type { PropertyStatusResult } from "@/lib/property-status"
 import { RenamePropertyButton } from "./RenamePropertyButton"
+import { DeletePropertyButton } from "./DeletePropertyButton"
 
 type PropertyDetailHeaderProps = {
   propertyId: string
@@ -33,6 +34,11 @@ export function PropertyDetailHeader({
               <RenamePropertyButton
                 propertyId={propertyId}
                 currentDisplayName={displayName}
+              />
+              <DeletePropertyButton
+                propertyId={propertyId}
+                propertyName={displayName}
+                redirectToDashboard
               />
             </div>
           <p className="mt-1 text-sm text-muted-foreground">

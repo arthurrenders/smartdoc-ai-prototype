@@ -44,9 +44,27 @@ export async function renameProperty(formData: FormData) {
     if (!res.ok) {
       let details: string | undefined
       try {
-        const body = (await res.json()) as any
+        const body = (await res.json()) as {
+          message?: string
+          hint?: string
+          details?: string
+          code?: string
+        }
         details = body?.message ?? body?.hint ?? body?.details
-      } catch {
+        if (
+          body?.code === "23505" ||
+          (typeof details === "string" &&
+            details.toLowerCase().includes("duplicate") &&
+            details.toLowerCase().includes("display_name"))
+        ) {
+          throw new Error(
+            "A property with this name already exists. Please choose a different name."
+          )
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith("A property with this name")) {
+          throw err
+        }
         // ignore json parsing errors
       }
       throw new Error(details || `Failed to rename property (HTTP ${res.status}).`)
