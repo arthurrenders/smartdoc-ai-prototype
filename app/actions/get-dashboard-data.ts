@@ -16,15 +16,21 @@ export type DocumentTypeRow = { id: string; name: string }
 export type PropertyStats = PropertyStatusResult
 
 export type DashboardData = {
-  properties: { id: string; created_at?: string }[]
+  properties: { id: string; created_at?: string; display_name?: string | null }[]
+  propertiesError: string | null
   documentTypes: DocumentTypeRow[]
   propertyStats: Record<string, PropertyStats>
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const { data: properties } = await getProperties()
+  const { data: properties, error: propertiesError } = await getProperties()
   if (properties.length === 0) {
-    return { properties: [], documentTypes: [], propertyStats: {} }
+    return {
+      properties: [],
+      propertiesError,
+      documentTypes: [],
+      propertyStats: {},
+    }
   }
 
   try {
@@ -66,12 +72,14 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   return {
     properties,
+    propertiesError: null,
     documentTypes,
     propertyStats,
   }
   } catch {
     return {
       properties,
+      propertiesError: null,
       documentTypes: [],
       propertyStats: Object.fromEntries(
         properties.map((p) => [

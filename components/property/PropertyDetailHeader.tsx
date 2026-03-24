@@ -2,6 +2,8 @@ import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import { StatusBadge } from "@/components/ui/StatusBadge"
 import type { PropertyStatusResult } from "@/lib/property-status"
+import { RenamePropertyButton } from "./RenamePropertyButton"
+import { DeletePropertyButton } from "./DeletePropertyButton"
 
 type PropertyDetailHeaderProps = {
   propertyId: string
@@ -25,9 +27,20 @@ export function PropertyDetailHeader({
       </Link>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            {displayName}
-          </h1>
+            <div className="flex flex-wrap items-start gap-3">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                {displayName}
+              </h1>
+              <RenamePropertyButton
+                propertyId={propertyId}
+                currentDisplayName={displayName}
+              />
+              <DeletePropertyButton
+                propertyId={propertyId}
+                propertyName={displayName}
+                redirectToDashboard
+              />
+            </div>
           <p className="mt-1 text-sm text-muted-foreground">
             ID: {propertyId}
           </p>
