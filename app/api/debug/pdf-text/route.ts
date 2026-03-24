@@ -65,9 +65,12 @@ export async function POST(request: NextRequest) {
         extractionInfo = await extractTextFromPDFFallback(buffer)
       }
 
+      const docTypes = document.document_types as { name?: string } | { name?: string }[] | null | undefined
+      const documentTypeName = Array.isArray(docTypes) ? docTypes[0]?.name : docTypes?.name
+
       return NextResponse.json({
         success: true,
-        documentType: document.document_types?.name || "unknown",
+        documentType: documentTypeName || "unknown",
         storagePath: document.storage_path,
         extraction: {
           totalLength: extractionInfo.totalLength,

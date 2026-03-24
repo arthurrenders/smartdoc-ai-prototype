@@ -17,18 +17,18 @@ export function PropertyDetailHeader({
   stats,
 }: PropertyDetailHeaderProps) {
   return (
-    <header className="flex flex-col gap-4">
+    <header className="flex flex-col gap-5">
       <Link
         href="/"
-        className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md"
+        className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-all duration-200 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-md"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden />
         Back to dashboard
       </Link>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
             <div className="flex flex-wrap items-start gap-3">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
                 {displayName}
               </h1>
               <RenamePropertyButton
@@ -41,13 +41,13 @@ export function PropertyDetailHeader({
                 redirectToDashboard
               />
             </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground sm:text-sm">
             ID: {propertyId}
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-3">
+        <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
           <StatusBadge status={stats.status} />
-          <span className="text-sm text-muted-foreground">
+          <span className="max-w-xs text-right text-sm leading-relaxed text-muted-foreground sm:text-left">
             {stats.documentCount} document{stats.documentCount !== 1 ? "s" : ""}
             {stats.missingCount > 0 && ` · ${stats.missingCount} missing`}
             {stats.expiriesCount > 0 && ` · ${stats.expiriesCount} expir${stats.expiriesCount !== 1 ? "ies" : "y"} soon`}

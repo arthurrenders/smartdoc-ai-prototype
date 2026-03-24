@@ -6,6 +6,7 @@ import { uploadDocument } from "@/app/actions/upload-document"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
 import { runAnalysis } from "@/app/actions/run-analysis"
 import { pickGoogleDrivePdfFiles } from "@/lib/google-drive/picker-flow"
+import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
 
 type DocumentType = {
   id: string
@@ -27,10 +28,24 @@ type AnalysisResult = {
   is_expired?: boolean | null
 }
 
+type AnalysisRunErrorPayload = { analysisError: string }
+
+type AnalysisRunResultJson = AnalysisResult | AnalysisRunErrorPayload
+
+function isAnalysisErrorPayload(json: AnalysisRunResultJson | null | undefined): json is AnalysisRunErrorPayload {
+  return (
+    typeof json === "object" &&
+    json !== null &&
+    "analysisError" in json &&
+    typeof (json as AnalysisRunErrorPayload).analysisError === "string"
+  )
+}
+
 type AnalysisRun = {
   id: string
   status: string
-  result_json: AnalysisResult | null
+  created_at?: string
+  result_json: AnalysisRunResultJson | null
 }
 
 type Document = {
@@ -57,6 +72,8 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   const [uploading, setUploading] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState<string | null>(null)
   const [driveImporting, setDriveImporting] = useState(false)
+  const [feedbackByDocType, setFeedbackByDocType] = useState<Record<string, string>>({})
+  const [driveFeedback, setDriveFeedback] = useState<string | null>(null)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => {
@@ -105,7 +122,10 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     return documentTypes[0]?.id ?? null
   }
 
-  async function uploadPdfFile(file: File, documentTypeId: string | null) {
+  async function uploadPdfFile(
+    file: File,
+    documentTypeId: string | null
+  ): Promise<{ documentId: string; analysisRunId: string }> {
     const formData = new FormData()
     formData.append("propertyId", propertyId)
     if (documentTypeId) {
@@ -123,6 +143,10 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       }
       throw new Error(errorMessage)
     }
+    if (!result.documentId || !result.analysisRunId) {
+      throw new Error("Upload geslaagd maar ontbrekende document- of analyse-run-id.")
+    }
+    return { documentId: result.documentId, analysisRunId: result.analysisRunId }
   }
 
   function getDocumentData(documentTypeId: string) {
@@ -135,7 +159,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       }
     }
 
-    const analysisRun = doc.analysis_runs?.[0] || null
+    const analysisRun = pickLatestAnalysisRun(doc.analysis_runs) || null
     let status = doc.status
 
     if (analysisRun) {
@@ -144,9 +168,13 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       } else if (analysisRun.status === "processing") {
         status = "Processing"
       } else if (analysisRun.status === "done") {
-        status = analysisRun.result_json?.status || "Done"
+        if (isAnalysisErrorPayload(analysisRun.result_json)) {
+          status = "Fout"
+        } else {
+          status = analysisRun.result_json?.status || "Done"
+        }
       } else if (analysisRun.status === "error") {
-        status = "Error"
+        status = "Fout"
       }
     } else if (doc.status === "uploaded") {
       status = "Uploaded"
@@ -159,8 +187,13 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     }
   }
 
-  async function handleRunAnalysis(documentId: string, analysisRunId: string) {
+  async function handleRunAnalysis(docTypeId: string, documentId: string, analysisRunId: string) {
     setAnalyzing(analysisRunId)
+    setFeedbackByDocType((prev) => {
+      const next = { ...prev }
+      delete next[docTypeId]
+      return next
+    })
 
     const formData = new FormData()
     formData.append("analysisRunId", analysisRunId)
@@ -169,13 +202,14 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
 
     try {
       const result = await runAnalysis(formData)
-      if (result.error) {
-        alert(`Analysis failed: ${result.error}`)
-      } else {
-        await loadData()
+      await loadData()
+      if (result.error && result.persistedToDb !== true) {
+        setFeedbackByDocType((prev) => ({ ...prev, [docTypeId]: result.error! }))
       }
     } catch (error) {
-      alert(`Analysis failed: ${error instanceof Error ? error.message : "Unknown error"}`)
+      const msg = error instanceof Error ? error.message : "Onbekende fout"
+      await loadData()
+      setFeedbackByDocType((prev) => ({ ...prev, [docTypeId]: msg }))
     } finally {
       setAnalyzing(null)
     }
@@ -189,12 +223,20 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     if (!file) return
 
     setUploading(documentTypeId)
+    setFeedbackByDocType((prev) => {
+      const next = { ...prev }
+      delete next[documentTypeId]
+      return next
+    })
 
     try {
-      await uploadPdfFile(file, documentTypeId)
+      const { documentId, analysisRunId } = await uploadPdfFile(file, documentTypeId)
       await loadData()
+      setUploading(null)
+      await handleRunAnalysis(documentTypeId, documentId, analysisRunId)
     } catch (error) {
-      alert(`Upload failed: ${error instanceof Error ? error.message : "Unknown error"}`)
+      const msg = error instanceof Error ? error.message : "Upload mislukt."
+      setFeedbackByDocType((prev) => ({ ...prev, [documentTypeId]: msg }))
     } finally {
       setUploading(null)
       if (fileInputRefs.current[documentTypeId]) {
@@ -205,17 +247,26 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
 
   async function handleGoogleDriveClick() {
     setDriveImporting(true)
+    setDriveFeedback(null)
     try {
       const files = await pickGoogleDrivePdfFiles()
       if (files.length === 0) return
 
       for (const file of files) {
         const documentTypeId = inferDocumentTypeIdFromFileName(file.name)
-        await uploadPdfFile(file, documentTypeId)
+        if (!documentTypeId) {
+          throw new Error(
+            "Geen documenttype herkend in de bestandsnaam. Hernoem het bestand (bijv. epc, asbest, elektrisch) of upload via de juiste rij."
+          )
+        }
+        const { documentId, analysisRunId } = await uploadPdfFile(file, documentTypeId)
+        await loadData()
+        await handleRunAnalysis(documentTypeId, documentId, analysisRunId)
       }
-      await loadData()
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Google Drive import failed")
+      setDriveFeedback(
+        error instanceof Error ? error.message : "Google Drive-import mislukt."
+      )
     } finally {
       setDriveImporting(false)
     }
@@ -230,7 +281,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       case "missing":
         return "text-red-600"
       case "uploaded":
-        return "text-blue-600"
+        return "text-brand-dark dark:text-brand-light"
       case "queued":
         return "text-orange-600"
       case "processing":
@@ -240,6 +291,8 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       case "orange":
         return "text-orange-600"
       case "red":
+        return "text-red-600"
+      case "fout":
         return "text-red-600"
       case "error":
         return "text-red-600"
@@ -261,6 +314,15 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
 
   const content = (
     <div className="space-y-4">
+      {driveFeedback && (
+        <div
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="alert"
+        >
+          <span className="font-medium">Google Drive: </span>
+          {driveFeedback}
+        </div>
+      )}
       <div className="flex flex-col gap-3 rounded-xl border border-dashed border-[hsl(var(--border))] bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-medium text-foreground">Import from Google Drive</p>
@@ -301,63 +363,99 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
           const { status, document, analysisRun } = getDocumentData(docType.id)
           const isUploading = uploading === docType.id
           const isAnalyzing = analyzing === analysisRun?.id
-          const showRunAnalysis = analysisRun?.status === "queued"
-          const showResults = analysisRun?.status === "done" && analysisRun.result_json
+          const showRunAnalysis =
+            analysisRun?.status === "queued" && !isAnalyzing
+          const statusForDisplay = isAnalyzing ? "Bezig met analyseren…" : status
+          const statusColorClass = getStatusColor(
+            isAnalyzing ? "processing" : status
+          )
+          const rowFeedback = feedbackByDocType[docType.id]
+          const persistedAnalysisError =
+            analysisRun?.status === "error" && isAnalysisErrorPayload(analysisRun.result_json)
+              ? analysisRun.result_json.analysisError
+              : null
+          const showResults =
+            analysisRun?.status === "done" &&
+            analysisRun.result_json &&
+            !isAnalysisErrorPayload(analysisRun.result_json)
 
           return (
             <div
               key={docType.id}
-              className="rounded-xl border border-[hsl(var(--card-border))] bg-card p-5 shadow-[var(--card-shadow)] space-y-4 transition-shadow hover:shadow-card-hover"
+              className="space-y-4 rounded-2xl border border-[hsl(var(--card-border))] bg-white p-6 shadow-sm transition-all duration-200 hover:border-brand-light/45 hover:shadow-md dark:bg-card"
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold text-foreground">{docType.name}</h3>
-                  <p className={`text-sm mt-1 ${getStatusColor(status)}`}>Status: {status}</p>
-                  {showResults && analysisRun.result_json && (
+                  {rowFeedback && (
+                    <div
+                      className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                      role="alert"
+                    >
+                      {rowFeedback}
+                    </div>
+                  )}
+                  <p className={`text-sm mt-1 ${statusColorClass}`}>
+                    Status: {statusForDisplay}
+                  </p>
+                  {persistedAnalysisError && (
+                    <div
+                      className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                      role="alert"
+                    >
+                      <p className="font-medium text-destructive">Analyse mislukt</p>
+                      <p className="mt-1 text-destructive/90">{persistedAnalysisError}</p>
+                    </div>
+                  )}
+                  {showResults && analysisRun.result_json && !isAnalysisErrorPayload(analysisRun.result_json) && (
                     <div className="mt-3 space-y-3">
                       <div className="rounded-lg border border-[hsl(var(--border))] bg-muted/50 p-3 text-sm">
                         <p className="font-medium text-foreground">Summary</p>
-                        <p className="mt-1 text-muted-foreground">{analysisRun.result_json.summary}</p>
+                        <p className="mt-1 text-muted-foreground">
+                          {(analysisRun.result_json as AnalysisResult).summary}
+                        </p>
                       </div>
                       {docType.name === "EPC" && (
                         <div className="rounded-lg border border-[hsl(var(--border))] bg-muted/50 p-3 text-sm space-y-1">
                           <p className="font-medium text-foreground">EPC Details</p>
-                          {analysisRun.result_json.epc_score_letter && (
+                          {(analysisRun.result_json as AnalysisResult).epc_score_letter && (
                             <p className="text-muted-foreground">
                               <span className="font-medium">EPC Score:</span>{" "}
-                              {analysisRun.result_json.epc_score_letter}
+                              {(analysisRun.result_json as AnalysisResult).epc_score_letter}
                             </p>
                           )}
-                          {analysisRun.result_json.energy_consumption_kwh_m2_year !== null &&
-                            analysisRun.result_json.energy_consumption_kwh_m2_year !== undefined && (
+                          {(analysisRun.result_json as AnalysisResult).energy_consumption_kwh_m2_year !== null &&
+                            (analysisRun.result_json as AnalysisResult).energy_consumption_kwh_m2_year !==
+                              undefined && (
                               <p className="text-muted-foreground">
                                 <span className="font-medium">Energy Consumption:</span>{" "}
-                                {analysisRun.result_json.energy_consumption_kwh_m2_year} kWh/m²/year
+                                {(analysisRun.result_json as AnalysisResult).energy_consumption_kwh_m2_year}{" "}
+                                kWh/m²/year
                               </p>
                             )}
-                          {analysisRun.result_json.certificate_date && (
+                          {(analysisRun.result_json as AnalysisResult).certificate_date && (
                             <p className="text-muted-foreground">
                               <span className="font-medium">Certificate Date:</span>{" "}
-                              {analysisRun.result_json.certificate_date}
+                              {(analysisRun.result_json as AnalysisResult).certificate_date}
                             </p>
                           )}
-                          {analysisRun.result_json.expiry_date && (
+                          {(analysisRun.result_json as AnalysisResult).expiry_date && (
                             <p className="text-muted-foreground">
                               <span className="font-medium">Expiry Date:</span>{" "}
-                              {analysisRun.result_json.expiry_date}
+                              {(analysisRun.result_json as AnalysisResult).expiry_date}
                             </p>
                           )}
-                          {analysisRun.result_json.is_expired !== null &&
-                            analysisRun.result_json.is_expired !== undefined && (
+                          {(analysisRun.result_json as AnalysisResult).is_expired !== null &&
+                            (analysisRun.result_json as AnalysisResult).is_expired !== undefined && (
                               <p
                                 className={`font-medium ${
-                                  analysisRun.result_json.is_expired
+                                  (analysisRun.result_json as AnalysisResult).is_expired
                                     ? "text-red-600 dark:text-red-400"
                                     : "text-emerald-600 dark:text-emerald-400"
                                 }`}
                               >
                                 <span className="font-medium">Expired Status:</span>{" "}
-                                {analysisRun.result_json.is_expired ? "EXPIRED" : "Valid"}
+                                {(analysisRun.result_json as AnalysisResult).is_expired ? "EXPIRED" : "Valid"}
                               </p>
                             )}
                         </div>
@@ -368,7 +466,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                 <div className="flex flex-shrink-0 flex-wrap gap-2">
                   {showRunAnalysis && document && analysisRun && (
                     <button
-                      onClick={() => handleRunAnalysis(document.id, analysisRun.id)}
+                      onClick={() => handleRunAnalysis(docType.id, document.id, analysisRun.id)}
                       disabled={isAnalyzing}
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
                     >

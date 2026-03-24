@@ -37,12 +37,14 @@ export async function getDocumentsForProperty(propertyId: string) {
       analysis_runs (
         id,
         status,
-        result_json
+        result_json,
+        created_at
       )
     `
     )
     .eq("property_id", propertyId)
     .order("created_at", { ascending: false })
+    .order("created_at", { foreignTable: "analysis_runs", ascending: false })
 
   if (error) {
     return { error: error.message, data: null }

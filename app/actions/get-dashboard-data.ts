@@ -10,6 +10,7 @@ import {
   type PropertyStatusResult,
 } from "@/lib/property-status"
 import { getCurrentDocumentsByType } from "@/lib/current-documents"
+import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
 
 export type DocumentTypeRow = { id: string; name: string }
 
@@ -20,6 +21,19 @@ export type DashboardData = {
   propertiesError: string | null
   documentTypes: DocumentTypeRow[]
   propertyStats: Record<string, PropertyStats>
+}
+
+type DocumentWithRelations = {
+  id: string
+  property_id: string
+  document_type_id: string | null
+  created_at?: string | null
+  analysis_runs?: Array<{
+    id: string
+    status: string
+    created_at?: string
+    result_json?: { status?: string; expiry_date?: string }
+  }>
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
@@ -40,13 +54,14 @@ export async function getDashboardData(): Promise<DashboardData> {
     supabase
       .from("documents")
       .select(
-        "id, property_id, document_type_id, created_at, document_types(id, name), analysis_runs(id, status, result_json)"
+        "id, property_id, document_type_id, created_at, document_types(id, name), analysis_runs(id, status, result_json, created_at)"
       )
-      .in("property_id", properties.map((p) => p.id)),
+      .in("property_id", properties.map((p) => p.id))
+      .order("created_at", { foreignTable: "analysis_runs", ascending: false }),
   ])
 
   const documentTypes: DocumentTypeRow[] = (typesRes.data as DocumentTypeRow[]) || []
-  const requiredNamesSet = new Set(REQUIRED_DOCUMENT_TYPE_NAMES)
+  const requiredNamesSet = new Set<string>(REQUIRED_DOCUMENT_TYPE_NAMES)
   const requiredTypeIds = documentTypes
     .filter((dt) => requiredNamesSet.has(dt.name))
     .map((dt) => dt.id)
@@ -60,7 +75,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     const byType = new Map<string, DocumentWithAnalysis>()
     for (const doc of currentDocs) {
       if (!doc.document_type_id) continue
-      const run = (doc as any).analysis_runs?.[0]
+      const run = pickLatestAnalysisRun((doc as DocumentWithRelations).analysis_runs)
       byType.set(doc.document_type_id, {
         documentTypeId: doc.document_type_id,
         analysis: toDocumentAnalysisSummary(run?.result_json),
@@ -94,12 +109,4 @@ export async function getDashboardData(): Promise<DashboardData> {
       ),
     }
   }
-}
-
-type DocumentWithRelations = {
-  id: string
-  property_id: string
-  document_type_id: string | null
-  created_at?: string | null
-  analysis_runs?: Array<{ id: string; status: string; result_json?: { status?: string; expiry_date?: string } }>
 }

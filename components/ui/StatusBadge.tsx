@@ -9,9 +9,11 @@ type StatusBadgeProps = {
 }
 
 const variantStyles: Record<StatusVariant, string> = {
-  green: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-  orange: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  red: "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/40 dark:text-red-300",
+  green:
+    "border-green-200/80 bg-green-100 text-green-800 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  orange:
+    "border-orange-200/80 bg-orange-100 text-orange-800 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  red: "border-red-200/80 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-900/40 dark:text-red-300",
 }
 
 const defaultLabels: Record<StatusVariant, string> = {
@@ -25,7 +27,7 @@ export function StatusBadge({ status, label, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold tracking-tight",
         variantStyles[status],
         className
       )}

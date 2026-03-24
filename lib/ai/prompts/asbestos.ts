@@ -131,6 +131,15 @@ invalid_quantity
 quantity = 0 or negative
 
 --------------------------------
+OPTIONAL — PROPERTY ADDRESS (Belgium)
+
+If the certified building address is clearly stated:
+
+property_street, property_house_number, property_box, property_postal_code (4 digits), property_municipality, property_region
+
+Otherwise null for each.
+
+--------------------------------
 OUTPUT
 
 Return ONLY JSON.
@@ -151,7 +160,13 @@ Return ONLY JSON.
    "unit": "m2"
   }
  ],
- "red_flags": []
+ "red_flags": [],
+ "property_street": null,
+ "property_house_number": null,
+ "property_box": null,
+ "property_postal_code": null,
+ "property_municipality": null,
+ "property_region": null
 }
 
 If a value cannot be found return null.

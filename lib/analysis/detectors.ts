@@ -1,3 +1,5 @@
+import type { ExtractedPropertyAddress } from "@/lib/property-address/types"
+
 export type Flag = {
   severity: "red" | "orange" | "green"
   title: string
@@ -9,6 +11,8 @@ export type AnalysisResult = {
   summary: string
   flags: Flag[]
   confidence?: number
+  /** When set by analyzers / extractors, used to sync property_addresses after a successful run. */
+  property_address?: ExtractedPropertyAddress
   // EPC-specific fields (optional, only present for EPC documents)
   epc_score_letter?: string | null
   energy_consumption_kwh_m2_year?: number | null

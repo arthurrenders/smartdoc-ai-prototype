@@ -121,6 +121,19 @@ export async function createProperty(formData: FormData) {
 
   const newId = data.id as string
 
+  const { error: addressError } = await supabase.from("property_addresses").insert({
+    property_id: newId,
+    source: "create_property",
+    raw_line1: displayName,
+    country_code: "BE",
+    updated_at: now,
+  })
+
+  if (addressError) {
+    await supabase.from("properties").delete().eq("id", newId)
+    throw new Error(addressError.message ?? "Failed to create property address.")
+  }
+
   revalidatePath("/")
   revalidatePath(`/properties/${newId}`)
 

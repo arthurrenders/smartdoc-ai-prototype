@@ -3,6 +3,7 @@ import { z } from "zod"
 import { EPCResponseSchema, type EPCResponse } from "./epc-schema"
 import { EPC_PROMPT } from "@/lib/ai/prompts/epc"
 import type { AnalysisResult, Flag } from "./detectors"
+import { structuredAddressFromSchemaFields } from "@/lib/property-address/extract-from-analysis"
 import { geminiClient, GEMINI_MODEL } from "@/lib/ai/gemini"
 
 const PROMPT_VERSION = "2.0"
@@ -103,6 +104,7 @@ export async function analyzeEPCWithAI(
 
     // If the certificate is expired, immediately return a red status
     if (epcData.is_expired === true) {
+      const property_address = propertyAddressFromEpc(epcData)
       const expiredResult: AnalysisResult = {
         status: "red",
         summary: "EPC certificate expired",
@@ -119,6 +121,7 @@ export async function analyzeEPCWithAI(
         certificate_date: epcData.certificate_date,
         expiry_date: epcData.expiry_date,
         is_expired: epcData.is_expired,
+        ...(property_address ? { property_address } : {}),
       }
 
       console.log("=== FINAL ANALYSIS RESULT (EXPIRED) ===")
@@ -169,6 +172,12 @@ export async function analyzeEPCWithAI(
       expiry_date: null,
       is_expired: null,
       red_flags: [],
+      property_street: null,
+      property_house_number: null,
+      property_box: null,
+      property_postal_code: null,
+      property_municipality: null,
+      property_region: null,
     }
 
     return {
@@ -178,6 +187,18 @@ export async function analyzeEPCWithAI(
       promptVersion: PROMPT_VERSION,
     }
   }
+}
+
+function propertyAddressFromEpc(epcData: EPCResponse): AnalysisResult["property_address"] {
+  const pa = structuredAddressFromSchemaFields({
+    street: epcData.property_street,
+    house_number: epcData.property_house_number,
+    box: epcData.property_box,
+    postal_code: epcData.property_postal_code,
+    municipality: epcData.property_municipality,
+    region: epcData.property_region,
+  })
+  return pa ?? undefined
 }
 
 /**
@@ -276,6 +297,8 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
     ? summaryParts.join(" | ")
     : "EPC document analyzed"
 
+  const property_address = propertyAddressFromEpc(epcData)
+
   return {
     status,
     summary,
@@ -287,6 +310,7 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
     certificate_date: epcData.certificate_date,
     expiry_date: epcData.expiry_date,
     is_expired: epcData.is_expired,
+    ...(property_address ? { property_address } : {}),
   } as AnalysisResult & {
     epc_score_letter?: string | null
     energy_consumption_kwh_m2_year?: number | null

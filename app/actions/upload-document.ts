@@ -138,25 +138,27 @@ export async function uploadDocument(formData: FormData) {
     }
 
     // Insert analysis_run row
-    const { error: analysisError } = await supabase
+    const { data: analysisRunRow, error: analysisError } = await supabase
       .from("analysis_runs")
       .insert({
         document_id: document.id,
         status: "queued",
       })
+      .select("id")
+      .single()
 
-    if (analysisError) {
+    if (analysisError || !analysisRunRow?.id) {
       console.error("Analysis run insert failed:", analysisError)
       return {
         ok: false,
-        error: `Failed to create analysis run: ${analysisError.message}`,
-        details: { analysis: analysisError.message },
+        error: `Failed to create analysis run: ${analysisError?.message ?? "Unknown error"}`,
+        details: { analysis: analysisError?.message },
       }
     }
 
     revalidatePath(`/properties/${propertyId}`)
 
-    return { ok: true, documentId: document.id }
+    return { ok: true, documentId: document.id, analysisRunId: analysisRunRow.id as string }
   } catch (error) {
     console.error("Unexpected error in uploadDocument:", error)
     return {

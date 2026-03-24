@@ -1,5 +1,6 @@
 import "server-only"
 import type { AnalysisResult, Flag } from "./detectors"
+import { structuredAddressFromSchemaFields } from "@/lib/property-address/extract-from-analysis"
 import { ASBEST_PROMPT as ASBESTOS_PROMPT } from "@/lib/ai/prompts/asbestos"
 import { geminiClient, GEMINI_MODEL } from "@/lib/ai/gemini"
 
@@ -22,6 +23,12 @@ type AsbestosAIResponse = {
   is_expired?: boolean | null
   asbestos_inventory?: AsbestosInventoryItem[] | null
   red_flags?: string[] | null
+  property_street?: string | null
+  property_house_number?: string | null
+  property_box?: string | null
+  property_postal_code?: string | null
+  property_municipality?: string | null
+  property_region?: string | null
 }
 
 function normalizeText(text: string): string {
@@ -233,11 +240,22 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse): AnalysisRe
   const summary =
     summaryParts.length > 0 ? summaryParts.join(" | ") : "Asbestos certificate analyzed"
 
+  const property_address =
+    structuredAddressFromSchemaFields({
+      street: data.property_street,
+      house_number: data.property_house_number,
+      box: data.property_box,
+      postal_code: data.property_postal_code,
+      municipality: data.property_municipality,
+      region: data.property_region,
+    }) ?? undefined
+
   const result: AnalysisResult = {
     status,
     summary,
     flags,
     confidence: 0.9,
+    ...(property_address ? { property_address } : {}),
   }
 
   return result

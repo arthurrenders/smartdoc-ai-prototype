@@ -49,17 +49,17 @@ export function PropertyAISummaryCard({
   return (
     <div
       className={cn(
-        "saas-card-elevated flex flex-col gap-6 rounded-xl border",
+        "saas-card-elevated flex flex-col gap-8 border",
         toneStyles[tone],
         className
       )}
     >
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary" aria-hidden>
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-dark/10 text-brand-dark dark:bg-brand-light/15 dark:text-brand-light" aria-hidden>
           <FileText className="h-5 w-5" aria-hidden />
         </div>
         <div>
-          <h2 className="saas-section-heading">Document summary</h2>
+          <h2 className="saas-section-heading text-xl sm:text-2xl">Document summary</h2>
           <p className="saas-section-subheading">
             Status of required documents for this property
           </p>

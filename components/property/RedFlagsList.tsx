@@ -1,3 +1,4 @@
+import { CheckCircle2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { FlagItem } from "@/app/actions/get-property-detail"
 
@@ -27,11 +28,15 @@ function groupFlagsByDocumentType(flags: FlagItem[]): Map<string, FlagItem[]> {
 export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
   if (flags.length === 0) {
     return (
-      <div className={cn("saas-card flex flex-col gap-1", className)}>
-        <h2 className="saas-section-heading">Issues &amp; flags</h2>
+      <div className={cn("saas-card flex flex-col gap-2", className)}>
+        <h2 className="saas-section-heading text-xl sm:text-2xl">Issues &amp; flags</h2>
         <p className="saas-section-subheading">No issues or flags reported for this property.</p>
-        <div className="mt-6 rounded-lg border border-[hsl(var(--card-border))] bg-muted/30 px-5 py-8 text-center">
-          <p className="text-sm font-medium text-muted-foreground">All clear — no action needed.</p>
+        <div className="mt-8 flex flex-col items-center justify-center rounded-xl border border-dashed border-[hsl(var(--card-border))] bg-muted/15 px-6 py-12 text-center">
+          <CheckCircle2
+            className="h-12 w-12 text-green-600/70 dark:text-green-400/80"
+            aria-hidden
+          />
+          <p className="mt-4 text-sm font-semibold text-foreground">All clear — no action needed.</p>
         </div>
       </div>
     )
@@ -44,8 +49,8 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
   ]
 
   return (
-    <div className={cn("saas-card flex flex-col gap-4", className)}>
-      <h2 className="saas-section-heading">Issues &amp; flags</h2>
+    <div className={cn("saas-card flex flex-col gap-6", className)}>
+      <h2 className="saas-section-heading text-xl sm:text-2xl">Issues &amp; flags</h2>
       <div className="flex flex-col gap-6">
         {orderedTypes.map((docType) => {
           const items = byType.get(docType) ?? []
@@ -59,7 +64,7 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
                   <li
                     key={`${docType}-${index}-${flag.title}`}
                     className={cn(
-                      "flex gap-4 rounded-lg border px-4 py-3 sm:px-4 sm:py-4",
+                      "flex gap-4 rounded-xl border px-4 py-4 transition-shadow duration-200 sm:px-5 sm:py-4",
                       severityStyles[flag.severity]
                     )}
                   >

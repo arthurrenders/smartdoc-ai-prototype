@@ -33,14 +33,14 @@ export default function NewPropertyPage() {
       <div className="saas-card max-w-xl">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               Add Property
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-2 text-sm text-muted-foreground">
               Create a new property. It will appear on your dashboard right away.
             </p>
           </div>
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-dark/10 text-brand-dark dark:bg-brand-light/15 dark:text-brand-light">
             <Home className="h-5 w-5" />
           </span>
         </div>

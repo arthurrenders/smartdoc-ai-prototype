@@ -7,11 +7,15 @@ import {
   extractTextFromPDF,
   extractTextFromPDFFallback,
 } from "@/lib/pdf/extractor"
-import { analyzeElectrical, analyzeEPC, analyzeAsbestos, calculateConfidence } from "@/lib/analysis/detectors"
+import { calculateConfidence } from "@/lib/analysis/detectors"
 import { analyzeWithLLM } from "@/lib/analysis/llm-analyzer"
 import { analyzeEPCWithAI } from "@/lib/analysis/epc-analyzer"
 import { analyzeElectricalWithAI } from "@/lib/analysis/electrical-analyzer"
 import { analyzeAsbestosWithAI } from "@/lib/analysis/asbestos-analyzer"
+import type { AnalysisResult } from "@/lib/analysis/detectors"
+import { extractDocumentDatesFromResult } from "@/lib/document-dates/extract-from-result"
+import { replaceDocumentDatesForDocument } from "@/lib/document-dates/persist"
+import { syncPropertyAddressFromDocumentAnalysis } from "@/lib/property-address/sync-from-analysis"
 
 function detectDocumentType(text: string): "epc" | "electrical" | "asbestos" | "unknown" {
   const t = text.toLowerCase()
@@ -63,20 +67,21 @@ const runAnalysisSchema = z.object({
 
 export async function runAnalysis(formData: FormData) {
   try {
-    const analysisRunId = formData.get("analysisRunId") as string
-    const documentId = formData.get("documentId") as string
-    const propertyId = formData.get("propertyId") as string
+    const analysisRunIdRaw = formData.get("analysisRunId") as string
+    const documentIdRaw = formData.get("documentId") as string
+    const propertyIdRaw = formData.get("propertyId") as string
 
     const validation = runAnalysisSchema.safeParse({
-      analysisRunId,
-      documentId,
-      propertyId,
+      analysisRunId: analysisRunIdRaw,
+      documentId: documentIdRaw,
+      propertyId: propertyIdRaw,
     })
 
     if (!validation.success) {
-      return { error: "Invalid input data" }
+      return { error: "Invalid input data", persistedToDb: false as const }
     }
 
+    const { analysisRunId, documentId, propertyId } = validation.data
     const supabase = createServerClient()
 
     // Set status to 'processing'
@@ -86,19 +91,37 @@ export async function runAnalysis(formData: FormData) {
       .eq("id", analysisRunId)
 
     if (processingError) {
-      return { error: `Failed to start processing: ${processingError.message}` }
+      return {
+        error: `Failed to start processing: ${processingError.message}`,
+        persistedToDb: false as const,
+      }
     }
 
+    async function markRunFailed(message: string) {
+      try {
+        await supabase.from("analysis_runs").update({
+          status: "error",
+          result_json: { analysisError: message },
+        }).eq("id", analysisRunId)
+      } catch (e) {
+        console.error("Failed to mark analysis_run as error:", e)
+      }
+      revalidatePath(`/properties/${propertyId}`)
+    }
+
+    try {
     // Fetch document to get storage_path and document_type_id
     const { data: document, error: documentError } = await supabase
       .from("documents")
-      .select("storage_path, document_type_id, document_types(name)")
+      .select("storage_path, document_type_id, property_id, document_types(name)")
       .eq("id", documentId)
       .single()
 
     if (documentError || !document) {
-      return { error: `Failed to fetch document: ${documentError?.message}` }
+      throw new Error(`Failed to fetch document: ${documentError?.message ?? "Unknown error"}`)
     }
+
+    const docPropertyId = document.property_id as string
 
     // Extract document type name from the query result
     let documentTypeName: string | null = null
@@ -116,7 +139,7 @@ export async function runAnalysis(formData: FormData) {
       .download(document.storage_path)
 
     if (downloadError || !pdfBlob) {
-      return { error: `Failed to download PDF: ${downloadError?.message}` }
+      throw new Error(`Failed to download PDF: ${downloadError?.message ?? "Unknown error"}`)
     }
 
     // Convert Blob to Buffer for PDF parsing
@@ -167,9 +190,9 @@ export async function runAnalysis(formData: FormData) {
       }
     } catch (parseError) {
       console.error("PDF extraction failed completely:", parseError)
-      return {
-        error: `Failed to parse PDF: ${parseError instanceof Error ? parseError.message : "Unknown error"}`,
-      }
+      throw new Error(
+        `Failed to parse PDF: ${parseError instanceof Error ? parseError.message : "Unknown error"}`
+      )
     }
 
     // Run analysis based on document type
@@ -367,7 +390,7 @@ export async function runAnalysis(formData: FormData) {
       .eq("id", analysisRunId)
 
     if (updateError) {
-      return { error: `Failed to update analysis: ${updateError.message}` }
+      throw new Error(`Failed to update analysis: ${updateError.message}`)
     }
 
     // Insert red_flags if status is orange or red
@@ -389,12 +412,41 @@ export async function runAnalysis(formData: FormData) {
       }
     }
 
+    try {
+      const dates = extractDocumentDatesFromResult(documentTypeName, result)
+      await replaceDocumentDatesForDocument(supabase, {
+        propertyId: docPropertyId,
+        documentId,
+        analysisRunId,
+        dates,
+      })
+    } catch (dateErr) {
+      console.error("Failed to persist document_dates:", dateErr)
+    }
+
+    try {
+      await syncPropertyAddressFromDocumentAnalysis(supabase, {
+        propertyId: docPropertyId,
+        result: result as AnalysisResult,
+        extractedText,
+      })
+    } catch (addrErr) {
+      console.error("Failed to sync property address from analysis:", addrErr)
+    }
+
     revalidatePath(`/properties/${propertyId}`)
 
     return { success: true, result }
+    } catch (pipelineError) {
+      const msg =
+        pipelineError instanceof Error ? pipelineError.message : "Unknown error occurred"
+      await markRunFailed(msg)
+      return { error: msg, persistedToDb: true as const }
+    }
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "Unknown error occurred",
+      persistedToDb: false as const,
     }
   }
 }

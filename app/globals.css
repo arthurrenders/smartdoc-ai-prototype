@@ -22,7 +22,7 @@
     --card: 0 0% 100%;
     --card-foreground: 215 25% 18%;
     --card-border: 214 20% 92%;
-    --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+    --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 4px 12px -2px rgb(0 0 0 / 0.06);
 
     /* Primary = brand dark blue */
     --primary: var(--brand-dark);
@@ -55,7 +55,7 @@
     --radius-lg: 1rem;
 
     /* Spacing scale (for consistency) */
-    --section-gap: 2rem;
+    --section-gap: 2.5rem;
     --card-padding: 1.5rem;
     --header-height: 5.5rem;
   }
@@ -93,14 +93,19 @@
 @layer components {
   /* Card – rounded, subtle shadow, soft border */
   .saas-card {
-    @apply rounded-xl border border-[hsl(var(--card-border))] bg-card text-card-foreground;
+    @apply rounded-2xl border border-[hsl(var(--card-border))] bg-white text-card-foreground shadow-sm transition-shadow duration-200 dark:bg-card;
     box-shadow: var(--card-shadow);
     padding: var(--card-padding);
   }
 
+  .saas-card-interactive {
+    @apply saas-card hover:shadow-md;
+  }
+
   .saas-card-elevated {
-    @apply saas-card;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+    @apply rounded-2xl border border-[hsl(var(--card-border))] bg-white text-card-foreground shadow-md transition-shadow duration-200 dark:bg-card;
+    padding: var(--card-padding);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 8px 20px -4px rgb(0 0 0 / 0.06);
   }
 
   /* Section heading – strong hierarchy */
@@ -109,28 +114,28 @@
   }
 
   .saas-section-subheading {
-    @apply mt-1 text-sm text-muted-foreground;
+    @apply mt-1 text-sm text-muted-foreground/90;
   }
 
-  /* Badges – status and labels (match StatusBadge border treatment) */
+  /* Badges – status and labels (pill style, aligned with StatusBadge) */
   .saas-badge {
-    @apply inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold;
   }
 
   .saas-badge-primary {
-    @apply saas-badge border-primary/30 bg-primary text-primary-foreground;
+    @apply saas-badge border-primary/25 bg-primary text-primary-foreground;
   }
 
   .saas-badge-success {
-    @apply saas-badge border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300;
+    @apply saas-badge border-green-200/80 bg-green-100 text-green-800 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300;
   }
 
   .saas-badge-warning {
-    @apply saas-badge border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-300;
+    @apply saas-badge border-orange-200/80 bg-orange-100 text-orange-800 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-300;
   }
 
   .saas-badge-danger {
-    @apply saas-badge border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/40 dark:text-red-300;
+    @apply saas-badge border-red-200/80 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-900/40 dark:text-red-300;
   }
 
   .saas-badge-muted {
@@ -139,7 +144,7 @@
 
   /* Page container – consistent max-width and padding */
   .saas-page {
-    @apply mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8;
+    @apply mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8;
   }
 
   /* Main content area (below header) */
@@ -150,30 +155,30 @@
 
   /* Empty state – centered content with icon and copy */
   .saas-empty-state {
-    @apply flex flex-col items-center justify-center rounded-xl border border-[hsl(var(--card-border))] bg-card py-16 px-6 text-center;
+    @apply flex flex-col items-center justify-center rounded-2xl border border-dashed border-[hsl(var(--card-border))] bg-muted/20 py-16 px-8 text-center;
     box-shadow: var(--card-shadow);
   }
 
   .saas-empty-state-icon {
-    @apply text-muted-foreground/50;
+    @apply text-muted-foreground/40;
   }
 
   .saas-empty-state-title {
-    @apply mt-4 text-base font-semibold text-foreground sm:text-lg;
+    @apply mt-5 text-base font-semibold text-foreground sm:text-lg;
   }
 
   .saas-empty-state-description {
-    @apply mt-1 max-w-sm text-sm text-muted-foreground;
+    @apply mt-2 max-w-md text-sm leading-relaxed text-muted-foreground;
   }
 
-  /* Primary button – brand dark, consistent focus */
+  /* Primary actions – brand donkerblauw #0e3b6a */
   .saas-btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 hover:shadow focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
   }
 
   /* Secondary / outline button */
   .saas-btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-[hsl(var(--border))] bg-card px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 dark:border-border dark:bg-card dark:hover:bg-muted/50;
   }
 }
 
@@ -185,4 +190,10 @@
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* /map — Leaflet divIcon: hide default white square behind coloured status dot */
+.leaflet-div-icon.smartdoc-map-marker {
+  background: transparent !important;
+  border: none !important;
 }

@@ -22,6 +22,19 @@ Date when the EPC certificate was issued.
 expiry_date
 Date when the EPC certificate expires.
 
+PROPERTY ADDRESS (Belgian building this certificate applies to)
+
+Optional — only if clearly stated on the certificate:
+
+property_street — street name (e.g. Bondgenotenlaan)
+property_house_number — house number (e.g. 42 or 42A)
+property_box — bus / box if present (e.g. 3)
+property_postal_code — four digits (e.g. 3000)
+property_municipality — gemeente / commune name (e.g. Leuven)
+property_region — only if explicitly given (e.g. Vlaanderen)
+
+If unsure, return null for each property_* field.
+
 --------------------------------
 COMMON LABELS TO SEARCH FOR
 --------------------------------
@@ -153,7 +166,13 @@ Never include explanations.
  "certificate_date": "2018-06-12",
  "expiry_date": "2028-06-12",
  "is_expired": false,
- "red_flags": []
+ "red_flags": [],
+ "property_street": null,
+ "property_house_number": null,
+ "property_box": null,
+ "property_postal_code": null,
+ "property_municipality": null,
+ "property_region": null
 }
 
 If a value cannot be extracted return null for that field.
