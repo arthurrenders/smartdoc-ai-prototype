@@ -14,24 +14,16 @@ export function InAppNotificationsCard({ notifications, error, syncNote }: Props
   const read = notifications.filter((n) => n.read_at)
 
   return (
-    <div className="saas-card">
-      <h2 className="saas-section-heading inline-flex flex-wrap items-center gap-2 text-xl sm:text-2xl">
-        <Bell className="h-5 w-5 text-brand-dark dark:text-brand-light" aria-hidden />
-        Meldingen
+    <div className="space-y-4">
+      <h2 className="dashboard-section-title">
+        <Bell className="h-5 w-5 text-dashboard-error" aria-hidden />
+        Notifications
         {unread.length > 0 ? (
-          <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-semibold text-destructive">
+          <span className="rounded-full bg-dashboard-error-container px-2 py-0.5 text-xs font-semibold text-dashboard-error">
             {unread.length} ongelezen
           </span>
         ) : null}
       </h2>
-      <p className="saas-section-subheading mb-2 text-muted-foreground/90">
-        Herinneringen op basis van documentdatums. Standaard:{" "}
-        <strong className="font-medium text-foreground/90">7, 14 en 30 dagen vóór</strong> de datum (instelbaar in{" "}
-        <code className="rounded bg-muted px-1 text-xs">notification_rules</code>).
-      </p>
-      <p className="mb-8 text-xs text-muted-foreground/80">
-        Bij elk bezoek aan het dashboard worden ontbrekende meldingen aangemaakt — geen aparte scheduler.
-      </p>
       {syncNote && (
         <div
           className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -50,28 +42,25 @@ export function InAppNotificationsCard({ notifications, error, syncNote }: Props
       )}
 
       {!error && notifications.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[hsl(var(--border))] bg-white/80 px-6 py-12 text-center text-sm text-muted-foreground dark:bg-card/50">
+        <div className="rounded-xl border border-dashed border-dashboard-outline-variant/40 bg-dashboard-surface px-6 py-12 text-center text-sm text-dashboard-on-surface-variant">
           Geen meldingen. Zodra een datum binnen een herinneringsvenster valt, verschijnt die hier.
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-3">
           {unread.length > 0 && (
-            <div className="rounded-xl bg-white/90 p-4 shadow-sm dark:bg-card/80">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Ongelezen
-              </p>
+            <div className="space-y-3">
               <ul className="space-y-3">
                 {unread.map((n) => (
                   <li
                     key={n.id}
-                    className="rounded-xl border border-[hsl(var(--border))] bg-white p-4 text-sm transition-all duration-200 hover:border-brand-light/50 hover:shadow-sm dark:bg-background/50"
+                    className="rounded-xl border-l-4 border-dashboard-error bg-dashboard-error-container p-4 text-sm"
                   >
-                    <p className="font-semibold text-foreground">{n.title}</p>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{n.body}</p>
+                    <p className="font-semibold text-dashboard-on-surface">{n.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-dashboard-on-surface-variant">{n.body}</p>
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       <Link
                         href={`/properties/${n.property_id}`}
-                        className="text-xs font-semibold text-brand-dark underline-offset-2 transition-colors hover:text-brand-dark/80 hover:underline dark:text-brand-light"
+                        className="text-xs font-semibold text-dashboard-primary underline-offset-2 transition-colors hover:underline"
                       >
                         Naar pand
                       </Link>
@@ -79,7 +68,7 @@ export function InAppNotificationsCard({ notifications, error, syncNote }: Props
                         <input type="hidden" name="notificationId" value={n.id} />
                         <button
                           type="submit"
-                          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-foreground transition-all duration-200 hover:bg-gray-50 dark:border-border dark:bg-card dark:hover:bg-muted/50"
+                          className="rounded-lg border border-dashboard-outline-variant/30 bg-white px-3 py-1.5 text-xs font-medium text-dashboard-on-surface transition-all duration-200 hover:bg-dashboard-surface-low"
                         >
                           Markeer gelezen
                         </button>
@@ -91,18 +80,15 @@ export function InAppNotificationsCard({ notifications, error, syncNote }: Props
             </div>
           )}
           {read.length > 0 && (
-            <div>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Recent gelezen
-              </p>
-              <ul className="space-y-2 opacity-90">
+            <div className="pt-1">
+              <ul className="space-y-2">
                 {read.slice(0, 8).map((n) => (
                   <li
                     key={n.id}
-                    className="rounded-xl border border-transparent bg-white/60 px-4 py-3 text-sm dark:bg-muted/20"
+                    className="rounded-xl border border-dashboard-outline-variant/20 bg-dashboard-surface-high/60 px-4 py-3 text-sm"
                   >
-                    <p className="font-medium text-foreground">{n.title}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{n.body}</p>
+                    <p className="font-medium text-dashboard-on-surface">{n.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-dashboard-on-surface-variant">{n.body}</p>
                   </li>
                 ))}
               </ul>

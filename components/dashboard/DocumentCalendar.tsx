@@ -143,29 +143,26 @@ export function DocumentCalendar({ entries, mapHref }: Props) {
 
   if (entries.length === 0) {
     return (
-      <div className="saas-card">
+      <div className="rounded-xl border border-dashboard-outline-variant/30 bg-dashboard-surface p-6 shadow-sm">
         <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <h2 className="saas-section-heading inline-flex items-center gap-2 text-xl sm:text-2xl">
-            <CalendarDays className="h-5 w-5 text-brand-dark dark:text-brand-light" aria-hidden />
-            Documentkalender
+          <h2 className="dashboard-section-title">
+            <CalendarDays className="h-5 w-5" aria-hidden />
+            Document Calendar
           </h2>
           {mapHref ? (
             <Link
               href={mapHref}
-              className="saas-btn-secondary inline-flex w-full shrink-0 items-center justify-center gap-2 sm:w-auto"
+              className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-dashboard-outline-variant/40 bg-white px-3 py-2 text-sm text-dashboard-primary transition-all hover:bg-dashboard-surface-low sm:w-auto"
             >
               <MapPin className="h-4 w-4" aria-hidden />
-              Kaartweergave
+              Map view
             </Link>
           ) : null}
         </div>
-        <p className="saas-section-subheading mb-6">
-          Datums uit geanalyseerde documenten (certificaat, verval, keuring)
-        </p>
-        <div className="saas-empty-state py-10">
+        <div className="rounded-xl border border-dashed border-dashboard-outline-variant/40 bg-dashboard-surface-low px-6 py-10 text-center">
           <CalendarDays className="h-12 w-12 sm:h-14 sm:w-14 saas-empty-state-icon" aria-hidden />
-          <p className="saas-empty-state-title">Nog geen datums</p>
-          <p className="saas-empty-state-description">
+          <p className="mt-4 text-base font-semibold text-dashboard-on-surface">Nog geen datums</p>
+          <p className="mt-2 text-sm text-dashboard-on-surface-variant">
             Na een geslaagde documentanalyse verschijnen belangrijke datums hier automatisch.
           </p>
         </div>
@@ -174,49 +171,46 @@ export function DocumentCalendar({ entries, mapHref }: Props) {
   }
 
   return (
-    <div className="saas-card">
+    <div className="rounded-xl border border-dashboard-outline-variant/30 bg-dashboard-surface p-6 shadow-sm">
       <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <h2 className="saas-section-heading inline-flex items-center gap-2 text-xl sm:text-2xl">
-          <CalendarDays className="h-5 w-5 text-brand-dark dark:text-brand-light" aria-hidden />
-          Documentkalender
+        <h2 className="dashboard-section-title">
+          <CalendarDays className="h-5 w-5" aria-hidden />
+          Document Calendar
         </h2>
         {mapHref ? (
           <Link
             href={mapHref}
-            className="saas-btn-secondary inline-flex w-full shrink-0 items-center justify-center gap-2 sm:w-auto"
+            className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-dashboard-outline-variant/40 bg-white px-3 py-2 text-sm text-dashboard-primary transition-all hover:bg-dashboard-surface-low sm:w-auto"
           >
             <MapPin className="h-4 w-4" aria-hidden />
-            Kaartweergave
+            Map view
           </Link>
         ) : null}
       </div>
-      <p className="saas-section-subheading mb-4">
-        Klik op een gemarkeerde dag om pand, documenttype en datumsoort te zien.
-      </p>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={goPrevMonth}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[hsl(var(--border))] bg-white text-foreground shadow-sm transition-all duration-200 hover:bg-gray-50 dark:bg-background dark:hover:bg-muted"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-dashboard-outline-variant/40 bg-white text-dashboard-on-surface shadow-sm transition-all hover:bg-dashboard-surface-low"
             aria-label="Vorige maand"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="min-w-[10rem] text-center text-sm font-semibold capitalize text-foreground">
+          <span className="min-w-[10rem] text-center text-sm font-semibold capitalize text-dashboard-on-surface">
             {monthTitle}
           </span>
           <button
             type="button"
             onClick={goNextMonth}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[hsl(var(--border))] bg-white text-foreground shadow-sm transition-all duration-200 hover:bg-gray-50 dark:bg-background dark:hover:bg-muted"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-dashboard-outline-variant/40 bg-white text-dashboard-on-surface shadow-sm transition-all hover:bg-dashboard-surface-low"
             aria-label="Volgende maand"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+        <div className="flex flex-wrap gap-3 text-xs text-dashboard-on-surface-variant">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Urgent (verval)
           </span>
@@ -231,7 +225,7 @@ export function DocumentCalendar({ entries, mapHref }: Props) {
 
       <div className="overflow-x-auto">
         <div className="min-w-[280px]">
-          <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-muted-foreground">
+          <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-dashboard-on-surface-variant">
             {WEEKDAYS.map((d) => (
               <div key={d} className="py-2">
                 {d}
@@ -258,11 +252,11 @@ export function DocumentCalendar({ entries, mapHref }: Props) {
                       onClick={() => onDayClick(day)}
                       disabled={!has}
                       className={[
-                        "flex h-full w-full flex-col items-center justify-center rounded-lg border text-sm font-medium transition-colors",
+                        "flex h-full w-full flex-col items-center justify-center rounded-lg border text-xs font-medium transition-colors",
                         has
                           ? `${urgencyDayCellClass(cellUrgency)} cursor-pointer hover:opacity-90`
-                          : "border-transparent text-muted-foreground hover:bg-muted/50",
-                        selected && has ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "",
+                          : "border-transparent text-dashboard-on-surface-variant/50 hover:bg-dashboard-surface-low",
+                        selected && has ? "ring-2 ring-dashboard-primary ring-offset-2 ring-offset-dashboard-surface" : "",
                         !has ? "cursor-default opacity-80" : "",
                       ].join(" ")}
                     >
@@ -288,11 +282,11 @@ export function DocumentCalendar({ entries, mapHref }: Props) {
 
       {selectedIso && selectedEvents.length > 0 ? (
         <div
-          className="mt-8 rounded-2xl border border-[hsl(var(--border))] bg-slate-50/80 p-5 shadow-sm dark:bg-muted/30"
+          className="mt-6 rounded-xl border border-dashboard-outline-variant/30 bg-dashboard-surface-low p-5 shadow-sm"
           role="region"
           aria-label="Geselecteerde dag"
         >
-          <p className="text-base font-bold text-foreground">
+          <p className="text-base font-bold text-dashboard-on-surface">
             {formatDateLongNl(selectedIso)}
           </p>
           <ul className="mt-4 space-y-3">
@@ -303,29 +297,29 @@ export function DocumentCalendar({ entries, mapHref }: Props) {
               return (
                 <li
                   key={e.id}
-                  className="rounded-xl border border-[hsl(var(--border))] bg-white p-4 text-sm shadow-sm transition-shadow duration-200 hover:shadow-md dark:bg-card"
+                  className="rounded-xl border border-dashboard-outline-variant/30 bg-dashboard-surface p-4 text-sm shadow-sm transition-shadow hover:shadow-md"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <Link
                         href={`/properties/${e.property_id}`}
-                        className="font-medium text-primary underline-offset-2 hover:underline"
+                        className="font-medium text-dashboard-primary underline-offset-2 hover:underline"
                       >
                         {propName}
                       </Link>
-                      <p className="mt-1 text-muted-foreground">
+                      <p className="mt-1 text-dashboard-on-surface-variant">
                         Document:{" "}
-                        <span className="text-foreground">
+                        <span className="text-dashboard-on-surface">
                           {e.documentTypeName ?? "Onbekend type"}
                         </span>
                       </p>
-                      <p className="mt-0.5 text-muted-foreground">
+                      <p className="mt-0.5 text-dashboard-on-surface-variant">
                         Soort:{" "}
-                        <span className="text-foreground">{dateTypeLabelNl(e.date_type)}</span>
+                        <span className="text-dashboard-on-surface">{dateTypeLabelNl(e.date_type)}</span>
                       </p>
-                      <p className="mt-0.5 text-muted-foreground">
+                      <p className="mt-0.5 text-dashboard-on-surface-variant">
                         Datum:{" "}
-                        <span className="font-medium text-foreground">{e.date_on}</span>
+                        <span className="font-medium text-dashboard-on-surface">{e.date_on}</span>
                       </p>
                     </div>
                     <span

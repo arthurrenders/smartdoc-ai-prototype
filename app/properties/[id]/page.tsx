@@ -1,36 +1,33 @@
 import { notFound } from "next/navigation"
+import nextDynamic from "next/dynamic"
+import Link from "next/link"
+import {
+  Bell,
+  Building2,
+  CircleHelp,
+  FileDown,
+  Filter,
+  LayoutDashboard,
+  Layers3,
+  Map as MapIcon,
+  Plus,
+  Search,
+  Settings,
+  UserCircle2,
+  MapPin,
+  AlertTriangle,
+} from "lucide-react"
 import { getPropertyDetail } from "@/app/actions/get-property-detail"
 import DocumentTable from "@/components/DocumentTable"
-import { PropertyDetailHeader } from "@/components/property/PropertyDetailHeader"
 import { PropertyAddressCard } from "@/components/property/PropertyAddressCard"
 import { PropertyLocationEnrichmentCard } from "@/components/property/PropertyLocationEnrichmentCard"
-import { StatusBanner } from "@/components/property/StatusBanner"
-import { PropertyAISummaryCard } from "@/components/property/PropertyAISummaryCard"
+import { RenamePropertyButton } from "@/components/property/RenamePropertyButton"
+import { DeletePropertyButton } from "@/components/property/DeletePropertyButton"
 import { RedFlagsList } from "@/components/property/RedFlagsList"
 import { SuggestedActionsCard } from "@/components/property/SuggestedActionsCard"
+import { StatusBadge } from "@/components/ui/StatusBadge"
 
-const STATUS_BANNER_COPY: Record<
-  "green" | "orange" | "red",
-  { title: string; description: string }
-> = {
-  green: {
-    title: "All documents in order",
-    description:
-      "Required documents are present and analyzed. No critical issues or missing certificates.",
-  },
-  orange:
-    {
-      title: "Attention needed",
-      description:
-        "Some documents are missing, have warnings, or have upcoming expiries. Review the suggested actions below.",
-    },
-  red:
-    {
-      title: "Critical issues",
-      description:
-        "Required documents are missing or critical compliance issues were found. Address these before closing.",
-    },
-}
+const PropertiesMap = nextDynamic(() => import("@/components/map/PropertiesMap"), { ssr: false })
 
 export default async function PropertyPage({
   params,
@@ -44,79 +41,188 @@ export default async function PropertyPage({
     notFound()
   }
 
-  const bannerCopy = STATUS_BANNER_COPY[data.stats.status]
+  const requiredTotal = data.summaryCounts.requiredTotal || 0
+  const validCount = data.summaryCounts.validCount || 0
+  const criticalIssues =
+    data.flags.filter((f) => f.severity === "red").length + (data.stats.missingCount > 0 ? 1 : 0)
+  const complianceScore =
+    requiredTotal > 0 ? Math.round((validCount / requiredTotal) * 100) : 0
+  const hasCoords =
+    data.propertyAddress?.latitude != null && data.propertyAddress?.longitude != null
+  const mapMarkers = hasCoords
+    ? [
+        {
+          propertyId: data.propertyId,
+          displayName: data.propertyDisplayName,
+          latitude: Number(data.propertyAddress!.latitude),
+          longitude: Number(data.propertyAddress!.longitude),
+          addressLabel: data.propertyAddress?.normalized_full_address || data.propertyAddress?.raw_line1 || "—",
+          status: data.stats.status,
+        },
+      ]
+    : []
 
   return (
-    <div className="saas-page">
-      <div className="mb-10 sm:mb-12">
-        <div className="rounded-2xl border border-[hsl(var(--card-border))] bg-white p-6 shadow-md sm:p-8 dark:bg-card">
-          <PropertyDetailHeader
-            propertyId={data.propertyId}
-            displayName={data.propertyDisplayName}
-            stats={data.stats}
-          />
-        </div>
-      </div>
-
-      <div
-        className="space-y-8 border-b border-[hsl(var(--border))]/60 pb-12 sm:space-y-10 sm:pb-16"
-        aria-label="Locatie"
-      >
-        <section aria-label="Property address">
-          <PropertyAddressCard propertyId={id} address={data.propertyAddress} />
-        </section>
-
-        <section aria-label="Property location enrichment">
-          <PropertyLocationEnrichmentCard
-            propertyId={id}
-            address={data.propertyAddress}
-            enrichment={data.locationEnrichment}
-          />
-        </section>
-      </div>
-
-      <div
-        className="mt-10 space-y-8 border-b border-[hsl(var(--border))]/60 pb-12 sm:mt-12 sm:space-y-10 sm:pb-16"
-        aria-label="Samenvatting documenten"
-      >
-        <section aria-label="Property status">
-          <StatusBanner
-            status={data.stats.status}
-            title={bannerCopy.title}
-            description={bannerCopy.description}
-          />
-        </section>
-
-        <section aria-label="AI summary">
-          <PropertyAISummaryCard
-            summaryCounts={data.summaryCounts}
-            status={data.stats.status}
-            fallbackParagraph={data.executiveSummary}
-          />
-        </section>
-      </div>
-
-      <div className="mt-10 space-y-8 sm:mt-12 sm:space-y-10" aria-label="Acties en issues">
-        <section aria-label="Issues and flags">
-          <RedFlagsList flags={data.flags} />
-        </section>
-
-        <section aria-label="Suggested actions">
-          <SuggestedActionsCard actions={data.suggestedActions} />
-        </section>
-      </div>
-
-      <section className="mt-10 sm:mt-12" aria-label="Documents">
-        <div className="saas-card flex flex-col gap-8">
-          <div>
-            <h2 className="saas-section-heading text-xl sm:text-2xl">Documents</h2>
-            <p className="saas-section-subheading mt-2">
-              Upload PDFs and run AI analysis per document type
-            </p>
+    <div className="-mt-10 overflow-hidden sm:-mt-12 lg:-mt-16">
+      <div className="dashboard-shell min-h-screen">
+        <aside className="dashboard-sidenav">
+          <div className="p-6">
+            <div className="mb-8">
+              <span className="font-headline text-xl font-bold tracking-tighter text-dashboard-primary">SmartDoc AI</span>
+              <p className="text-[10px] uppercase tracking-widest text-dashboard-on-surface-variant/70">Editorial Intelligence</p>
+            </div>
+            <nav className="mt-8 space-y-2">
+              <Link href="/" className="flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-dashboard-primary">
+                <LayoutDashboard className="h-4 w-4" />
+                Dashboard
+              </Link>
+              <Link href="/map" className="flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-dashboard-primary">
+                <MapIcon className="h-4 w-4" />
+                Map View
+              </Link>
+              <a href="#" className="flex items-center gap-3 border-r-4 border-dashboard-primary bg-slate-100 px-4 py-2.5 text-sm font-bold text-dashboard-primary">
+                <Building2 className="h-4 w-4" />
+                Properties
+              </a>
+            </nav>
+            <div className="mt-6 px-0">
+              <Link href="/properties/new" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-dashboard-primary py-3 text-sm font-bold text-white hover:opacity-90">
+                <Plus className="h-4 w-4" />
+                New Report
+              </Link>
+            </div>
           </div>
-          <DocumentTable propertyId={id} wrapInCard={false} />
-        </div>
-      </section>
+          <div className="mt-auto border-t border-dashboard-outline-variant/40 p-4">
+            <a href="#" className="flex items-center gap-3 rounded-lg px-4 py-2 text-sm text-slate-500 hover:text-dashboard-primary">
+              <Settings className="h-4 w-4" />
+              Settings
+            </a>
+            <a href="#" className="flex items-center gap-3 rounded-lg px-4 py-2 text-sm text-slate-500 hover:text-dashboard-primary">
+              <CircleHelp className="h-4 w-4" />
+              Support
+            </a>
+          </div>
+        </aside>
+
+        <main className="flex flex-1 flex-col overflow-y-auto">
+          <header className="dashboard-topnav px-8">
+            <div className="flex items-center gap-8">
+              <div className="group relative hidden w-64 lg:block">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dashboard-on-surface-variant" />
+                <input className="w-full rounded-full border-none bg-dashboard-surface-low py-1.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-dashboard-primary" placeholder="Search properties..." type="text" />
+              </div>
+              <nav className="flex items-center gap-6">
+                <a className="translate-y-2.5 border-b-2 border-dashboard-primary pb-5 text-sm font-semibold text-dashboard-primary" href="#">Overview</a>
+                <a className="text-sm text-slate-500 hover:text-dashboard-primary" href="#">Analytics</a>
+                <a className="text-sm text-slate-500 hover:text-dashboard-primary" href="#">Reports</a>
+              </nav>
+            </div>
+            <div className="flex items-center gap-4">
+              <button className="rounded-lg bg-dashboard-secondary-container px-4 py-2 text-xs font-semibold text-dashboard-on-secondary-container hover:opacity-80">
+                <FileDown className="mr-2 inline h-4 w-4" />
+                Export Data
+              </button>
+              <button className="rounded-full p-2 text-dashboard-on-surface-variant hover:bg-dashboard-surface-low">
+                <Bell className="h-5 w-5" />
+              </button>
+              <button className="rounded-full p-2 text-dashboard-on-surface-variant hover:bg-dashboard-surface-low">
+                <UserCircle2 className="h-5 w-5" />
+              </button>
+            </div>
+          </header>
+
+          <div className="mx-auto w-full max-w-7xl space-y-8 p-8">
+            <section className="flex flex-col justify-between gap-6 border-b border-dashboard-surface-variant/60 pb-4 md:flex-row md:items-end">
+              <div className="space-y-2">
+                <nav className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-dashboard-on-surface-variant">
+                  <span>Properties</span>
+                  <span>›</span>
+                  <span className="font-semibold text-dashboard-primary">Leuven</span>
+                </nav>
+                <h1 className="font-headline text-4xl font-extrabold tracking-tight text-dashboard-primary">
+                  {data.propertyDisplayName}
+                </h1>
+                <div className="mt-2 flex items-center gap-4">
+                  <span className="font-mono text-xs text-dashboard-on-surface-variant">ID: {data.propertyId.slice(0, 8).toUpperCase()}</span>
+                  {data.stats.status === "red" ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-dashboard-error-container px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-dashboard-on-error-container">
+                      <AlertTriangle className="h-3 w-3" />
+                      Critical Action Required
+                    </span>
+                  ) : (
+                    <StatusBadge status={data.stats.status} />
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <RenamePropertyButton propertyId={data.propertyId} currentDisplayName={data.propertyDisplayName} />
+                <DeletePropertyButton propertyId={data.propertyId} propertyName={data.propertyDisplayName} redirectToDashboard />
+              </div>
+            </section>
+
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+              <div className="space-y-8 lg:col-span-8">
+                <div className="relative h-[400px] w-full overflow-hidden rounded-xl border border-dashboard-outline-variant/20 bg-dashboard-surface-low shadow-sm">
+                  {mapMarkers.length > 0 ? (
+                    <PropertiesMap markers={mapMarkers} className="h-full w-full border-0 shadow-none" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-dashboard-on-surface-variant">
+                      Geocode this address to display its map marker.
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                  <PropertyAddressCard propertyId={id} address={data.propertyAddress} />
+                  <PropertyLocationEnrichmentCard
+                    propertyId={id}
+                    address={data.propertyAddress}
+                    enrichment={data.locationEnrichment}
+                  />
+                </div>
+
+                <section className="rounded-xl border border-dashboard-outline-variant/10 bg-dashboard-surface shadow-sm" aria-label="Documents">
+                  <div className="flex items-center justify-between border-b border-dashboard-outline-variant/20 bg-dashboard-surface-low px-6 py-4">
+                    <h3 className="font-headline text-lg font-bold text-dashboard-primary">Verification Documents</h3>
+                    <span className="text-xs text-dashboard-on-surface-variant">{data.documentTypes.length} total document types</span>
+                  </div>
+                  <div className="p-6">
+                    <DocumentTable propertyId={id} wrapInCard={false} />
+                  </div>
+                </section>
+              </div>
+
+              <div className="space-y-6 lg:col-span-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2 space-y-4 rounded-xl bg-dashboard-primary p-6 text-white shadow-xl">
+                    <div className="flex items-start justify-between">
+                      <span className="font-headline text-4xl font-extrabold">{complianceScore}%</span>
+                      <Layers3 className="h-8 w-8 opacity-50" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-widest opacity-80">Compliance Score</h4>
+                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/20">
+                        <div className="h-full bg-white" style={{ width: `${complianceScore}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-100 p-4">
+                    <div className="text-xl font-extrabold text-emerald-800">{validCount}</div>
+                    <div className="text-[10px] font-bold uppercase text-emerald-900/60">Valid Points</div>
+                  </div>
+                  <div className="rounded-xl border border-dashboard-error/20 bg-dashboard-error-container p-4">
+                    <div className="text-xl font-extrabold text-dashboard-on-error-container">{criticalIssues}</div>
+                    <div className="text-[10px] font-bold uppercase text-dashboard-on-error-container/70">Critical Issues</div>
+                  </div>
+                </div>
+
+                <RedFlagsList flags={data.flags} className="rounded-xl border border-dashboard-outline-variant/10 bg-white shadow-sm" />
+                <SuggestedActionsCard actions={data.suggestedActions} className="rounded-xl" />
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

@@ -83,6 +83,14 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: var(--font-inter), Inter, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-manrope), Manrope, sans-serif;
   }
 }
 
@@ -151,6 +159,26 @@
   .saas-main {
     min-height: calc(100vh - var(--header-height));
     padding-top: var(--section-gap);
+  }
+
+  .dashboard-shell {
+    @apply flex min-h-screen bg-dashboard-background text-dashboard-on-surface;
+  }
+
+  .dashboard-sidenav {
+    @apply hidden w-64 flex-col border-r border-dashboard-outline-variant/40 bg-slate-50 md:flex;
+  }
+
+  .dashboard-topnav {
+    @apply sticky top-0 z-40 flex h-16 items-center justify-between border-b border-dashboard-outline-variant/40 bg-white/80 px-6 backdrop-blur-md;
+  }
+
+  .dashboard-content {
+    @apply flex-1 overflow-y-auto p-6 md:p-8;
+  }
+
+  .dashboard-section-title {
+    @apply inline-flex items-center gap-2 text-lg font-bold tracking-tight text-dashboard-primary;
   }
 
   /* Empty state – centered content with icon and copy */

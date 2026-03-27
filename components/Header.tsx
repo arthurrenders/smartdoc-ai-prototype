@@ -1,5 +1,8 @@
+"use client"
+
 import Link from "next/link"
 import Image from "next/image"
+import { usePathname } from "next/navigation"
 
 import logoImage from "@/components/public/logo png.png"
 
@@ -7,6 +10,14 @@ import logoImage from "@/components/public/logo png.png"
  * App header with brand logo and nav.
  */
 export function Header() {
+  const pathname = usePathname()
+
+  const isPropertyDetail = /^\/properties\/[^/]+$/.test(pathname ?? "")
+
+  if (pathname === "/" || pathname === "/map" || isPropertyDetail) {
+    return null
+  }
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-white/90 py-2.5 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/80 dark:bg-card/95">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">

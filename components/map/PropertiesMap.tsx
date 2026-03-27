@@ -10,6 +10,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge"
 
 type Props = {
   markers: MapMarkerRow[]
+  className?: string
 }
 
 /** Matches StatusBadge-style greens / ambers / reds (prototype). */
@@ -58,12 +59,12 @@ function FitBounds({ markers }: { markers: MapMarkerRow[] }) {
 
 const BELGIUM_CENTER: [number, number] = [50.85, 4.35]
 
-export default function PropertiesMap({ markers }: Props) {
+export default function PropertiesMap({ markers, className }: Props) {
   return (
     <MapContainer
       center={BELGIUM_CENTER}
       zoom={8}
-      className="z-0 h-[min(70vh,560px)] w-full rounded-2xl border border-[hsl(var(--border))] shadow-md"
+      className={className ?? "z-0 h-[min(70vh,560px)] w-full rounded-2xl border border-[hsl(var(--border))] shadow-md"}
       scrollWheelZoom
     >
       <TileLayer
