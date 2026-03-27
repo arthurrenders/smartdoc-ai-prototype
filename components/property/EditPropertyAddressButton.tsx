@@ -36,10 +36,16 @@ export function EditPropertyAddressButton({ propertyId, initialRawLine1 }: Props
     event.preventDefault()
     setError(null)
     const formData = new FormData(event.currentTarget)
+    console.info("[SmartDoc][address-edit-ui] submit", {
+      propertyId,
+      currentInputValue: draft,
+      submittedValue: String(formData.get("rawLine1") ?? ""),
+    })
 
     startTransition(async () => {
       try {
         await updatePropertyAddress(formData)
+        console.info("[SmartDoc][address-edit-ui] save completed", { propertyId })
         setIsOpen(false)
         router.refresh()
       } catch (err) {

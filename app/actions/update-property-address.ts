@@ -34,13 +34,25 @@ export async function updatePropertyAddress(formData: FormData): Promise<void> {
     .string()
     .min(1, "Adres mag niet leeg zijn.")
     .max(500, "Adres is te lang (max. 500 tekens).")
-    .transform((v) => v.trim())
+    .transform((v) =>
+      v
+        .replace(/[\r\n]+/g, ", ")
+        .replace(/\s*,\s*/g, ", ")
+        .replace(/\s+/g, " ")
+        .trim()
+    )
     .safeParse(typeof rawLine === "string" ? rawLine : "")
 
   if (!rawLine1Parsed.success) {
     throw new Error(rawLine1Parsed.error.issues[0]?.message ?? "Ongeldig adres.")
   }
   const rawLine1 = rawLine1Parsed.data
+  console.info("[SmartDoc][address-edit-action] request payload", {
+    propertyId,
+    submittedRaw: typeof rawLine === "string" ? rawLine : null,
+    normalizedRaw: rawLine1,
+    syncDisplayName,
+  })
 
   if (syncDisplayName && rawLine1.length > 80) {
     throw new Error(
@@ -92,6 +104,10 @@ export async function updatePropertyAddress(formData: FormData): Promise<void> {
   if (upAddrErr) {
     throw new Error(upAddrErr.message ?? "Adres opslaan mislukt.")
   }
+  console.info("[SmartDoc][address-edit-action] address saved", {
+    propertyId,
+    rawLine1,
+  })
 
   const { error: enrichDelErr } = await supabase
     .from("property_location_enrichment")
@@ -119,5 +135,7 @@ export async function updatePropertyAddress(formData: FormData): Promise<void> {
   }
 
   revalidatePath("/")
+  // Address edits reset geocode fields; invalidate global map so removed coordinates disappear.
+  revalidatePath("/map")
   revalidatePath(`/properties/${propertyId}`)
 }

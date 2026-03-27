@@ -18,6 +18,7 @@ export type PropertyStats = PropertyStatusResult
 
 export type DashboardData = {
   properties: { id: string; created_at?: string; display_name?: string | null }[]
+  totalPropertiesCount: number
   propertiesError: string | null
   documentTypes: DocumentTypeRow[]
   propertyStats: Record<string, PropertyStats>
@@ -36,11 +37,46 @@ type DocumentWithRelations = {
   }>
 }
 
-export async function getDashboardData(): Promise<DashboardData> {
-  const { data: properties, error: propertiesError } = await getProperties()
+function normalizeSearchTerm(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase()
+}
+
+function matchesPropertySearch(
+  query: string,
+  property: { id: string; display_name?: string | null },
+  address: {
+    raw_line1?: string | null
+    normalized_full_address?: string | null
+    street_name?: string | null
+    postal_code?: string | null
+    municipality?: string | null
+  } | null
+): boolean {
+  if (!query) return true
+  const haystack = [
+    property.display_name,
+    address?.raw_line1,
+    address?.normalized_full_address,
+    address?.street_name,
+    address?.postal_code,
+    address?.municipality,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+  return haystack.includes(query)
+}
+
+export async function getDashboardData(searchQuery?: string): Promise<DashboardData> {
+  const { data: allProperties, error: propertiesError } = await getProperties()
+  const totalPropertiesCount = allProperties.length
+  let properties = allProperties
+
+  const normalizedQuery = normalizeSearchTerm(searchQuery)
   if (properties.length === 0) {
     return {
       properties: [],
+      totalPropertiesCount,
       propertiesError,
       documentTypes: [],
       propertyStats: {},
@@ -49,6 +85,51 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   try {
     const supabase = createServerClient()
+    if (normalizedQuery) {
+      const { data: addressRows } = await supabase
+        .from("property_addresses")
+        .select(
+          "property_id, raw_line1, normalized_full_address, street_name, postal_code, municipality"
+        )
+        .in("property_id", allProperties.map((p) => p.id))
+
+      const addressByProperty = new Map<
+        string,
+        {
+          raw_line1?: string | null
+          normalized_full_address?: string | null
+          street_name?: string | null
+          postal_code?: string | null
+          municipality?: string | null
+        }
+      >()
+      for (const row of addressRows ?? []) {
+        const typed = row as {
+          property_id: string
+          raw_line1?: string | null
+          normalized_full_address?: string | null
+          street_name?: string | null
+          postal_code?: string | null
+          municipality?: string | null
+        }
+        addressByProperty.set(typed.property_id, typed)
+      }
+
+      properties = allProperties.filter((property) =>
+        matchesPropertySearch(normalizedQuery, property, addressByProperty.get(property.id) ?? null)
+      )
+    }
+
+    if (properties.length === 0) {
+      return {
+        properties: [],
+        totalPropertiesCount,
+        propertiesError: null,
+        documentTypes: [],
+        propertyStats: {},
+      }
+    }
+
     const [typesRes, docsRes] = await Promise.all([
     supabase.from("document_types").select("id, name").order("name"),
     supabase
@@ -87,6 +168,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   return {
     properties,
+    totalPropertiesCount,
     propertiesError: null,
     documentTypes,
     propertyStats,
@@ -94,6 +176,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   } catch {
     return {
       properties,
+      totalPropertiesCount,
       propertiesError: null,
       documentTypes: [],
       propertyStats: Object.fromEntries(

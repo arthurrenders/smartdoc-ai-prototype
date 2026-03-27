@@ -14,7 +14,15 @@ export function Header() {
 
   const isPropertyDetail = /^\/properties\/[^/]+$/.test(pathname ?? "")
 
-  if (pathname === "/" || pathname === "/map" || isPropertyDetail) {
+  // Dashboard-style pages render their own shell header.
+  // Keeping the global header here causes stacked top bars and excessive top whitespace.
+  if (
+    pathname === "/" ||
+    pathname === "/map" ||
+    pathname === "/analytics" ||
+    pathname === "/reports" ||
+    isPropertyDetail
+  ) {
     return null
   }
 

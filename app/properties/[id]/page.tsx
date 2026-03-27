@@ -1,11 +1,9 @@
 import { notFound } from "next/navigation"
 import nextDynamic from "next/dynamic"
 import Link from "next/link"
+import Image from "next/image"
 import {
-  Bell,
   Building2,
-  CircleHelp,
-  FileDown,
   Filter,
   LayoutDashboard,
   Layers3,
@@ -13,11 +11,11 @@ import {
   Plus,
   Search,
   Settings,
-  UserCircle2,
   MapPin,
   AlertTriangle,
 } from "lucide-react"
 import { getPropertyDetail } from "@/app/actions/get-property-detail"
+import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
 import DocumentTable from "@/components/DocumentTable"
 import { PropertyAddressCard } from "@/components/property/PropertyAddressCard"
 import { PropertyLocationEnrichmentCard } from "@/components/property/PropertyLocationEnrichmentCard"
@@ -26,6 +24,9 @@ import { DeletePropertyButton } from "@/components/property/DeletePropertyButton
 import { RedFlagsList } from "@/components/property/RedFlagsList"
 import { SuggestedActionsCard } from "@/components/property/SuggestedActionsCard"
 import { StatusBadge } from "@/components/ui/StatusBadge"
+import { NotificationsBellDropdown } from "@/components/navigation/NotificationsBellDropdown"
+import { ExportDataButton } from "@/components/navigation/ExportDataButton"
+import logoImage from "@/components/public/logo png.png"
 
 const PropertiesMap = nextDynamic(() => import("@/components/map/PropertiesMap"), { ssr: false })
 
@@ -35,7 +36,10 @@ export default async function PropertyPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const data = await getPropertyDetail(id)
+  const [data, { data: notificationRows, error: notificationsError }] = await Promise.all([
+    getPropertyDetail(id),
+    getDashboardNotifications(12),
+  ])
 
   if (!data) {
     notFound()
@@ -67,9 +71,15 @@ export default async function PropertyPage({
       <div className="dashboard-shell min-h-screen">
         <aside className="dashboard-sidenav">
           <div className="p-6">
-            <div className="mb-8">
-              <span className="font-headline text-xl font-bold tracking-tighter text-dashboard-primary">SmartDoc AI</span>
-              <p className="text-[10px] uppercase tracking-widest text-dashboard-on-surface-variant/70">Editorial Intelligence</p>
+            <div className="mb-6 px-4">
+              <Image
+                src={logoImage}
+                alt="SmartDoc AI logo"
+                width={528}
+                height={132}
+                className="h-24 w-auto max-w-full object-contain"
+                priority
+              />
             </div>
             <nav className="mt-8 space-y-2">
               <Link href="/" className="flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-dashboard-primary">
@@ -88,46 +98,42 @@ export default async function PropertyPage({
             <div className="mt-6 px-0">
               <Link href="/properties/new" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-dashboard-primary py-3 text-sm font-bold text-white hover:opacity-90">
                 <Plus className="h-4 w-4" />
-                New Report
+                New Property
               </Link>
             </div>
           </div>
           <div className="mt-auto border-t border-dashboard-outline-variant/40 p-4">
-            <a href="#" className="flex items-center gap-3 rounded-lg px-4 py-2 text-sm text-slate-500 hover:text-dashboard-primary">
+            <Link href="/settings" className="flex items-center gap-3 rounded-lg px-4 py-2 text-sm text-slate-500 hover:text-dashboard-primary">
               <Settings className="h-4 w-4" />
               Settings
-            </a>
-            <a href="#" className="flex items-center gap-3 rounded-lg px-4 py-2 text-sm text-slate-500 hover:text-dashboard-primary">
-              <CircleHelp className="h-4 w-4" />
-              Support
-            </a>
+            </Link>
           </div>
         </aside>
 
         <main className="flex flex-1 flex-col overflow-y-auto">
-          <header className="dashboard-topnav px-8">
-            <div className="flex items-center gap-8">
-              <div className="group relative hidden w-64 lg:block">
+          <header className="dashboard-topnav">
+            <div className="flex min-w-0 flex-1 items-center gap-4 lg:gap-8">
+              <div className="group relative hidden w-56 md:block lg:w-64 xl:w-72">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dashboard-on-surface-variant" />
-                <input className="w-full rounded-full border-none bg-dashboard-surface-low py-1.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-dashboard-primary" placeholder="Search properties..." type="text" />
+                <input
+                  className="w-full cursor-not-allowed rounded-full border-none bg-dashboard-surface-low py-1.5 pl-10 pr-4 text-sm opacity-70"
+                  placeholder="Use search on Dashboard or Map View"
+                  type="text"
+                  disabled
+                  aria-disabled="true"
+                />
               </div>
-              <nav className="flex items-center gap-6">
-                <a className="translate-y-2.5 border-b-2 border-dashboard-primary pb-5 text-sm font-semibold text-dashboard-primary" href="#">Overview</a>
-                <a className="text-sm text-slate-500 hover:text-dashboard-primary" href="#">Analytics</a>
-                <a className="text-sm text-slate-500 hover:text-dashboard-primary" href="#">Reports</a>
+              <nav className="flex min-w-0 items-center gap-4 lg:gap-6">
+                <a className="inline-flex h-12 items-center border-b-2 border-dashboard-primary text-sm font-semibold text-dashboard-primary" href="#">Overview</a>
+                <Link href="/analytics" className="py-2 text-sm text-slate-500 transition-colors hover:text-dashboard-primary">Analytics</Link>
               </nav>
             </div>
-            <div className="flex items-center gap-4">
-              <button className="rounded-lg bg-dashboard-secondary-container px-4 py-2 text-xs font-semibold text-dashboard-on-secondary-container hover:opacity-80">
-                <FileDown className="mr-2 inline h-4 w-4" />
-                Export Data
-              </button>
-              <button className="rounded-full p-2 text-dashboard-on-surface-variant hover:bg-dashboard-surface-low">
-                <Bell className="h-5 w-5" />
-              </button>
-              <button className="rounded-full p-2 text-dashboard-on-surface-variant hover:bg-dashboard-surface-low">
-                <UserCircle2 className="h-5 w-5" />
-              </button>
+            <div className="flex shrink-0 items-center gap-2 md:gap-4">
+              <ExportDataButton />
+              <NotificationsBellDropdown
+                notifications={notificationRows}
+                error={notificationsError}
+              />
             </div>
           </header>
 

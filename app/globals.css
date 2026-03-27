@@ -170,7 +170,7 @@
   }
 
   .dashboard-topnav {
-    @apply sticky top-0 z-40 flex h-16 items-center justify-between border-b border-dashboard-outline-variant/40 bg-white/80 px-6 backdrop-blur-md;
+    @apply sticky top-0 z-40 flex min-h-[4.25rem] flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-dashboard-outline-variant/40 bg-white/85 px-4 py-2 backdrop-blur-md sm:px-6 lg:px-8;
   }
 
   .dashboard-content {

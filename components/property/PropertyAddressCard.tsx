@@ -3,6 +3,8 @@ import type { PropertyAddressRecord } from "@/lib/property-address/types"
 import { formatPropertyAddressLines } from "@/lib/property-address/format-display"
 import { GeocodePropertyAddressButton } from "./GeocodePropertyAddressButton"
 import { EditPropertyAddressButton } from "./EditPropertyAddressButton"
+import { chooseGeocodeCandidate } from "@/app/actions/geocode-property-address"
+import { decodeGeocodeCandidatesState } from "@/lib/geocoding/geocode-candidate-state"
 
 type Props = {
   propertyId: string
@@ -59,6 +61,15 @@ function hasStructuredFields(a: PropertyAddressRecord): boolean {
 }
 
 export function PropertyAddressCard({ propertyId, address }: Props) {
+  const candidateState = decodeGeocodeCandidatesState(address?.geocode_error ?? null)
+  console.info("[SmartDoc][geocode-ui] render state", {
+    propertyId,
+    status: address?.geocode_status ?? "no_address",
+    rawLine1: address?.raw_line1 ?? null,
+    hasCandidateState: Boolean(candidateState),
+    candidateCount: candidateState?.candidates.length ?? 0,
+  })
+
   return (
     <div className="saas-card">
       <h2 className="saas-section-heading inline-flex items-center gap-2 text-xl sm:text-2xl">
@@ -92,11 +103,58 @@ export function PropertyAddressCard({ propertyId, address }: Props) {
             </div>
             {address.geocode_error ? (
               <p className="mt-3 text-sm text-destructive" role="status">
-                {address.geocode_error}
+                {candidateState?.detail ?? address.geocode_error}
               </p>
             ) : null}
+            {address.geocode_status === "ok" ? (
+              <div className="mt-3 rounded-lg border border-[#519fc8]/30 bg-[#519fc8]/10 px-3 py-2 text-sm text-[#0e3b6a]">
+                Locatie bevestigd en opgeslagen.
+                {address.normalized_full_address ? (
+                  <span className="block text-xs text-[#0e3b6a]/80">{address.normalized_full_address}</span>
+                ) : null}
+              </div>
+            ) : null}
+            {candidateState && candidateState.candidates.length > 0 ? (
+              <div className="mt-3 space-y-3 rounded-lg border border-[#519fc8]/30 bg-[#519fc8]/5 p-4">
+                <p className="text-sm font-semibold text-[#0e3b6a]">
+                  {candidateState.kind === "ambiguous_candidates"
+                    ? "We found several possible matches. Please choose the correct one."
+                    : "Did you mean one of these locations?"}
+                </p>
+                <ul className="space-y-2">
+                  {candidateState.candidates.map((c, idx) => (
+                    <li key={`${c.latitude}-${c.longitude}-${idx}`}>
+                      <form
+                        action={chooseGeocodeCandidate}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-[#0e3b6a]/10 bg-white p-3"
+                      >
+                        <input type="hidden" name="propertyId" value={propertyId} />
+                        <input type="hidden" name="candidateIndex" value={String(idx)} />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">{c.displayName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {[c.postalCode, c.municipality, (c.countryCode ?? "be").toUpperCase()]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <button
+                          type="submit"
+                          className="inline-flex whitespace-nowrap rounded-md bg-[#0e3b6a] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#0b3158]"
+                        >
+                          Gebruik
+                        </button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="mt-5">
-              <GeocodePropertyAddressButton propertyId={propertyId} />
+              <GeocodePropertyAddressButton
+                propertyId={propertyId}
+                rawLine1={address.raw_line1}
+              />
             </div>
           </div>
           <div>

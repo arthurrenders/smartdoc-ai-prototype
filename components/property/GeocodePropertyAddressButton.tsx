@@ -7,9 +7,10 @@ import { geocodePropertyAddress } from "@/app/actions/geocode-property-address"
 
 type Props = {
   propertyId: string
+  rawLine1: string
 }
 
-export function GeocodePropertyAddressButton({ propertyId }: Props) {
+export function GeocodePropertyAddressButton({ propertyId, rawLine1 }: Props) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -18,10 +19,19 @@ export function GeocodePropertyAddressButton({ propertyId }: Props) {
     event.preventDefault()
     setError(null)
     const formData = new FormData(event.currentTarget)
+    const submittedRaw = String(formData.get("rawLine1") ?? "")
+    console.info("[SmartDoc][geocode-ui] submit", {
+      propertyId,
+      currentInputValue: rawLine1,
+      submittedValue: submittedRaw,
+    })
 
     startTransition(async () => {
       try {
         await geocodePropertyAddress(formData)
+        console.info("[SmartDoc][geocode-ui] server action completed", {
+          propertyId,
+        })
         router.refresh()
       } catch (err) {
         setError(err instanceof Error ? err.message : "Geocoding mislukt.")
@@ -32,6 +42,7 @@ export function GeocodePropertyAddressButton({ propertyId }: Props) {
   return (
     <form onSubmit={onSubmit} className="space-y-2">
       <input type="hidden" name="propertyId" value={propertyId} />
+      <input type="hidden" name="rawLine1" value={rawLine1} />
       <button
         type="submit"
         disabled={isPending}
