@@ -5,7 +5,6 @@ import { Upload, Play, FileQuestion, FileText } from "lucide-react"
 import { uploadDocument } from "@/app/actions/upload-document"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
 import { runAnalysis } from "@/app/actions/run-analysis"
-import { pickGoogleDrivePdfFiles } from "@/lib/google-drive/picker-flow"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
 
 type DocumentType = {
@@ -149,6 +148,21 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     return { documentId: result.documentId, analysisRunId: result.analysisRunId }
   }
 
+  /**
+   * Same path as the per-row file input: FormData upload → refresh list → run analysis.
+   * Optional hook runs after loadData (e.g. clear row uploading state before analysis).
+   */
+  async function uploadPdfThroughManualPipeline(
+    file: File,
+    documentTypeId: string,
+    afterLoadData?: () => void
+  ) {
+    const { documentId, analysisRunId } = await uploadPdfFile(file, documentTypeId)
+    await loadData()
+    afterLoadData?.()
+    await handleRunAnalysis(documentTypeId, documentId, analysisRunId)
+  }
+
   function getDocumentData(documentTypeId: string) {
     const doc = documents.find((d) => d.document_type_id === documentTypeId)
     if (!doc) {
@@ -230,10 +244,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     })
 
     try {
-      const { documentId, analysisRunId } = await uploadPdfFile(file, documentTypeId)
-      await loadData()
-      setUploading(null)
-      await handleRunAnalysis(documentTypeId, documentId, analysisRunId)
+      await uploadPdfThroughManualPipeline(file, documentTypeId, () => setUploading(null))
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Upload mislukt."
       setFeedbackByDocType((prev) => ({ ...prev, [documentTypeId]: msg }))
@@ -249,6 +260,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     setDriveImporting(true)
     setDriveFeedback(null)
     try {
+      const { pickGoogleDrivePdfFiles } = await import("@/lib/google-drive/picker-flow")
       const files = await pickGoogleDrivePdfFiles()
       if (files.length === 0) return
 
@@ -259,9 +271,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
             "Geen documenttype herkend in de bestandsnaam. Hernoem het bestand (bijv. epc, asbest, elektrisch) of upload via de juiste rij."
           )
         }
-        const { documentId, analysisRunId } = await uploadPdfFile(file, documentTypeId)
-        await loadData()
-        await handleRunAnalysis(documentTypeId, documentId, analysisRunId)
+        await uploadPdfThroughManualPipeline(file, documentTypeId)
       }
     } catch (error) {
       setDriveFeedback(
