@@ -16,7 +16,6 @@ import {
 } from "lucide-react"
 import { getPropertyDetail } from "@/app/actions/get-property-detail"
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
-import DocumentTable from "@/components/DocumentTable"
 import { PropertyAddressCard } from "@/components/property/PropertyAddressCard"
 import { PropertyLocationEnrichmentCard } from "@/components/property/PropertyLocationEnrichmentCard"
 import { RenamePropertyButton } from "@/components/property/RenamePropertyButton"
@@ -29,6 +28,20 @@ import { ExportDataButton } from "@/components/navigation/ExportDataButton"
 import logoImage from "@/components/public/logo png.png"
 
 const PropertiesMap = nextDynamic(() => import("@/components/map/PropertiesMap"), { ssr: false })
+
+/** Client-only: avoids pulling the Drive Picker / GAPI subgraph into the server RSC payload and reduces ChunkLoadError races on soft navigation. */
+const DocumentTable = nextDynamic(() => import("@/components/DocumentTable"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+      <div
+        className="h-8 w-8 animate-spin rounded-full border-2 border-dashboard-primary border-t-transparent"
+        aria-hidden
+      />
+      <p className="text-sm text-dashboard-on-surface-variant">Loading documents…</p>
+    </div>
+  ),
+})
 
 export default async function PropertyPage({
   params,

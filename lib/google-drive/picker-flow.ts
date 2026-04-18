@@ -1,9 +1,5 @@
 "use client"
 
-const apiKey = "PASTE_API_KEY_HERE"
-const clientId = "PASTE_FULL_CLIENT_ID_HERE"
-const appId = "PASTE_APP_ID_HERE"
-
 const GSI_SCRIPT = "https://accounts.google.com/gsi/client"
 const GAPI_SCRIPT = "https://apis.google.com/js/api.js"
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
@@ -66,43 +62,24 @@ function loadPickerApi(): Promise<void> {
 
 type TokenClient = { requestAccessToken: (override?: { prompt?: string }) => void }
 
-function requestAccessToken(): Promise<string> {
-  const win = window as GapiWindow
-  const google = win.google as
-    | {
-        accounts?: {
-          oauth2?: {
-            initTokenClient: (config: {
-              client_id: string
-              scope: string
-              callback: (tokenResponse: { error?: string; access_token?: string }) => void
-            }) => TokenClient
-          }
-        }
-      }
-    | undefined
+type GoogleIdentity = {
+  accounts?: {
+    oauth2?: {
+      initTokenClient: (config: {
+        client_id: string
+        scope: string
+        callback: (tokenResponse: { error?: string; access_token?: string }) => void
+      }) => TokenClient
+    }
+  }
+}
 
-  const init = google?.accounts?.oauth2?.initTokenClient
-  if (!init) throw new Error("Google Identity Services not available")
-
-  return new Promise((resolve, reject) => {
-    const tokenClient = init({
-      client_id: clientId,
-      scope: DRIVE_SCOPE,
-      callback: (tokenResponse) => {
-        if (tokenResponse.error) {
-          reject(new Error(tokenResponse.error))
-          return
-        }
-        if (!tokenResponse.access_token) {
-          reject(new Error("No access token returned"))
-          return
-        }
-        resolve(tokenResponse.access_token)
-      },
-    })
-    tokenClient.requestAccessToken()
-  })
+type GooglePickerNs = {
+  PickerBuilder: new () => PickerBuilderChain
+  DocsView: new (viewId?: unknown) => { setMimeTypes: (m: string) => unknown }
+  ViewId: { DOCS: unknown }
+  Feature: { MULTISELECT_ENABLED: unknown }
+  Action?: { PICKED: string; CANCEL: string; ERROR: string }
 }
 
 async function downloadDrivePdf(
@@ -110,8 +87,10 @@ async function downloadDrivePdf(
   fileName: string,
   accessToken: string
 ): Promise<File> {
-  const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`
-  const res = await fetch(url, {
+  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`)
+  url.searchParams.set("alt", "media")
+  url.searchParams.set("supportsAllDrives", "true")
+  const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (!res.ok) {
@@ -120,20 +99,33 @@ async function downloadDrivePdf(
   }
   const blob = await res.blob()
   const safeName = fileName.toLowerCase().endsWith(".pdf") ? fileName : `${fileName}.pdf`
-  return new File([blob], safeName, { type: "application/pdf" })
+  return new File([blob], safeName, { type: "application/pdf", lastModified: Date.now() })
 }
 
 type PickerDoc = { id?: string; name?: string; mimeType?: string }
 
+/**
+ * Drive Picker passes {@link https://developers.google.com/workspace/drive/picker/reference/picker.responseobject | ResponseObject}
+ * with selected items in `docs` (not `documents`). Support both for compatibility.
+ */
 function readPickerCallbackData(data: Record<string, unknown>): {
   action: string
   documents: PickerDoc[]
 } {
-  const action = typeof data.action === "string" ? data.action : ""
-  const raw = data.documents
-  const documents: PickerDoc[] = Array.isArray(raw)
-    ? raw.map((d) => (d && typeof d === "object" ? (d as PickerDoc) : {}))
-    : []
+  const actionRaw = data.action
+  const action = typeof actionRaw === "string" ? actionRaw : String(actionRaw ?? "")
+  const raw = data.docs ?? data.documents
+  if (!Array.isArray(raw)) {
+    return { action, documents: [] }
+  }
+  const documents: PickerDoc[] = raw.map((d) => {
+    if (!d || typeof d !== "object") return {}
+    const o = d as Record<string, unknown>
+    const id = typeof o.id === "string" ? o.id : undefined
+    const name = typeof o.name === "string" ? o.name : undefined
+    const mimeType = typeof o.mimeType === "string" ? o.mimeType : undefined
+    return { id, name, mimeType }
+  })
   return { action, documents }
 }
 
@@ -148,25 +140,31 @@ type PickerBuilderChain = {
 }
 
 /**
- * OAuth → Drive Picker (PDFs only) → download as File[]. Empty if user cancels picker.
+ * Load scripts + Picker API, then OAuth. The Picker is built and shown inside the token
+ * callback immediately after a valid access_token is received (PDFs only via MIME filter).
  */
 export async function pickGoogleDrivePdfFiles(): Promise<File[]> {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY?.trim() ?? ""
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? ""
+  const appId = process.env.NEXT_PUBLIC_GOOGLE_APP_ID?.trim() ?? ""
+  if (!apiKey || !clientId || !appId) {
+    throw new Error(
+      "Google Drive picker is not configured. Set NEXT_PUBLIC_GOOGLE_API_KEY, NEXT_PUBLIC_GOOGLE_CLIENT_ID, and NEXT_PUBLIC_GOOGLE_APP_ID (GCP project number) in .env.local."
+    )
+  }
+
   await loadScript(GSI_SCRIPT)
   await loadScript(GAPI_SCRIPT)
   await loadPickerApi()
 
-  const accessToken = await requestAccessToken()
-
   const win = window as GapiWindow
-  const pickerNs = win.google?.picker as
-    | {
-        PickerBuilder: new () => PickerBuilderChain
-        DocsView: new (viewId?: unknown) => { setMimeTypes: (m: string) => unknown }
-        ViewId: { DOCS: unknown }
-        Feature: { MULTISELECT_ENABLED: unknown }
-      }
-    | undefined
+  const googleIdentity = win.google as GoogleIdentity | undefined
+  const initTokenClient = googleIdentity?.accounts?.oauth2?.initTokenClient
+  if (!initTokenClient) {
+    throw new Error("Google Identity Services not available")
+  }
 
+  const pickerNs = win.google?.picker as GooglePickerNs | undefined
   if (!pickerNs?.PickerBuilder) {
     throw new Error("google.picker is not available")
   }
@@ -182,42 +180,83 @@ export async function pickGoogleDrivePdfFiles(): Promise<File[]> {
       fn()
     }
 
-    const picker = new PickerBuilder()
-      .addView(pdfView)
-      .enableFeature(Feature.MULTISELECT_ENABLED)
-      .setOAuthToken(accessToken)
-      .setDeveloperKey(apiKey)
-      .setAppId(appId)
-      .setCallback((data: Record<string, unknown>) => {
-        const { action, documents } = readPickerCallbackData(data)
-        if (action === "cancel") {
-          finish(() => resolve([]))
+    const tokenClient = initTokenClient({
+      client_id: clientId,
+      scope: DRIVE_SCOPE,
+      callback: (tokenResponse) => {
+        if (tokenResponse.error) {
+          finish(() => reject(new Error(tokenResponse.error)))
           return
         }
-        if (action !== "picked") {
+        const accessToken = tokenResponse.access_token
+        if (!accessToken) {
+          finish(() => reject(new Error("No access token returned")))
           return
         }
 
-        void (async () => {
-          try {
-            const files: File[] = []
-            for (const doc of documents) {
-              const id = doc.id
-              const name = doc.name || "document.pdf"
-              const mime = doc.mimeType || ""
-              if (mime && mime !== "application/pdf") continue
-              if (!id) continue
-              const file = await downloadDrivePdf(id, name, accessToken)
-              files.push(file)
-            }
-            finish(() => resolve(files))
-          } catch (e) {
-            finish(() => reject(e instanceof Error ? e : new Error(String(e))))
-          }
-        })()
-      })
-      .build()
+        const oauthAccessToken = accessToken
 
-    picker.setVisible(true)
+        const Action = pickerNs.Action
+        const picked = Action?.PICKED ?? "picked"
+        const cancel = Action?.CANCEL ?? "cancel"
+        const errorAction = Action?.ERROR ?? "error"
+
+        try {
+          const picker = new PickerBuilder()
+            .addView(pdfView)
+            .enableFeature(Feature.MULTISELECT_ENABLED)
+            .setOAuthToken(oauthAccessToken)
+            .setDeveloperKey(apiKey)
+            .setAppId(appId)
+            .setCallback((data: Record<string, unknown>) => {
+              const { action, documents } = readPickerCallbackData(data)
+              if (action === cancel) {
+                finish(() => resolve([]))
+                return
+              }
+              if (action === errorAction) {
+                finish(() =>
+                  reject(
+                    new Error(
+                      typeof data.error === "string"
+                        ? data.error
+                        : "Google Picker reported an error."
+                    )
+                  )
+                )
+                return
+              }
+              if (action !== picked) {
+                return
+              }
+
+              void (async () => {
+                try {
+                  const files: File[] = []
+                  for (const doc of documents) {
+                    const id = doc.id
+                    const name = doc.name || "document.pdf"
+                    const mime = doc.mimeType || ""
+                    if (mime && mime !== "application/pdf") continue
+                    if (!id) continue
+                    const file = await downloadDrivePdf(id, name, oauthAccessToken)
+                    files.push(file)
+                  }
+                  finish(() => resolve(files))
+                } catch (e) {
+                  finish(() => reject(e instanceof Error ? e : new Error(String(e))))
+                }
+              })()
+            })
+            .build()
+
+          picker.setVisible(true)
+        } catch (e) {
+          finish(() => reject(e instanceof Error ? e : new Error(String(e))))
+        }
+      },
+    })
+
+    tokenClient.requestAccessToken()
   })
 }
