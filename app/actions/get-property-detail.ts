@@ -44,6 +44,12 @@ export type SuggestedActionsData = {
   followUps: string[]
 }
 
+export type PresentDocumentBrief = {
+  documentTypeName: string
+  analysisStatus?: "red" | "orange" | "green"
+  analysisSummary?: string
+}
+
 export type PropertyDetailData = {
   propertyId: string
   propertyDisplayName: string
@@ -55,6 +61,10 @@ export type PropertyDetailData = {
   summaryCounts: PropertySummaryCounts
   flags: FlagItem[]
   suggestedActions: SuggestedActionsData
+  /** Required document type names (EPC, ASBESTOS, ELECTRICAL, …) with no current upload for this property. */
+  missingRequiredDocumentNames: string[]
+  /** Latest upload per type: short analysis status/summary for email context. */
+  presentDocumentsBrief: PresentDocumentBrief[]
 }
 
 function formatPropertyDisplayName(id: string): string {
@@ -163,11 +173,22 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
     const summaryParts: string[] = []
     const manualReviewTypeIds = new Set<string>()
     const perDocumentFlags: Array<{ documentTypeName: string; documentId: string; flags: Array<{ severity: "red" | "orange" | "green"; title: string; details: string }> }> = []
+    const presentDocumentsBrief: PresentDocumentBrief[] = []
 
     for (const doc of currentDocuments) {
       const run = pickLatestAnalysisRun((doc as DocumentWithRelations).analysis_runs)
       const result = run?.result_json
       const typeName = (doc as any).document_types?.name ?? "Document"
+      const st = result?.status
+      const analysisStatus =
+        st === "red" || st === "orange" || st === "green" ? st : undefined
+      const rawSummary = result?.summary
+      const summaryStr = typeof rawSummary === "string" ? rawSummary.trim() : ""
+      presentDocumentsBrief.push({
+        documentTypeName: typeName,
+        ...(analysisStatus ? { analysisStatus } : {}),
+        ...(summaryStr ? { analysisSummary: summaryStr.slice(0, 600) } : {}),
+      })
       if (result?.summary) {
         summaryParts.push(`${typeName}: ${result.summary}`)
         const s = (result.summary as string).toLowerCase()
@@ -226,6 +247,12 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
 
     const suggestedActions = buildSuggestedActions(stats, flags)
 
+    const missingRequiredDocumentNames = requiredTypeIds
+      .filter((typeId) => !byType.has(typeId))
+      .map((typeId) => documentTypes.find((dt) => dt.id === typeId)?.name)
+      .filter((n): n is string => Boolean(n))
+      .sort()
+
     const propertyAddress: PropertyAddressRecord | null = (() => {
       if (addrRes.error || !addrRes.data) return null
       const raw = addrRes.data as PropertyAddressRecord
@@ -267,6 +294,8 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
       summaryCounts,
       flags,
       suggestedActions,
+      missingRequiredDocumentNames,
+      presentDocumentsBrief,
     }
   } catch {
     return null
