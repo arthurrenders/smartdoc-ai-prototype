@@ -32,8 +32,19 @@ CREATE TABLE documents (
   document_type_id UUID REFERENCES document_types(id) ON DELETE SET NULL,
   storage_path TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
+  expected_property_id UUID REFERENCES properties(id) ON DELETE SET NULL,
+  expected_address TEXT,
+  extracted_document_address TEXT,
+  address_match_status TEXT,
+  address_match_confidence DOUBLE PRECISION,
+  address_match_reason TEXT,
+  address_match_user_overridden BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT documents_address_match_status_check CHECK (
+    address_match_status IS NULL
+    OR address_match_status IN ('match', 'possible_match', 'mismatch', 'unknown')
+  )
 );
 
 -- Analysis runs table
@@ -68,6 +79,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_properties_display_name_lower_unique
 CREATE INDEX idx_documents_property_id ON documents(property_id);
 CREATE INDEX idx_documents_document_type_id ON documents(document_type_id);
 CREATE INDEX idx_documents_status ON documents(status);
+CREATE INDEX IF NOT EXISTS idx_documents_address_match_status ON documents(address_match_status);
 CREATE INDEX idx_analysis_runs_document_id ON analysis_runs(document_id);
 CREATE INDEX idx_analysis_runs_status ON analysis_runs(status);
 CREATE INDEX idx_red_flags_document_id ON red_flags(document_id);

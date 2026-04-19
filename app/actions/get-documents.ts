@@ -30,6 +30,13 @@ export async function getDocumentsForProperty(propertyId: string) {
       storage_path,
       status,
       created_at,
+      expected_property_id,
+      expected_address,
+      extracted_document_address,
+      address_match_status,
+      address_match_confidence,
+      address_match_reason,
+      address_match_user_overridden,
       document_types (
         id,
         name

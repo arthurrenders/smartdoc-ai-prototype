@@ -1,0 +1,6 @@
+export type { AddressMatchStatus, AddressMatchOutcome } from "./types"
+export type { DocumentAddressValidationPayload } from "./upload-result"
+export { buildCanonicalExpectedAddress } from "./expected-address"
+export { matchExtractedAddressToProperty } from "./compare"
+export { extractAddressFromPdfBuffer } from "./extract-from-pdf-buffer"
+export { verifyUploadAddressCoreFields, normalizeAddressCoreField } from "./verify-upload-core-fields"

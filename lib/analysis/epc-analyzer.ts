@@ -1,10 +1,11 @@
 import "server-only"
-import { z } from "zod"
-import { EPCResponseSchema, type EPCResponse } from "./epc-schema"
+import { type EPCResponse, normalizeParsedEpcResponse } from "./epc-schema"
 import { EPC_PROMPT } from "@/lib/ai/prompts/epc"
 import type { AnalysisResult, Flag } from "./detectors"
 import { structuredAddressFromSchemaFields } from "@/lib/property-address/extract-from-analysis"
-import { geminiClient, GEMINI_MODEL } from "@/lib/ai/gemini"
+import { GEMINI_MODEL, generateContentWithRetry } from "@/lib/ai/gemini"
+import { userFacingAnalysisFailureFromError } from "@/lib/ai/gemini-errors"
+import { getTextFromGeminiResponse, parseJsonFromModelOutput } from "@/lib/ai/json-from-model"
 
 const PROMPT_VERSION = "2.0"
 
@@ -46,11 +47,11 @@ export async function analyzeEPCWithAI(
     const prompt = `${EPC_PROMPT}\n\nExtract information from this EPC document:\n\n${textToSend}${
       isTruncated ? "\n\n[Document truncated for length]" : ""
     }`
-    const response = await geminiClient.models.generateContent({
+    const response = await generateContentWithRetry({
       model: GEMINI_MODEL,
       contents: prompt,
     })
-    const content = response.text
+    const content = getTextFromGeminiResponse(response)
     if (!content) {
       throw new Error("No content in LLM response")
     }
@@ -59,48 +60,15 @@ export async function analyzeEPCWithAI(
     console.log(content)
     console.log("=== END RAW AI RESPONSE ===")
 
-    // Clean and parse JSON safely (handles markdown code fences)
-    const cleanedContent = content
-      .replace(/```json/gi, "")
-      .replace(/```/g, "")
-      .trim()
+    const parsed = parseJsonFromModelOutput(content)
+    console.log("=== PARSED JSON ===")
+    console.log(parsed !== null ? JSON.stringify(parsed, null, 2) : "(parse failed, using empty coercion)")
+    console.log("=== END PARSED JSON ===")
 
-    console.log("=== CLEANED AI RESPONSE ===")
-    console.log(cleanedContent)
-    console.log("=== END CLEANED AI RESPONSE ===")
-
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(cleanedContent)
-      console.log("=== PARSED JSON ===")
-      console.log(JSON.stringify(parsed, null, 2))
-      console.log("=== END PARSED JSON ===")
-    } catch (parseError) {
-      console.error("Failed to parse EPC AI JSON response:", parseError)
-      console.error("Raw content that failed to parse:", content)
-      console.error("Cleaned content that failed to parse:", cleanedContent)
-      throw new Error(
-        `Failed to parse EPC AI JSON response: ${
-          parseError instanceof Error ? parseError.message : "Unknown error"
-        }`
-      )
-    }
-
-    // Validate with Zod
-    let epcData: EPCResponse
-    try {
-      epcData = EPCResponseSchema.parse(parsed)
-      console.log("=== VALIDATED EPC DATA ===")
-      console.log(JSON.stringify(epcData, null, 2))
-      console.log("=== END VALIDATED EPC DATA ===")
-    } catch (validationError) {
-      if (validationError instanceof z.ZodError) {
-        console.error("EPC AI response validation failed:", validationError.errors)
-        console.error("Parsed data that failed validation:", parsed)
-        throw new Error(`EPC AI output validation failed: ${validationError.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`)
-      }
-      throw validationError
-    }
+    const epcData = normalizeParsedEpcResponse(parsed)
+    console.log("=== COERCED EPC DATA ===")
+    console.log(JSON.stringify(epcData, null, 2))
+    console.log("=== END COERCED EPC DATA ===")
 
     // If the certificate is expired, immediately return a red status
     if (epcData.is_expired === true) {
@@ -151,15 +119,16 @@ export async function analyzeEPCWithAI(
     }
   } catch (error) {
     console.error("EPC AI analysis failed:", error)
+    const ux = userFacingAnalysisFailureFromError(error)
 
     const manualReviewResult: AnalysisResult = {
       status: "orange",
-      summary: "AI analysis failed. Manual review required.",
+      summary: ux.summary,
       flags: [
         {
           severity: "orange",
-          title: "Manual review required",
-          details: "Automatic AI analysis failed and the document must be checked manually.",
+          title: ux.title,
+          details: ux.details,
         },
       ],
     }
