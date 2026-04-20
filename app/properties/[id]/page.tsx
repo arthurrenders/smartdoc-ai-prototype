@@ -22,6 +22,7 @@ import { RenamePropertyButton } from "@/components/property/RenamePropertyButton
 import { DeletePropertyButton } from "@/components/property/DeletePropertyButton"
 import { RedFlagsList } from "@/components/property/RedFlagsList"
 import { SuggestedActionsCard } from "@/components/property/SuggestedActionsCard"
+import { GenerateEmailDraftCard } from "@/components/property/GenerateEmailDraftCard"
 import { StatusBadge } from "@/components/ui/StatusBadge"
 import { NotificationsBellDropdown } from "@/components/navigation/NotificationsBellDropdown"
 import { ExportDataButton } from "@/components/navigation/ExportDataButton"
@@ -78,6 +79,14 @@ export default async function PropertyPage({
         },
       ]
     : []
+
+  const allowMissingDocs = data.missingRequiredDocumentNames.length > 0
+  const allowRedFlags = data.flags.some((f) => f.severity === "red" || f.severity === "orange")
+  const allowDocumentMismatch = data.flags.some(
+    (f) =>
+      f.title.toLowerCase().includes("wrong document type") ||
+      f.details.toLowerCase().includes("wrong document")
+  )
 
   return (
     <div className="-mt-10 overflow-hidden sm:-mt-12 lg:-mt-16">
@@ -236,6 +245,12 @@ export default async function PropertyPage({
                 </div>
 
                 <RedFlagsList flags={data.flags} className="rounded-xl border border-dashboard-outline-variant/10 bg-white shadow-sm" />
+                <GenerateEmailDraftCard
+                  propertyId={id}
+                  allowMissingDocs={allowMissingDocs}
+                  allowRedFlags={allowRedFlags}
+                  allowDocumentMismatch={allowDocumentMismatch}
+                />
                 <SuggestedActionsCard actions={data.suggestedActions} className="rounded-xl" />
               </div>
             </div>
