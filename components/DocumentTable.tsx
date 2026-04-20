@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { Upload, Play, FileQuestion, FileText } from "lucide-react"
 import { uploadDocument } from "@/app/actions/upload-document"
+import { verifyDocumentAddress } from "@/app/actions/verify-document-address"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
 import { runAnalysis } from "@/app/actions/run-analysis"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
@@ -54,6 +55,13 @@ type Document = {
   storage_path: string
   status: string
   created_at: string
+  expected_property_id?: string | null
+  expected_address?: string | null
+  extracted_document_address?: string | null
+  address_match_status?: string | null
+  address_match_confidence?: number | null
+  address_match_reason?: string | null
+  address_match_user_overridden?: boolean | null
   document_types: DocumentType | null
   analysis_runs: AnalysisRun[] | null
 }
@@ -158,6 +166,9 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     afterLoadData?: () => void
   ) {
     const { documentId, analysisRunId } = await uploadPdfFile(file, documentTypeId)
+    const verifyFd = new FormData()
+    verifyFd.append("documentId", documentId)
+    await verifyDocumentAddress(verifyFd)
     await loadData()
     afterLoadData?.()
     await handleRunAnalysis(documentTypeId, documentId, analysisRunId)
@@ -286,6 +297,20 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     fileInputRefs.current[documentTypeId]?.click()
   }
 
+  function addressVerificationDotClass(status: string | null | undefined): string {
+    switch (status) {
+      case "match":
+        return "bg-emerald-500"
+      case "mismatch":
+        return "bg-red-500"
+      case "unknown":
+      case "possible_match":
+        return "bg-orange-500"
+      default:
+        return "bg-muted-foreground/40"
+    }
+  }
+
   function getStatusColor(status: string): string {
     switch (status.toLowerCase()) {
       case "missing":
@@ -397,6 +422,37 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold text-foreground">{docType.name}</h3>
+                  {document?.address_match_status != null && (
+                    <div className="mt-2 space-y-2 text-sm">
+                      <div className="flex items-center gap-2 text-foreground">
+                        <span
+                          className={`inline-block h-2 w-2 shrink-0 rounded-full ${addressVerificationDotClass(
+                            document.address_match_status
+                          )}`}
+                          aria-hidden
+                        />
+                        <span className="font-medium">Address</span>
+                      </div>
+                      {(document.address_match_status === "unknown" ||
+                        document.address_match_status === "possible_match") &&
+                        document.address_match_reason && (
+                          <p className="pl-4 text-muted-foreground">{document.address_match_reason}</p>
+                        )}
+                      {document.address_match_status === "mismatch" && (
+                        <div className="space-y-2 pl-4 text-muted-foreground">
+                          <p>The address is not identical.</p>
+                          <p>
+                            <span className="font-medium text-foreground">Property address: </span>
+                            {document.expected_address?.trim() || "—"}
+                          </p>
+                          <p>
+                            <span className="font-medium text-foreground">Address found in document: </span>
+                            {document.extracted_document_address?.trim() || "—"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {rowFeedback && (
                     <div
                       className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"

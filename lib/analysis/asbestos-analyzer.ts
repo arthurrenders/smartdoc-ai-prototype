@@ -2,7 +2,9 @@ import "server-only"
 import type { AnalysisResult, Flag } from "./detectors"
 import { structuredAddressFromSchemaFields } from "@/lib/property-address/extract-from-analysis"
 import { ASBEST_PROMPT as ASBESTOS_PROMPT } from "@/lib/ai/prompts/asbestos"
-import { geminiClient, GEMINI_MODEL } from "@/lib/ai/gemini"
+import { GEMINI_MODEL, generateContentWithRetry } from "@/lib/ai/gemini"
+import { userFacingAnalysisFailureFromError } from "@/lib/ai/gemini-errors"
+import { getTextFromGeminiResponse, parseJsonFromModelOutput } from "@/lib/ai/json-from-model"
 
 const PROMPT_VERSION = "1.0"
 
@@ -38,6 +40,138 @@ function normalizeText(text: string): string {
   return normalized
 }
 
+function coerceAsbestosData(parsed: unknown): AsbestosAIResponse {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {}
+  }
+  const o = parsed as Record<string, unknown>
+
+  const normStrings = (raw: unknown): string[] | undefined => {
+    if (raw == null) return undefined
+    if (!Array.isArray(raw)) return undefined
+    const out: string[] = []
+    for (const item of raw) {
+      if (typeof item === "string" && item.trim()) {
+        out.push(item.trim())
+      } else if (item && typeof item === "object") {
+        const r = item as Record<string, unknown>
+        const code = r.code ?? r.flag ?? r.type
+        if (typeof code === "string" && code.trim()) out.push(code.trim())
+      }
+    }
+    return out.length ? out : undefined
+  }
+
+  let building_year: number | null | undefined
+  const by = o.building_year ?? o.bouwjaar_pand ?? o.build_year
+  if (by === null) building_year = null
+  else if (typeof by === "number" && Number.isFinite(by)) building_year = by
+  else if (typeof by === "string") {
+    const n = parseInt(by.replace(/\D/g, ""), 10)
+    building_year =
+      Number.isFinite(n) && n >= 1500 && n <= 2100 ? n : null
+  }
+
+  const normInventory = (raw: unknown): AsbestosInventoryItem[] | null | undefined => {
+    if (raw == null) return undefined
+    if (!Array.isArray(raw)) return undefined
+    return raw.map((item) => {
+      if (!item || typeof item !== "object") return {}
+      const it = item as Record<string, unknown>
+      let quantity: number | null | undefined
+      const q = it.quantity ?? it.hoeveelheid
+      if (q === null) quantity = null
+      else if (typeof q === "number" && Number.isFinite(q)) quantity = q
+      else if (typeof q === "string") {
+        const n = parseFloat(q.replace(",", "."))
+        quantity = Number.isFinite(n) ? n : null
+      }
+      const material =
+        typeof it.material_type === "string"
+          ? it.material_type
+          : typeof it.type_materiaal === "string"
+            ? it.type_materiaal
+            : null
+      const location =
+        typeof it.location === "string"
+          ? it.location
+          : typeof it.locatie === "string"
+            ? it.locatie
+            : null
+      const unit =
+        typeof it.unit === "string"
+          ? it.unit
+          : typeof it.meeteenheid === "string"
+            ? it.meeteenheid
+            : null
+      return {
+        material_type: material,
+        location,
+        quantity: quantity ?? null,
+        unit,
+      }
+    })
+  }
+
+  const boolish = (v: unknown): boolean | null | undefined => {
+    if (v === null || v === undefined) return undefined
+    if (typeof v === "boolean") return v
+    if (typeof v === "string") {
+      const l = v.toLowerCase()
+      if (l === "true" || l === "1" || l === "yes") return true
+      if (l === "false" || l === "0" || l === "no") return false
+    }
+    return undefined
+  }
+
+  const certNum =
+    typeof o.certificate_number === "string"
+      ? o.certificate_number
+      : typeof o.attest_id === "string"
+        ? o.attest_id
+        : null
+  const certDate =
+    typeof o.certificate_date === "string"
+      ? o.certificate_date
+      : typeof o.datum_uitgifte === "string"
+        ? o.datum_uitgifte
+        : null
+  const expiry =
+    typeof o.expiry_date === "string"
+      ? o.expiry_date
+      : typeof o.geldig_tot === "string"
+        ? o.geldig_tot
+        : null
+  const score =
+    typeof o.asbestos_score === "string"
+      ? o.asbestos_score
+      : typeof o.score === "string"
+        ? o.score
+        : null
+  const inventoryRaw = o.asbestos_inventory ?? o.inventaris
+
+  return {
+    document_type: typeof o.document_type === "string" ? o.document_type : undefined,
+    building_year: building_year ?? null,
+    certificate_number: certNum,
+    certificate_date: certDate,
+    expiry_date: expiry,
+    asbestos_score: score,
+    is_expired: boolish(o.is_expired) ?? null,
+    asbestos_inventory: normInventory(inventoryRaw) ?? null,
+    red_flags: normStrings(o.red_flags ?? o.redFlags) ?? null,
+    property_street: typeof o.property_street === "string" ? o.property_street : null,
+    property_house_number:
+      typeof o.property_house_number === "string" ? o.property_house_number : null,
+    property_box: typeof o.property_box === "string" ? o.property_box : null,
+    property_postal_code:
+      typeof o.property_postal_code === "string" ? o.property_postal_code : null,
+    property_municipality:
+      typeof o.property_municipality === "string" ? o.property_municipality : null,
+    property_region: typeof o.property_region === "string" ? o.property_region : null,
+  }
+}
+
 export async function analyzeAsbestosWithAI(
   text: string
 ): Promise<{ result: AnalysisResult; modelName: string; promptVersion: string }> {
@@ -57,11 +191,11 @@ export async function analyzeAsbestosWithAI(
     const prompt = `${ASBESTOS_PROMPT}\n\nExtract information from this asbestos certificate:\n\n${textToSend}${
       isTruncated ? "\n\n[Document truncated for length]" : ""
     }`
-    const response = await geminiClient.models.generateContent({
+    const response = await generateContentWithRetry({
       model: GEMINI_MODEL,
       contents: prompt,
     })
-    const content = response.text
+    const content = getTextFromGeminiResponse(response)
     if (!content) {
       throw new Error("No content in asbestos LLM response")
     }
@@ -70,33 +204,16 @@ export async function analyzeAsbestosWithAI(
     console.log(content)
     console.log("=== END RAW ASBESTOS AI RESPONSE ===")
 
-    const cleanedContent = content
-      .replace(/```json/gi, "")
-      .replace(/```/g, "")
-      .trim()
-
-    console.log("=== CLEANED ASBESTOS AI RESPONSE ===")
-    console.log(cleanedContent)
-    console.log("=== END CLEANED ASBESTOS AI RESPONSE ===")
-
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(cleanedContent)
+    const parsed = parseJsonFromModelOutput(content)
+    if (parsed !== null) {
       console.log("=== PARSED ASBESTOS JSON ===")
       console.log(JSON.stringify(parsed, null, 2))
       console.log("=== END PARSED ASBESTOS JSON ===")
-    } catch (parseError) {
-      console.error("Failed to parse asbestos AI JSON response:", parseError)
-      console.error("Raw content that failed to parse:", content)
-      console.error("Cleaned content that failed to parse:", cleanedContent)
-      throw new Error(
-        `Failed to parse asbestos AI JSON response: ${
-          parseError instanceof Error ? parseError.message : "Unknown error"
-        }`
-      )
+    } else {
+      console.warn("Asbestos AI output was not valid JSON; using empty coercion")
     }
 
-    const asbestosData = parsed as AsbestosAIResponse
+    const asbestosData = coerceAsbestosData(parsed)
 
     console.log("Transforming asbestos AI data to analysis result...")
     const result = transformAsbestosToAnalysisResult(asbestosData)
@@ -111,15 +228,16 @@ export async function analyzeAsbestosWithAI(
     }
   } catch (error) {
     console.error("Asbestos AI analysis failed:", error)
+    const ux = userFacingAnalysisFailureFromError(error)
 
     const manualReviewResult: AnalysisResult = {
       status: "orange",
-      summary: "AI analysis failed. Manual review required.",
+      summary: ux.summary,
       flags: [
         {
           severity: "orange",
-          title: "Manual review required",
-          details: "Automatic AI analysis failed and the document must be checked manually.",
+          title: ux.title,
+          details: ux.details,
         },
       ],
     }
@@ -225,13 +343,14 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse): AnalysisRe
   if (!hasKeyData) {
     return {
       status: "orange",
-      summary: "AI analysis failed. Manual review required.",
+      summary:
+        "Asbestos certificate reviewed — key fields were not extracted automatically.",
       flags: [
         {
           severity: "orange",
-          title: "Manual review required",
+          title: "Incomplete automatic extraction",
           details:
-            "The AI could not extract key asbestos certificate information from this document. Please verify the document type and contents manually.",
+            "The PDF text may be incomplete, scanned without OCR, or in an unexpected layout. Open the document to verify, or try a text-based export.",
         },
       ],
     }

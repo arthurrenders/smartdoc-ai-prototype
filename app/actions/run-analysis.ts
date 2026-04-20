@@ -16,6 +16,7 @@ import type { AnalysisResult } from "@/lib/analysis/detectors"
 import { extractDocumentDatesFromResult } from "@/lib/document-dates/extract-from-result"
 import { replaceDocumentDatesForDocument } from "@/lib/document-dates/persist"
 import { syncPropertyAddressFromDocumentAnalysis } from "@/lib/property-address/sync-from-analysis"
+import { userFacingAnalysisFailureFromError } from "@/lib/ai/gemini-errors"
 
 function detectDocumentType(text: string): "epc" | "electrical" | "asbestos" | "unknown" {
   const t = text.toLowerCase()
@@ -231,15 +232,15 @@ export async function runAnalysis(formData: FormData) {
           console.log("EPC AI analysis result:", JSON.stringify(result, null, 2))
         } catch (epcError) {
           console.error("EPC AI analysis failed:", epcError)
-          // Fallback to manual review if AI fails at this level
+          const ux = userFacingAnalysisFailureFromError(epcError)
           result = {
             status: "orange" as const,
-            summary: "AI analysis failed. Manual review required.",
+            summary: ux.summary,
             flags: [
               {
                 severity: "orange" as const,
-                title: "Manual review required",
-                details: "Automatic AI analysis failed and the document must be checked manually.",
+                title: ux.title,
+                details: ux.details,
               },
             ],
           }
@@ -276,15 +277,15 @@ export async function runAnalysis(formData: FormData) {
           console.log("Electrical AI analysis result:", JSON.stringify(result, null, 2))
         } catch (electricalError) {
           console.error("Electrical AI analysis failed at pipeline level:", electricalError)
-          // Fallback to manual review if AI fails at this level
+          const ux = userFacingAnalysisFailureFromError(electricalError)
           result = {
             status: "orange" as const,
-            summary: "AI analysis failed. Manual review required.",
+            summary: ux.summary,
             flags: [
               {
                 severity: "orange" as const,
-                title: "Manual review required",
-                details: "Automatic AI analysis failed and the document must be checked manually.",
+                title: ux.title,
+                details: ux.details,
               },
             ],
           }
@@ -321,15 +322,15 @@ export async function runAnalysis(formData: FormData) {
           console.log("Asbestos AI analysis result:", JSON.stringify(result, null, 2))
         } catch (asbestosError) {
           console.error("Asbestos AI analysis failed at pipeline level:", asbestosError)
-          // Fallback to manual review if AI fails at this level
+          const ux = userFacingAnalysisFailureFromError(asbestosError)
           result = {
             status: "orange" as const,
-            summary: "AI analysis failed. Manual review required.",
+            summary: ux.summary,
             flags: [
               {
                 severity: "orange" as const,
-                title: "Manual review required",
-                details: "Automatic AI analysis failed and the document must be checked manually.",
+                title: ux.title,
+                details: ux.details,
               },
             ],
           }

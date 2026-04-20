@@ -2,7 +2,9 @@ import "server-only"
 import type { AnalysisResult, Flag } from "./detectors"
 import { structuredAddressFromSchemaFields } from "@/lib/property-address/extract-from-analysis"
 import { ELECTRICAL_PROMPT } from "@/lib/ai/prompts/electrical"
-import { geminiClient, GEMINI_MODEL } from "@/lib/ai/gemini"
+import { GEMINI_MODEL, generateContentWithRetry } from "@/lib/ai/gemini"
+import { userFacingAnalysisFailureFromError } from "@/lib/ai/gemini-errors"
+import { getTextFromGeminiResponse, parseJsonFromModelOutput } from "@/lib/ai/json-from-model"
 
 const PROMPT_VERSION = "1.0"
 
@@ -34,6 +36,81 @@ function normalizeText(text: string): string {
   return normalized
 }
 
+function coerceElectricalData(parsed: unknown): ElectricalAIResponse {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {}
+  }
+  const o = parsed as Record<string, unknown>
+
+  const normStrings = (raw: unknown): string[] | undefined => {
+    if (raw == null) return undefined
+    if (!Array.isArray(raw)) return undefined
+    const out: string[] = []
+    for (const item of raw) {
+      if (typeof item === "string" && item.trim()) {
+        out.push(item.trim())
+      } else if (item && typeof item === "object") {
+        const r = item as Record<string, unknown>
+        const code = r.code ?? r.flag ?? r.type
+        if (typeof code === "string" && code.trim()) out.push(code.trim())
+      }
+    }
+    return out.length ? out : undefined
+  }
+
+  let installation_year: number | null | undefined
+  const iy = o.installation_year
+  if (iy === null) installation_year = null
+  else if (typeof iy === "number" && Number.isFinite(iy)) installation_year = iy
+  else if (typeof iy === "string") {
+    const n = parseInt(iy.replace(/\D/g, ""), 10)
+    installation_year =
+      Number.isFinite(n) && n >= 1800 && n <= 2100 ? n : null
+  }
+
+  const boolish = (v: unknown): boolean | null | undefined => {
+    if (v === null || v === undefined) return undefined
+    if (typeof v === "boolean") return v
+    if (typeof v === "string") {
+      const l = v.toLowerCase()
+      if (l === "true" || l === "1" || l === "yes") return true
+      if (l === "false" || l === "0" || l === "no") return false
+    }
+    return undefined
+  }
+
+  return {
+    document_type: typeof o.document_type === "string" ? o.document_type : undefined,
+    wrong_document_type: boolish(o.wrong_document_type) ?? null,
+    detected_actual_document_type:
+      typeof o.detected_actual_document_type === "string"
+        ? o.detected_actual_document_type
+        : null,
+    inspection_result:
+      typeof o.inspection_result === "string" ? o.inspection_result : null,
+    certificate_number:
+      typeof o.certificate_number === "string" ? o.certificate_number : null,
+    inspection_date: typeof o.inspection_date === "string" ? o.inspection_date : null,
+    expiry_date: typeof o.expiry_date === "string" ? o.expiry_date : null,
+    installation_year: installation_year ?? null,
+    installation_type:
+      typeof o.installation_type === "string" ? o.installation_type : null,
+    is_expired: boolish(o.is_expired) ?? null,
+    buyer_must_fix_within_18_months:
+      boolish(o.buyer_must_fix_within_18_months) ?? null,
+    red_flags: normStrings(o.red_flags ?? o.redFlags) ?? null,
+    property_street: typeof o.property_street === "string" ? o.property_street : null,
+    property_house_number:
+      typeof o.property_house_number === "string" ? o.property_house_number : null,
+    property_box: typeof o.property_box === "string" ? o.property_box : null,
+    property_postal_code:
+      typeof o.property_postal_code === "string" ? o.property_postal_code : null,
+    property_municipality:
+      typeof o.property_municipality === "string" ? o.property_municipality : null,
+    property_region: typeof o.property_region === "string" ? o.property_region : null,
+  }
+}
+
 export async function analyzeElectricalWithAI(
   text: string
 ): Promise<{ result: AnalysisResult; modelName: string; promptVersion: string }> {
@@ -53,11 +130,11 @@ export async function analyzeElectricalWithAI(
     const prompt = `${ELECTRICAL_PROMPT}\n\nExtract information from this electrical inspection document:\n\n${textToSend}${
       isTruncated ? "\n\n[Document truncated for length]" : ""
     }`
-    const response = await geminiClient.models.generateContent({
+    const response = await generateContentWithRetry({
       model: GEMINI_MODEL,
       contents: prompt,
     })
-    const content = response.text
+    const content = getTextFromGeminiResponse(response)
     if (!content) {
       throw new Error("No content in electrical LLM response")
     }
@@ -66,33 +143,16 @@ export async function analyzeElectricalWithAI(
     console.log(content)
     console.log("=== END RAW ELECTRICAL AI RESPONSE ===")
 
-    const cleanedContent = content
-      .replace(/```json/gi, "")
-      .replace(/```/g, "")
-      .trim()
-
-    console.log("=== CLEANED ELECTRICAL AI RESPONSE ===")
-    console.log(cleanedContent)
-    console.log("=== END CLEANED ELECTRICAL AI RESPONSE ===")
-
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(cleanedContent)
+    const parsed = parseJsonFromModelOutput(content)
+    if (parsed !== null) {
       console.log("=== PARSED ELECTRICAL JSON ===")
       console.log(JSON.stringify(parsed, null, 2))
       console.log("=== END PARSED ELECTRICAL JSON ===")
-    } catch (parseError) {
-      console.error("Failed to parse electrical AI JSON response:", parseError)
-      console.error("Raw content that failed to parse:", content)
-      console.error("Cleaned content that failed to parse:", cleanedContent)
-      throw new Error(
-        `Failed to parse electrical AI JSON response: ${
-          parseError instanceof Error ? parseError.message : "Unknown error"
-        }`
-      )
+    } else {
+      console.warn("Electrical AI output was not valid JSON; using empty coercion")
     }
 
-    const electricalData = parsed as ElectricalAIResponse
+    const electricalData = coerceElectricalData(parsed)
 
     console.log("Transforming electrical AI data to analysis result...")
     const result = transformElectricalToAnalysisResult(electricalData)
@@ -107,15 +167,16 @@ export async function analyzeElectricalWithAI(
     }
   } catch (error) {
     console.error("Electrical AI analysis failed:", error)
+    const ux = userFacingAnalysisFailureFromError(error)
 
     const manualReviewResult: AnalysisResult = {
       status: "orange",
-      summary: "AI analysis failed. Manual review required.",
+      summary: ux.summary,
       flags: [
         {
           severity: "orange",
-          title: "Manual review required",
-          details: "Automatic AI analysis failed and the document must be checked manually.",
+          title: ux.title,
+          details: ux.details,
         },
       ],
     }
@@ -238,13 +299,14 @@ function transformElectricalToAnalysisResult(data: ElectricalAIResponse): Analys
   if (!hasKeyData) {
     return {
       status: "orange",
-      summary: "AI analysis failed. Manual review required.",
+      summary:
+        "Electrical inspection document reviewed — key fields were not extracted automatically.",
       flags: [
         {
           severity: "orange",
-          title: "Manual review required",
+          title: "Incomplete automatic extraction",
           details:
-            "The AI could not extract key electrical inspection information from this document. Please verify the document type and contents manually.",
+            "The PDF text may be incomplete, scanned without OCR, or in an unexpected layout. Open the document to verify, or try a text-based export.",
         },
       ],
     }

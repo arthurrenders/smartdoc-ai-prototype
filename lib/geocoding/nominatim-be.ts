@@ -144,13 +144,13 @@ function parseStreetAndHouseNumber(raw: string): {
   const beforeComma = input.split(",")[0]?.trim() ?? input
   const streetLine = beforeComma.replace(/\b(Belgium|België)\b/gi, "").trim()
   const m = streetLine.match(
-    /^(?<street>.*?)(?:\s+)(?<house>\d+[a-zA-Z]?)(?:\s*(?:bus|boite|box)\s*(?<box>[a-zA-Z0-9-]+))?\s*$/i
+    /^(.*?)(?:\s+)(\d+[a-zA-Z]?)(?:\s*(?:bus|boite|box)\s*([a-zA-Z0-9-]+))?\s*$/i
   )
-  if (m?.groups) {
+  if (m) {
     return {
-      streetName: safePart(m.groups.street ?? null),
-      houseNumber: safePart(m.groups.house ?? null),
-      box: safePart(m.groups.box ?? null),
+      streetName: safePart(m[1] ?? null),
+      houseNumber: safePart(m[2] ?? null),
+      box: safePart(m[3] ?? null),
     }
   }
   return {
