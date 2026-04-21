@@ -4,6 +4,7 @@ import "server-only"
 import { createServerClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import { attachDocumentToProperty } from "@/lib/documents/attach-document-to-property"
 
 const uploadSchema = z.object({
   propertyId: z.string().uuid({ message: "propertyId must be a valid UUID" }),
@@ -154,6 +155,15 @@ export async function uploadDocument(formData: FormData) {
         error: `Failed to create analysis run: ${analysisError?.message ?? "Unknown error"}`,
         details: { analysis: analysisError?.message },
       }
+    }
+
+    const attach = await attachDocumentToProperty(supabase, {
+      documentId: document.id,
+      propertyId,
+      sourceFileName: file.name,
+    })
+    if (!attach.ok) {
+      console.error("[upload] attachDocumentToProperty:", attach.error)
     }
 
     revalidatePath(`/properties/${propertyId}`)

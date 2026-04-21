@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { createServerClient } from "@/lib/supabase/server"
 import { resolveOwnerUserId } from "@/lib/supabase/resolve-owner-user-id"
 import { z } from "zod"
+import { escapeForIlike } from "@/lib/properties/display-name-match"
 
 const CreatePropertySchema = z.object({
   displayName: z
@@ -16,11 +17,6 @@ const CreatePropertySchema = z.object({
 
 const DUPLICATE_NAME_MESSAGE =
   "A property with this name already exists. Please choose a different name."
-
-/** Escape % and _ so ilike is exact match, not a pattern. */
-function escapeForIlike(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")
-}
 
 export async function createProperty(formData: FormData) {
   const rawName = formData.get("displayName")

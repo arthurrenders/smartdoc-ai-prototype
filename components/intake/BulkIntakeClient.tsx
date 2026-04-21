@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
@@ -10,12 +10,24 @@ import {
   Loader2,
   RefreshCw,
   FolderOpen,
+  FolderInput,
 } from "lucide-react"
 
 import type { IntakeUploadRow, IntakeProcessingStatus } from "@/lib/intake/types"
 import { bulkIntakeUpload } from "@/app/actions/bulk-intake-upload"
 import { processIntakeUploads } from "@/app/actions/process-intake-uploads"
+import {
+  collectPdfFilesFromDataTransfer,
+  dedupePdfInputs,
+  type PdfFileWithPath,
+} from "@/lib/intake/collect-pdf-files"
+import { IntakeManualPropertyForm } from "@/components/intake/IntakeManualPropertyForm"
 import { cn } from "@/lib/utils"
+
+/** Batch size per server round-trip to keep FormData and processing bounded for large folders. */
+const UPLOAD_CHUNK_SIZE = 30
+
+const INTAKE_SESSION_CUTOFF_KEY = "intake_queue_session_cutoff_iso"
 
 function formatFileSize(bytes: number | null): string {
   if (bytes == null || bytes < 0) return "—"
@@ -46,8 +58,19 @@ function statusBadgeClass(status: IntakeProcessingStatus): string {
   }
 }
 
-function formatStatusLabel(status: IntakeProcessingStatus): string {
-  return status.replace(/_/g, " ")
+/** User-facing queue state (per-file); distinct from raw `processing_status` for Matched vs Created. */
+function formatQueueStatus(row: IntakeUploadRow): string {
+  const s = row.processing_status
+  if (s === "uploaded") return "Pending"
+  if (s === "processing") return "Processing"
+  if (s === "needs_review") return "Needs review"
+  if (s === "failed") return "Failed"
+  if (s === "processed") {
+    if (row.matched_property_id) return "Matched"
+    if (row.created_property_id) return "Created"
+    return "Processed"
+  }
+  return (s as string).replace(/_/g, " ")
 }
 
 function formatConfidencePercent(score: number | null): string {
@@ -60,6 +83,11 @@ function matchTierFromScore(score: number | null): string {
   if (score >= 0.88) return "Strong"
   if (score >= 0.72) return "Medium"
   return "Low"
+}
+
+function canEnterPropertyManually(row: IntakeUploadRow, propId: string | null): boolean {
+  if (propId) return false
+  return row.processing_status === "needs_review" || row.processing_status === "failed"
 }
 
 function formatIntakeMatchSummary(row: IntakeUploadRow): string {
@@ -89,69 +117,118 @@ type BulkIntakeClientProps = {
 export function BulkIntakeClient({ initialRows, loadError }: BulkIntakeClientProps) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null)
   const [isWorking, setIsWorking] = useState(false)
+  const [manualFormIntakeId, setManualFormIntakeId] = useState<string | null>(null)
+  /** Per-tab session: only rows created after this ISO time (stored in sessionStorage). */
+  const [sessionCutoffIso, setSessionCutoffIso] = useState<string | null>(null)
+  const [showFullHistory, setShowFullHistory] = useState(false)
+
+  useEffect(() => {
+    try {
+      let iso = sessionStorage.getItem(INTAKE_SESSION_CUTOFF_KEY)
+      if (!iso) {
+        iso = new Date().toISOString()
+        sessionStorage.setItem(INTAKE_SESSION_CUTOFF_KEY, iso)
+      }
+      setSessionCutoffIso(iso)
+    } catch {
+      setSessionCutoffIso(new Date().toISOString())
+    }
+  }, [])
+
+  const queueRows = useMemo(() => {
+    if (showFullHistory || !sessionCutoffIso) return initialRows
+    const t = Date.parse(sessionCutoffIso)
+    if (Number.isNaN(t)) return initialRows
+    return initialRows.filter((r) => Date.parse(r.created_at) >= t)
+  }, [initialRows, sessionCutoffIso, showFullHistory])
 
   const refresh = useCallback(() => {
     router.refresh()
   }, [router])
 
-  const handleFiles = useCallback(
-    async (list: FileList | File[]) => {
-      const files = Array.from(list).filter((f) => f.size > 0)
-      if (!files.length) return
+  const handlePdfRows = useCallback(
+    async (rowsIn: PdfFileWithPath[], options?: { skippedNonPdf?: number }) => {
+      const rows = dedupePdfInputs(rowsIn.filter((r) => r.file.size > 0))
+      if (!rows.length) {
+        const skipped = options?.skippedNonPdf ?? 0
+        setMessage({
+          type: "err",
+          text:
+            skipped > 0
+              ? `No PDF files found (${skipped} non-PDF file(s) skipped).`
+              : "No PDF files to upload.",
+        })
+        return
+      }
 
       setMessage(null)
       setIsWorking(true)
       try {
-        const formData = new FormData()
-        for (const f of files) {
-          formData.append("files", f)
-        }
+        let totalOk = 0
+        const errorParts: string[] = []
 
-        const res = await bulkIntakeUpload(formData)
-        if (!res.ok && !res.results.some((r) => r.intakeId)) {
-          setMessage({
-            type: "err",
-            text: res.error ?? "Upload failed.",
-          })
+        for (let offset = 0; offset < rows.length; offset += UPLOAD_CHUNK_SIZE) {
+          const chunk = rows.slice(offset, offset + UPLOAD_CHUNK_SIZE)
+          const formData = new FormData()
+          for (const { file, relativePath } of chunk) {
+            formData.append("files", file)
+            formData.append("relativePaths", relativePath)
+          }
+
+          const res = await bulkIntakeUpload(formData)
+          if (!res.ok && !res.results.some((r) => r.intakeId)) {
+            setMessage({
+              type: "err",
+              text: res.error ?? "Upload failed.",
+            })
+            router.refresh()
+            return
+          }
+
+          const errors = res.results.filter((r) => r.error)
+          const okIds = res.results.map((r) => r.intakeId).filter(Boolean) as string[]
+          totalOk += okIds.length
+
+          for (const e of errors) {
+            errorParts.push(`${e.filename}: ${e.error}`)
+          }
+
           router.refresh()
-          return
+
+          if (okIds.length) {
+            const procRes = await processIntakeUploads(okIds)
+            if (!procRes.ok) {
+              setMessage({
+                type: "err",
+                text: procRes.error ?? "Processing failed.",
+              })
+            }
+            router.refresh()
+          }
         }
 
-        const errors = res.results.filter((r) => r.error)
-        const okIds = res.results.map((r) => r.intakeId).filter(Boolean) as string[]
+        const extra =
+          options?.skippedNonPdf && options.skippedNonPdf > 0
+            ? ` ${options.skippedNonPdf} non-PDF file(s) were skipped.`
+            : ""
 
-        if (errors.length) {
+        if (errorParts.length) {
           setMessage({
             type: "err",
-            text: `${errors.length} file(s) failed: ${errors.map((e) => `${e.filename}: ${e.error}`).join("; ")}`,
+            text: `Some files failed (${errorParts.length}): ${errorParts.slice(0, 5).join("; ")}${errorParts.length > 5 ? "…" : ""}.${extra}`,
           })
         } else {
           setMessage({
             type: "ok",
-            text: `${okIds.length} file(s) uploaded. Running property matching…`,
+            text: `${totalOk} PDF(s) uploaded and processed through the intake pipeline (address extraction and property matching).${extra}`,
           })
         }
 
         router.refresh()
-
-        if (okIds.length) {
-          const procRes = await processIntakeUploads(okIds)
-          if (!procRes.ok) {
-            setMessage({
-              type: "err",
-              text: procRes.error ?? "Processing failed.",
-            })
-          } else if (!errors.length) {
-            setMessage({
-              type: "ok",
-              text: `${okIds.length} file(s) processed: address matching, property link or create, and document registration (see queue for details).`,
-            })
-          }
-          router.refresh()
-        }
       } finally {
         setIsWorking(false)
       }
@@ -163,11 +240,12 @@ export function BulkIntakeClient({ initialRows, loadError }: BulkIntakeClientPro
     (e: React.DragEvent) => {
       e.preventDefault()
       setDragOver(false)
-      if (e.dataTransfer.files?.length) {
-        void handleFiles(e.dataTransfer.files)
-      }
+      void (async () => {
+        const { files, stats } = await collectPdfFilesFromDataTransfer(e.dataTransfer)
+        await handlePdfRows(files, { skippedNonPdf: stats.skippedNonPdf })
+      })()
     },
-    [handleFiles]
+    [handlePdfRows]
   )
 
   return (
@@ -229,8 +307,11 @@ export function BulkIntakeClient({ initialRows, loadError }: BulkIntakeClientPro
           <div className="rounded-full bg-[#0e3b6a]/10 p-4 text-[#0e3b6a]">
             <Upload className="h-8 w-8" />
           </div>
-          <p className="mt-4 font-medium text-[#0e3b6a]">Drag & drop PDFs here</p>
-          <p className="mt-1 text-sm text-muted-foreground">or click to browse — multiple files supported</p>
+          <p className="mt-4 font-medium text-[#0e3b6a]">Drag & drop PDFs or folders here</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Click to pick files, or use the Choose folder control below. Nested folders are scanned (PDFs only; up to 500
+            files per drop).
+          </p>
           <input
             ref={inputRef}
             type="file"
@@ -239,10 +320,60 @@ export function BulkIntakeClient({ initialRows, loadError }: BulkIntakeClientPro
             className="hidden"
             onChange={(e) => {
               const fl = e.target.files
-              if (fl?.length) void handleFiles(fl)
+              if (fl?.length) {
+                const mapped: PdfFileWithPath[] = Array.from(fl).map((f) => ({
+                  file: f,
+                  relativePath: (f.webkitRelativePath && f.webkitRelativePath.length > 0
+                    ? f.webkitRelativePath
+                    : f.name
+                  ).replace(/\\/g, "/"),
+                }))
+                void handlePdfRows(mapped)
+              }
               e.target.value = ""
             }}
           />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => folderInputRef.current?.click()}
+            disabled={isWorking}
+            className="inline-flex items-center gap-2 rounded-lg border border-[#519fc8]/50 bg-[#519fc8]/10 px-4 py-2.5 text-sm font-semibold text-[#0e3b6a] shadow-sm transition hover:bg-[#519fc8]/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <FolderInput className="h-4 w-4" />
+            Choose folder
+          </button>
+          <input
+            ref={(el) => {
+              folderInputRef.current = el
+              if (el) {
+                el.setAttribute("webkitdirectory", "")
+                el.setAttribute("directory", "")
+              }
+            }}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const fl = e.target.files
+              if (fl?.length) {
+                const mapped: PdfFileWithPath[] = Array.from(fl).map((f) => ({
+                  file: f,
+                  relativePath: (f.webkitRelativePath && f.webkitRelativePath.length > 0
+                    ? f.webkitRelativePath
+                    : f.name
+                  ).replace(/\\/g, "/"),
+                }))
+                void handlePdfRows(mapped)
+              }
+              e.target.value = ""
+            }}
+          />
+          <span className="text-xs text-muted-foreground">
+            Non-PDF files in a folder are ignored. Duplicate paths in one batch are deduplicated.
+          </span>
         </div>
 
         {isWorking && (
@@ -275,35 +406,65 @@ export function BulkIntakeClient({ initialRows, loadError }: BulkIntakeClientPro
       </section>
 
       <section className="saas-card space-y-4">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="h-5 w-5 text-[#519fc8]" />
-          <h2 className="text-lg font-semibold text-[#0e3b6a]">Intake queue</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="h-5 w-5 text-[#519fc8]" />
+            <h2 className="text-lg font-semibold text-[#0e3b6a]">Intake queue</h2>
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={showFullHistory}
+              onChange={(e) => setShowFullHistory(e.target.checked)}
+              className="rounded border-[hsl(var(--border))]"
+            />
+            Show all uploads (history)
+          </label>
         </div>
+        {!showFullHistory && sessionCutoffIso && (
+          <p className="text-xs text-muted-foreground">
+            Showing files from this browser tab session only. Enable &quot;Show all uploads&quot; to see older rows.
+          </p>
+        )}
 
         {initialRows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[hsl(var(--border))] bg-muted/10 py-12 text-center text-sm text-muted-foreground">
             <FileText className="mx-auto h-10 w-10 opacity-40" />
             <p className="mt-3">No uploads yet. Add PDFs above to see them listed here.</p>
           </div>
+        ) : queueRows.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-[hsl(var(--border))] bg-muted/10 py-12 text-center text-sm text-muted-foreground">
+            <FileText className="mx-auto h-10 w-10 opacity-40" />
+            <p className="mt-3">No uploads in this session yet.</p>
+            <button
+              type="button"
+              onClick={() => setShowFullHistory(true)}
+              className="mt-3 text-sm font-medium text-[#519fc8] underline-offset-2 hover:underline"
+            >
+              Show all uploads
+            </button>
+          </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-[hsl(var(--card-border))]">
-            <table className="w-full min-w-[1100px] text-left text-sm">
+            <table className="w-full min-w-[1280px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[hsl(var(--border))] bg-muted/30">
                   <th className="px-4 py-3 font-semibold text-[#0e3b6a]">File</th>
+                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Folder path</th>
                   <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Status</th>
                   <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Type</th>
                   <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Address (raw)</th>
                   <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Match result</th>
                   <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Confidence</th>
                   <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Property</th>
-                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Review</th>
+                  <th className="min-w-[280px] px-4 py-3 font-semibold text-[#0e3b6a]">Review</th>
                   <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Size</th>
                 </tr>
               </thead>
               <tbody>
-                {initialRows.map((row) => {
+                {queueRows.map((row) => {
                   const propId = row.matched_property_id ?? row.created_property_id
+                  const manualEligible = canEnterPropertyManually(row, propId)
                   return (
                     <tr
                       key={row.id}
@@ -318,14 +479,23 @@ export function BulkIntakeClient({ initialRows, loadError }: BulkIntakeClientPro
                           <span className="break-all font-medium text-foreground">{row.filename}</span>
                         </div>
                       </td>
+                      <td className="max-w-[160px] px-4 py-3 text-xs text-muted-foreground">
+                        {row.source_relative_path?.trim() ? (
+                          <span className="line-clamp-2 break-all" title={row.source_relative_path}>
+                            {row.source_relative_path}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span
                           className={cn(
-                            "inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize",
+                            "inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold",
                             statusBadgeClass(row.processing_status)
                           )}
                         >
-                          {formatStatusLabel(row.processing_status)}
+                          {formatQueueStatus(row)}
                         </span>
                         {row.error_message && (
                           <p className="mt-1 text-xs text-destructive">{row.error_message}</p>
@@ -358,8 +528,33 @@ export function BulkIntakeClient({ initialRows, loadError }: BulkIntakeClientPro
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
-                        {row.needs_manual_review ? (
+                      <td className="min-w-[280px] px-4 py-3 align-top">
+                        {row.processing_status === "uploaded" || row.processing_status === "processing" ? (
+                          <span className="text-xs text-muted-foreground">Awaiting pipeline</span>
+                        ) : manualEligible ? (
+                          <div className="space-y-2">
+                            {manualFormIntakeId === row.id ? (
+                              <IntakeManualPropertyForm
+                                intakeUploadId={row.id}
+                                onDone={() => setManualFormIntakeId(null)}
+                              />
+                            ) : (
+                              <>
+                                <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/80 bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Needs action
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setManualFormIntakeId(row.id)}
+                                  className="flex w-full max-w-xs items-center justify-center rounded-lg bg-[#0e3b6a] px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md transition hover:bg-[#0e3b6a]/90"
+                                >
+                                  Enter property manually
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        ) : row.needs_manual_review ? (
                           <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/80 bg-amber-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-amber-950">
                             <AlertTriangle className="h-3.5 w-3.5" />
                             Review

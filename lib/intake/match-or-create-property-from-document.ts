@@ -7,16 +7,27 @@ import { extractBelgianAddressFromPdfText } from "@/lib/property-address/extract
 import { extractIntakePropertyAddressWithGemini } from "@/lib/intake/extract-address-with-gemini"
 import { geocodeResetPatch } from "@/lib/property-address/geocode-reset"
 import type { IntakeDetectedDocumentType } from "@/lib/intake/types"
+import {
+  assertNoConflictingPropertyAddressMatch,
+  fetchAllPropertyAddressesForUser,
+  findUniquePropertyAddressMatch,
+  findUniqueRawLineTextMatch,
+  scoreForMatchTier,
+  parsePartialAddressFromText,
+  type DbAddressRow,
+  type NormalizedAddressFields,
+} from "@/lib/intake/property-address-match"
+import {
+  assertPropertyExistsForUser,
+  findPropertyIdByOwnerDisplayName,
+} from "@/lib/properties/display-name-match"
+import { attachDocumentToProperty } from "@/lib/documents/attach-document-to-property"
 
-/** Structured address after normalization (Belgium-first). */
-export type NormalizedAddressFields = {
-  street_name: string | null
-  house_number: string | null
-  box: string | null
-  postal_code: string | null
-  municipality: string | null
-  country_code: string
+function isValidPropertyUuid(id: string | null | undefined): id is string {
+  return typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 }
+
+export type { NormalizedAddressFields } from "@/lib/intake/property-address-match"
 
 export type AddressMatchTier = "strong" | "medium"
 
@@ -70,72 +81,9 @@ export type MatchOrCreatePropertyResult =
   | MatchOrCreatePropertyReview
   | MatchOrCreatePropertyFailure
 
-type DbAddressRow = {
-  id: string
-  property_id: string
-  street_name: string | null
-  house_number: string | null
-  box: string | null
-  postal_code: string | null
-  municipality: string | null
-  country_code: string | null
-}
-
 function sanitizeStorageSegment(name: string): string {
   const base = name.replace(/[/\\]/g, "_").replace(/[^a-zA-Z0-9._-]+/g, "_")
   return base.length > 120 ? base.slice(0, 120) : base
-}
-
-function normStr(s: string | null | undefined): string {
-  return (s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/\s+/g, " ")
-    .trim()
-}
-
-function normHouse(s: string | null | undefined): string {
-  return normStr(s).replace(/\s/g, "")
-}
-
-function stripPunct(s: string | null | undefined): string {
-  return normStr(s).replace(/[^a-z0-9]/g, "")
-}
-
-function municipalityClose(a: string | null, b: string | null): boolean {
-  const na = normStr(a)
-  const nb = normStr(b)
-  if (!na || !nb) return false
-  if (na === nb) return true
-  if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return true
-  return false
-}
-
-function streetStrongEq(
-  aStreet: string | null,
-  aHouse: string | null,
-  bStreet: string | null,
-  bHouse: string | null
-): boolean {
-  return normStr(aStreet) === normStr(bStreet) && normHouse(aHouse) === normHouse(bHouse)
-}
-
-function streetMediumFuzzy(aStreet: string | null, bStreet: string | null): boolean {
-  const fa = stripPunct(aStreet)
-  const fb = stripPunct(bStreet)
-  if (!fa || !fb) return false
-  if (fa === fb) return true
-  if (fa.length > 4 && fb.length > 4 && (fa.includes(fb) || fb.includes(fa))) return true
-  return false
-}
-
-function boxCompatible(extracted: string | null, db: string | null): boolean {
-  const e = normStr(extracted)
-  const d = normStr(db)
-  if (!e) return true
-  if (!d) return true
-  return e === d
 }
 
 export function normalizeExtractedAddress(
@@ -152,10 +100,6 @@ export function normalizeExtractedAddress(
   }
 }
 
-function scoreForTier(tier: AddressMatchTier): number {
-  return tier === "strong" ? 0.92 : 0.78
-}
-
 function detectIntakeDocumentType(text: string): "epc" | "electricity" | "asbestos" | "unknown" {
   const t = text.slice(0, 12_000).toLowerCase()
   if (t.includes("energieprestatie") || /\bepc\b/.test(t) || t.includes("energieprestatiecertificaat")) {
@@ -166,74 +110,6 @@ function detectIntakeDocumentType(text: string): "epc" | "electricity" | "asbest
     return "electricity"
   }
   return "unknown"
-}
-
-async function fetchOwnerPropertyIds(supabase: SupabaseClient, userId: string): Promise<string[]> {
-  const { data, error } = await supabase.from("properties").select("id").eq("user_id", userId)
-  if (error) {
-    console.error("[intake] matchOrCreate: list properties failed", error.message)
-    return []
-  }
-  return (data ?? []).map((r) => r.id as string)
-}
-
-async function fetchAddressCandidates(
-  supabase: SupabaseClient,
-  propertyIds: string[],
-  postalFilter: string | null
-): Promise<DbAddressRow[]> {
-  if (!propertyIds.length) return []
-
-  let q = supabase
-    .from("property_addresses")
-    .select("id, property_id, street_name, house_number, box, postal_code, municipality, country_code")
-    .in("property_id", propertyIds)
-
-  if (postalFilter && /^[1-9]\d{3}$/.test(postalFilter)) {
-    q = q.eq("postal_code", postalFilter)
-  }
-
-  const { data, error } = await q
-  if (error) {
-    console.error("[intake] matchOrCreate: load property_addresses failed", error.message)
-    return []
-  }
-  return (data as DbAddressRow[]) ?? []
-}
-
-function classifyMatches(
-  extracted: NormalizedAddressFields,
-  rows: DbAddressRow[]
-): { strong: DbAddressRow[]; medium: DbAddressRow[] } {
-  const strong: DbAddressRow[] = []
-  const medium: DbAddressRow[] = []
-
-  const exPostal = extracted.postal_code
-  if (!exPostal || !/^[1-9]\d{3}$/.test(exPostal)) {
-    return { strong, medium }
-  }
-
-  for (const row of rows) {
-    const dbPostal = row.postal_code?.trim()
-    if (!dbPostal || normStr(dbPostal) !== normStr(exPostal)) continue
-    if (!boxCompatible(extracted.box, row.box)) continue
-    if (!normHouse(extracted.house_number) || !normHouse(row.house_number)) continue
-    if (normHouse(extracted.house_number) !== normHouse(row.house_number)) continue
-
-    if (
-      streetStrongEq(extracted.street_name, extracted.house_number, row.street_name, row.house_number) &&
-      municipalityClose(extracted.municipality, row.municipality)
-    ) {
-      strong.push(row)
-      continue
-    }
-
-    if (streetMediumFuzzy(extracted.street_name, row.street_name) && municipalityClose(extracted.municipality, row.municipality)) {
-      medium.push(row)
-    }
-  }
-
-  return { strong, medium }
 }
 
 function canAutoCreateProperty(n: NormalizedAddressFields): boolean {
@@ -275,12 +151,31 @@ async function copyIntakeToPropertyStorage(
 
 async function insertDocumentAndAnalysis(
   supabase: SupabaseClient,
-  params: { propertyId: string; storagePath: string }
+  params: {
+    propertyId: string
+    storagePath: string
+    intakeDetectedDocumentType?: IntakeDetectedDocumentType | null
+    sourceFileName?: string | null
+  }
 ): Promise<{ documentId: string; analysisRunId: string } | { error: string }> {
+  const pid = params.propertyId?.trim()
+  if (!pid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pid)) {
+    return { error: "Cannot attach document: invalid propertyId" }
+  }
+
+  const { data: propOk, error: propLookupErr } = await supabase.from("properties").select("id").eq("id", pid).maybeSingle()
+  if (propLookupErr || !propOk?.id) {
+    return {
+      error:
+        propLookupErr?.message ??
+        `Cannot attach document: property ${pid} does not exist (FK documents_property_id_fkey would fail).`,
+    }
+  }
+
   const { data: document, error: documentError } = await supabase
     .from("documents")
     .insert({
-      property_id: params.propertyId,
+      property_id: pid,
       document_type_id: null,
       storage_path: params.storagePath,
       status: "uploaded",
@@ -308,7 +203,20 @@ async function insertDocumentAndAnalysis(
     return { error: analysisError?.message ?? "analysis run insert failed" }
   }
 
-  return { documentId: document.id as string, analysisRunId: analysisRunRow.id as string }
+  const documentId = document.id as string
+  const analysisRunId = analysisRunRow.id as string
+
+  const attach = await attachDocumentToProperty(supabase, {
+    documentId,
+    propertyId: pid,
+    intakeDetectedType: params.intakeDetectedDocumentType ?? null,
+    sourceFileName: params.sourceFileName ?? null,
+  })
+  if (!attach.ok) {
+    console.error("[intake] attachDocumentToProperty after insert:", attach.error)
+  }
+
+  return { documentId, analysisRunId }
 }
 
 /**
@@ -410,60 +318,37 @@ export async function matchOrCreatePropertyFromDocument(
   const normalized = normalizeExtractedAddress(candidate)
   const extractedAddressRaw = candidate.raw_line1?.trim() ?? null
 
-  const propertyIds = await fetchOwnerPropertyIds(supabase, params.userId)
-  const rows = await fetchAddressCandidates(supabase, propertyIds, normalized.postal_code)
-  const { strong, medium } = classifyMatches(normalized, rows)
-
-  console.info(
-    `${logPrefix} candidates strong=${strong.length} medium=${medium.length} postal=${normalized.postal_code} docType=${detectedDocumentType}`
-  )
-
-  const pickUnique = (list: DbAddressRow[], tier: AddressMatchTier): DbAddressRow | null => {
-    if (list.length !== 1) return null
-    return list[0] ?? null
-  }
+  const rows = await fetchAllPropertyAddressesForUser(supabase, params.userId)
+  const uniqueMatch = findUniquePropertyAddressMatch(normalized, rows)
 
   let chosen: DbAddressRow | null = null
   let matchTier: AddressMatchTier | null = null
 
-  const strongPick = pickUnique(strong, "strong")
-  if (strongPick) {
-    chosen = strongPick
-    matchTier = "strong"
-  } else if (strong.length > 1) {
-    console.warn(`${logPrefix} ambiguous strong matches (${strong.length}), skipping auto-link`)
+  if (uniqueMatch.kind === "linked") {
+    chosen = uniqueMatch.row
+    matchTier = uniqueMatch.tier
+    console.info(
+      `${logPrefix} unified match=${uniqueMatch.tier} streetSim=${uniqueMatch.streetSimilarity.toFixed(2)} property=${chosen.property_id}`
+    )
+  } else if (uniqueMatch.kind === "ambiguous") {
+    console.warn(
+      `${logPrefix} ambiguous unified match strong=${uniqueMatch.strongCount} medium=${uniqueMatch.mediumCount}`
+    )
     return {
       outcome: "needs_manual_review",
       reason: "ambiguous_match",
       confidenceScore: null,
       normalized,
       extractedAddressRaw,
-      candidateCountStrong: strong.length,
-      candidateCountMedium: medium.length,
+      candidateCountStrong: uniqueMatch.strongCount,
+      candidateCountMedium: uniqueMatch.mediumCount,
       extractedTextLength,
       detectedDocumentType,
     }
-  }
-
-  if (!chosen) {
-    const medPick = pickUnique(medium, "medium")
-    if (medPick) {
-      chosen = medPick
-      matchTier = "medium"
-    } else if (medium.length > 1) {
-      console.warn(`${logPrefix} ambiguous medium matches (${medium.length}), skipping auto-link`)
-      return {
-        outcome: "needs_manual_review",
-        reason: "ambiguous_match",
-        confidenceScore: null,
-        normalized,
-        extractedAddressRaw,
-        candidateCountStrong: strong.length,
-        candidateCountMedium: medium.length,
-        extractedTextLength,
-        detectedDocumentType,
-      }
-    }
+  } else {
+    console.info(
+      `${logPrefix} no unified property match (postal optional) postal=${normalized.postal_code} docType=${detectedDocumentType}`
+    )
   }
 
   let propertyId: string | null = chosen?.property_id ?? null
@@ -479,13 +364,37 @@ export async function matchOrCreatePropertyFromDocument(
         confidenceScore: candidate.confidence,
         normalized,
         extractedAddressRaw,
-        candidateCountStrong: strong.length,
-        candidateCountMedium: medium.length,
+        candidateCountStrong: 0,
+        candidateCountMedium: 0,
         extractedTextLength,
         detectedDocumentType,
       }
     }
 
+    const guard = await assertNoConflictingPropertyAddressMatch(supabase, params.userId, normalized)
+    if (guard.kind === "linked") {
+      chosen = guard.row
+      matchTier = guard.tier
+      propertyId = chosen.property_id
+      propertyAddressId = chosen.id
+      created = false
+      console.info(`${logPrefix} pre-create guard linked existing property=${propertyId}`)
+    } else if (guard.kind === "ambiguous") {
+      return {
+        outcome: "needs_manual_review",
+        reason: "ambiguous_match",
+        confidenceScore: null,
+        normalized,
+        extractedAddressRaw,
+        candidateCountStrong: guard.strongCount,
+        candidateCountMedium: guard.mediumCount,
+        extractedTextLength,
+        detectedDocumentType,
+      }
+    }
+  }
+
+  if (!propertyId) {
     const now = new Date().toISOString()
     const displayName =
       (extractedAddressRaw && extractedAddressRaw.length <= 80
@@ -577,6 +486,8 @@ export async function matchOrCreatePropertyFromDocument(
   const docRes = await insertDocumentAndAnalysis(supabase, {
     propertyId: propertyId!,
     storagePath: copyRes.destPath,
+    intakeDetectedDocumentType: detectedDocumentType,
+    sourceFileName: params.filename,
   })
 
   if ("error" in docRes) {
@@ -598,7 +509,7 @@ export async function matchOrCreatePropertyFromDocument(
     console.warn(`${logPrefix} could not remove intake blob`, err)
   })
 
-  const confidenceScore = matchTier ? scoreForTier(matchTier) : Math.max(0.74, candidate.confidence)
+  const confidenceScore = matchTier ? scoreForMatchTier(matchTier) : Math.max(0.74, candidate.confidence)
 
   const outcome: "linked_existing" | "created_new" = created ? "created_new" : "linked_existing"
   console.info(
@@ -619,4 +530,330 @@ export async function matchOrCreatePropertyFromDocument(
     extractedTextLength,
     detectedDocumentType,
   }
+}
+
+export type LinkIntakeManualPropertyParams = {
+  userId: string
+  intakeUploadId: string
+  /** Shown in the app as the property label (required). */
+  displayName: string
+  /** Optional free-form address line stored on `property_addresses.raw_line1`. */
+  addressLine: string | null
+}
+
+/**
+ * Copy intake blob → property storage, insert `documents` + `analysis_runs`, remove intake blob.
+ * Sequential guarantees: document row only exists after storage copy succeeds; intake blob removed only after doc row exists.
+ * @param newPropertyIdForRollback When set, delete this property (+ its address row) if copy or document insert fails.
+ */
+async function commitIntakePdfToProperty(
+  supabase: SupabaseClient,
+  args: {
+    intakeUploadId: string
+    storagePath: string
+    filename: string
+    propertyId: string
+    newPropertyIdForRollback: string | null
+    intakeDetectedDocumentType: IntakeDetectedDocumentType
+  }
+): Promise<
+  { ok: true; finalStoragePath: string; documentId: string; analysisRunId: string } | { ok: false; error: string }
+> {
+  const copyRes = await copyIntakeToPropertyStorage(supabase, {
+    sourcePath: args.storagePath,
+    propertyId: args.propertyId,
+    intakeUploadId: args.intakeUploadId,
+    filename: args.filename,
+  })
+
+  if ("error" in copyRes) {
+    if (args.newPropertyIdForRollback) {
+      await supabase.from("property_addresses").delete().eq("property_id", args.newPropertyIdForRollback)
+      await supabase.from("properties").delete().eq("id", args.newPropertyIdForRollback)
+    }
+    return { ok: false, error: `Storage: ${copyRes.error}` }
+  }
+
+  const docRes = await insertDocumentAndAnalysis(supabase, {
+    propertyId: args.propertyId,
+    storagePath: copyRes.destPath,
+    intakeDetectedDocumentType: args.intakeDetectedDocumentType,
+    sourceFileName: args.filename,
+  })
+
+  if ("error" in docRes) {
+    await supabase.storage.from("documents").remove([copyRes.destPath]).catch(() => {})
+    if (args.newPropertyIdForRollback) {
+      await supabase.from("property_addresses").delete().eq("property_id", args.newPropertyIdForRollback)
+      await supabase.from("properties").delete().eq("id", args.newPropertyIdForRollback)
+    }
+    return { ok: false, error: docRes.error }
+  }
+
+  await supabase.storage.from("documents").remove([args.storagePath]).catch(() => {})
+
+  return {
+    ok: true,
+    finalStoragePath: copyRes.destPath,
+    documentId: docRes.documentId,
+    analysisRunId: docRes.analysisRunId,
+  }
+}
+
+/**
+ * When AI matching is inconclusive, resolve from user input using the same address matching rules as automatic intake,
+ * then copy/link the PDF. Creates a property only when no confident unique match exists.
+ */
+export async function linkIntakeUploadToManualProperty(
+  supabase: SupabaseClient,
+  params: LinkIntakeManualPropertyParams
+): Promise<{ ok: true; propertyId: string } | { ok: false; error: string }> {
+  const label = params.displayName.trim()
+  if (!label) {
+    return { ok: false, error: "Property name is required." }
+  }
+
+  const { data: row, error: fetchErr } = await supabase
+    .from("intake_uploads")
+    .select(
+      "id, user_id, processing_status, filename, storage_path, matched_property_id, created_property_id, detected_document_type"
+    )
+    .eq("id", params.intakeUploadId)
+    .maybeSingle()
+
+  if (fetchErr || !row) {
+    return { ok: false, error: fetchErr?.message ?? "Intake upload not found." }
+  }
+  if (row.user_id !== params.userId) {
+    return { ok: false, error: "Not allowed for this upload." }
+  }
+
+  const status = row.processing_status as string
+  if (status !== "needs_review" && status !== "failed") {
+    return { ok: false, error: "Manual linking is only available for items that need review or failed processing." }
+  }
+  if (row.matched_property_id || row.created_property_id) {
+    return { ok: false, error: "This upload is already linked to a property." }
+  }
+
+  const storagePath = row.storage_path as string
+  const filename = row.filename as string
+  const now = new Date().toISOString()
+  const rawLine = (params.addressLine?.trim() || label).slice(0, 500)
+
+  const rows = await fetchAllPropertyAddressesForUser(supabase, params.userId)
+
+  let resolvedPropertyId: string | null = null
+  let matchedExisting = false
+  let matchTier: AddressMatchTier | null = null
+
+  /**
+   * Manual intake used to INSERT first, then hit the unique index on lower(display_name) and surface
+   * "choose a different name" — even when the user meant an existing property. We now MATCH first
+   * (name, structured address, raw_line1 fuzzy) and only INSERT when no safe match exists.
+   */
+  const nameMatchId = await findPropertyIdByOwnerDisplayName(supabase, params.userId, label.slice(0, 80))
+  if (nameMatchId) {
+    resolvedPropertyId = nameMatchId
+    matchedExisting = true
+    matchTier = "strong"
+  }
+
+  const parsed =
+    parsePartialAddressFromText(params.addressLine?.trim() ?? "") ?? parsePartialAddressFromText(label)
+
+  if (!resolvedPropertyId && parsed) {
+    let m = findUniquePropertyAddressMatch(parsed, rows)
+    if (m.kind === "ambiguous") {
+      return {
+        ok: false,
+        error: `Multiple existing properties match this address (${m.strongCount} strong / ${m.mediumCount} medium signals). Add postcode and municipality, or correct the street line.`,
+      }
+    }
+    if (m.kind === "linked") {
+      resolvedPropertyId = m.row.property_id
+      matchedExisting = true
+      matchTier = m.tier
+    } else {
+      const guard = await assertNoConflictingPropertyAddressMatch(supabase, params.userId, parsed)
+      if (guard.kind === "ambiguous") {
+        return {
+          ok: false,
+          error: `Multiple existing properties match this address (${guard.strongCount} strong / ${guard.mediumCount} medium). Refine the address.`,
+        }
+      }
+      if (guard.kind === "linked") {
+        resolvedPropertyId = guard.row.property_id
+        matchedExisting = true
+        matchTier = guard.tier
+      }
+    }
+  }
+
+  const combinedForRawLine = [params.addressLine?.trim(), label].filter(Boolean).join(" — ").slice(0, 500)
+  if (!resolvedPropertyId && combinedForRawLine.trim().length >= 6) {
+    const rawM = findUniqueRawLineTextMatch(combinedForRawLine, rows)
+    if (rawM.kind === "ambiguous") {
+      return {
+        ok: false,
+        error: `Several saved addresses look like this input (${rawM.strongCount} strong / ${rawM.mediumCount} medium). Add postcode and municipality or narrow the street line.`,
+      }
+    }
+    if (rawM.kind === "linked") {
+      resolvedPropertyId = rawM.row.property_id
+      matchedExisting = true
+      matchTier = rawM.tier
+    }
+  }
+
+  let newPropertyIdForRollback: string | null = null
+
+  if (!resolvedPropertyId) {
+    const { data: propRow, error: propErr } = await supabase
+      .from("properties")
+      .insert({
+        user_id: params.userId,
+        display_name: label.slice(0, 80),
+        updated_at: now,
+      })
+      .select("id")
+      .single()
+
+    if (propErr || !propRow?.id) {
+      const msg = propErr?.message ?? "Could not create property."
+      const pgCode = (propErr as { code?: string } | undefined)?.code
+      const dup =
+        pgCode === "23505" ||
+        msg.toLowerCase().includes("unique") ||
+        msg.toLowerCase().includes("duplicate")
+      if (dup) {
+        const existingId = await findPropertyIdByOwnerDisplayName(supabase, params.userId, label.slice(0, 80))
+        if (existingId) {
+          resolvedPropertyId = existingId
+          matchedExisting = true
+          matchTier = "strong"
+        } else {
+          return {
+            ok: false,
+            error:
+              "Could not create a property and no existing property matched this name. Try again or refine the address.",
+          }
+        }
+      } else {
+        return { ok: false, error: msg }
+      }
+    }
+
+    if (!resolvedPropertyId && propRow?.id) {
+      const propertyId = propRow.id as string
+      newPropertyIdForRollback = propertyId
+
+      const structured = parsed ?? {
+        street_name: null,
+        house_number: null,
+        box: null,
+        postal_code: null,
+        municipality: null,
+        country_code: "BE" as const,
+      }
+
+      const { data: addrIns, error: addrErr } = await supabase
+        .from("property_addresses")
+        .insert({
+          property_id: propertyId,
+          ...geocodeResetPatch(now),
+          raw_line1: rawLine,
+          street_name: structured.street_name,
+          house_number: structured.house_number,
+          box: structured.box,
+          postal_code: structured.postal_code,
+          municipality: structured.municipality,
+          region: null,
+          country_code: structured.country_code || "BE",
+          source: "manual_intake",
+          created_at: now,
+        })
+        .select("id")
+        .single()
+
+      if (addrErr || !addrIns?.id) {
+        await supabase.from("properties").delete().eq("id", propertyId)
+        return { ok: false, error: addrErr?.message ?? "Could not save address for the new property." }
+      }
+
+      const preCreateGuard = structured.street_name && structured.house_number
+        ? await assertNoConflictingPropertyAddressMatch(supabase, params.userId, structured)
+        : { kind: "none" as const }
+
+      if (preCreateGuard.kind === "linked") {
+        await supabase.from("property_addresses").delete().eq("property_id", propertyId)
+        await supabase.from("properties").delete().eq("id", propertyId)
+        newPropertyIdForRollback = null
+        resolvedPropertyId = preCreateGuard.row.property_id
+        matchedExisting = true
+        matchTier = preCreateGuard.tier
+      } else if (preCreateGuard.kind === "ambiguous") {
+        await supabase.from("property_addresses").delete().eq("property_id", propertyId)
+        await supabase.from("properties").delete().eq("id", propertyId)
+        return {
+          ok: false,
+          error: `Another property now matches this address (${preCreateGuard.strongCount} strong / ${preCreateGuard.mediumCount} medium). Refine and try again.`,
+        }
+      } else {
+        resolvedPropertyId = propertyId
+      }
+    }
+  }
+
+  if (!isValidPropertyUuid(resolvedPropertyId)) {
+    return { ok: false, error: "Cannot attach document: invalid propertyId" }
+  }
+
+  const ownerOk = await assertPropertyExistsForUser(supabase, params.userId, resolvedPropertyId)
+  if (!ownerOk) {
+    return { ok: false, error: "Property not found or access denied; cannot attach document." }
+  }
+
+  const detected = (row.detected_document_type as IntakeDetectedDocumentType | null) ?? "unknown"
+  const extractedRaw = params.addressLine?.trim() || null
+
+  const propertyIdForCommit = resolvedPropertyId
+
+  const commit = await commitIntakePdfToProperty(supabase, {
+    intakeUploadId: params.intakeUploadId,
+    storagePath,
+    filename,
+    propertyId: propertyIdForCommit,
+    newPropertyIdForRollback: matchedExisting ? null : newPropertyIdForRollback,
+    intakeDetectedDocumentType: detected,
+  })
+
+  if (!commit.ok) {
+    return { ok: false, error: commit.error }
+  }
+
+  const { error: upErr } = await supabase
+    .from("intake_uploads")
+    .update({
+      processing_status: "processed",
+      detected_document_type: detected,
+      extracted_address_raw: extractedRaw,
+      matched_property_id: matchedExisting ? resolvedPropertyId : null,
+      created_property_id: matchedExisting ? null : resolvedPropertyId,
+      confidence_score: matchTier ? scoreForMatchTier(matchTier) : null,
+      needs_manual_review: false,
+      error_message: null,
+      storage_path: commit.finalStoragePath,
+    })
+    .eq("id", params.intakeUploadId)
+
+  if (upErr) {
+    console.error("[intake] manual link: intake update failed", upErr.message)
+    return {
+      ok: false,
+      error: "The document was linked but updating the intake queue failed. Open the property from the dashboard.",
+    }
+  }
+
+  return { ok: true, propertyId: propertyIdForCommit }
 }

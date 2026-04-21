@@ -26,6 +26,7 @@ export async function bulkIntakeUpload(formData: FormData): Promise<{
 }> {
   const rawFiles = formData.getAll("files")
   const files = rawFiles.filter((f): f is File => f instanceof File && f.size > 0)
+  const rawPaths = formData.getAll("relativePaths").map((p) => (typeof p === "string" ? p : ""))
 
   if (files.length === 0) {
     return { ok: false, results: [], error: "No files provided." }
@@ -45,7 +46,12 @@ export async function bulkIntakeUpload(formData: FormData): Promise<{
 
   const results: BulkIntakeFileResult[] = []
 
-  for (const file of files) {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    const sourceRelativePath =
+      rawPaths[i]?.trim() ||
+      (file.webkitRelativePath && file.webkitRelativePath.length > 0 ? file.webkitRelativePath : null)
+
     if (file.type !== PDF_MIME) {
       results.push({
         filename: file.name,
@@ -76,6 +82,7 @@ export async function bulkIntakeUpload(formData: FormData): Promise<{
       .insert({
         user_id: userId,
         filename: file.name,
+        source_relative_path: sourceRelativePath,
         storage_path: storagePath,
         processing_status: "uploaded",
         needs_manual_review: true,

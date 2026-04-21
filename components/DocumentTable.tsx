@@ -150,14 +150,21 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   }
 
   function getDocumentData(documentTypeId: string) {
-    const doc = documents.find((d) => d.document_type_id === documentTypeId)
-    if (!doc) {
+    // Intake-linked PDFs get a real `document_type_id` in `attachDocumentToProperty`; pick the latest row per type
+    // so verification rows match manual uploads (including re-uploads).
+    const candidates = documents.filter((d) => d.document_type_id === documentTypeId)
+    if (!candidates.length) {
       return {
         status: "Missing",
         document: null,
         analysisRun: null,
       }
     }
+    const doc = candidates.reduce((a, b) => {
+      const ta = new Date(a.created_at).getTime()
+      const tb = new Date(b.created_at).getTime()
+      return tb >= ta ? b : a
+    })
 
     const analysisRun = pickLatestAnalysisRun(doc.analysis_runs) || null
     let status = doc.status
@@ -230,10 +237,8 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     })
 
     try {
-      const { documentId, analysisRunId } = await uploadPdfFile(file, documentTypeId)
+      await uploadPdfFile(file, documentTypeId)
       await loadData()
-      setUploading(null)
-      await handleRunAnalysis(documentTypeId, documentId, analysisRunId)
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Upload mislukt."
       setFeedbackByDocType((prev) => ({ ...prev, [documentTypeId]: msg }))
@@ -259,9 +264,8 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
             "Geen documenttype herkend in de bestandsnaam. Hernoem het bestand (bijv. epc, asbest, elektrisch) of upload via de juiste rij."
           )
         }
-        const { documentId, analysisRunId } = await uploadPdfFile(file, documentTypeId)
+        await uploadPdfFile(file, documentTypeId)
         await loadData()
-        await handleRunAnalysis(documentTypeId, documentId, analysisRunId)
       }
     } catch (error) {
       setDriveFeedback(

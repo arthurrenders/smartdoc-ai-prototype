@@ -11,6 +11,8 @@ export type IntakeUploadRow = {
   id: string
   user_id: string
   filename: string
+  /** When set, original location inside an uploaded folder tree. */
+  source_relative_path?: string | null
   storage_path: string
   processing_status: IntakeProcessingStatus
   detected_document_type: IntakeDetectedDocumentType | null

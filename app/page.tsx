@@ -9,7 +9,6 @@ import {
   Map as MapIcon,
   Settings,
   LayoutDashboard,
-  Upload,
 } from "lucide-react"
 import { DocumentIntakeFab } from "@/components/dashboard/DocumentIntakeFab"
 import { getDashboardData } from "@/app/actions/get-dashboard-data"
@@ -25,6 +24,7 @@ import { InAppNotificationsCard } from "@/components/dashboard/InAppNotification
 import { NotificationsBellDropdown } from "@/components/navigation/NotificationsBellDropdown"
 import { ExportDataButton } from "@/components/navigation/ExportDataButton"
 import { PropertySearchInput } from "@/components/navigation/PropertySearchInput"
+import { DeletePropertyDashboardButton } from "@/components/dashboard/DeletePropertyDashboardButton"
 import logoImage from "@/components/public/logo png.png"
 
 function formatPropertyName(id: string): string {
@@ -103,13 +103,6 @@ export default async function DashboardPage({
               >
                 <MapIcon className="h-4 w-4" />
                 Map View
-              </Link>
-              <Link
-                href="/intake"
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-dashboard-primary"
-              >
-                <Upload className="h-4 w-4" />
-                Document intake
               </Link>
             </nav>
           </div>
@@ -213,13 +206,16 @@ export default async function DashboardPage({
                   <Building2 className="h-5 w-5" />
                   Key Properties
                 </h2>
-                <Link
-                  href="/properties/new"
-                  className="saas-btn-primary inline-flex items-center gap-2 transition-all duration-200"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add property
-                </Link>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href="/properties/new"
+                    className="saas-btn-primary inline-flex items-center gap-2 transition-all duration-200"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add property
+                  </Link>
+                  <DeletePropertyDashboardButton properties={properties} />
+                </div>
               </div>
               {propertiesError && (
                 <div
