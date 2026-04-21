@@ -3,6 +3,7 @@
 import "server-only"
 import { revalidatePath } from "next/cache"
 import { createServerClient } from "@/lib/supabase/server"
+import { resolveOwnerUserId } from "@/lib/supabase/resolve-owner-user-id"
 import { z } from "zod"
 
 const CreatePropertySchema = z.object({
@@ -19,53 +20,6 @@ const DUPLICATE_NAME_MESSAGE =
 /** Escape % and _ so ilike is exact match, not a pattern. */
 function escapeForIlike(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")
-}
-
-/**
- * Single-user tool: no login. Resolve owner UUID in order:
- * 1) PROPERTIES_OWNER_USER_ID in .env.local (paste from properties.user_id in Supabase)
- * 2) user_id on the row whose id is DEMO_PROPERTY_ID (if set)
- * 3) user_id on any existing property row
- */
-async function resolveOwnerUserId(
-  supabase: ReturnType<typeof createServerClient>
-): Promise<string> {
-  const fromEnv = process.env.PROPERTIES_OWNER_USER_ID?.trim()
-  const envParsed = fromEnv ? z.string().uuid().safeParse(fromEnv) : null
-  if (envParsed?.success) {
-    return envParsed.data
-  }
-
-  const demoId = process.env.DEMO_PROPERTY_ID?.trim()
-  const demoParsed = demoId ? z.string().uuid().safeParse(demoId) : null
-  if (demoParsed?.success) {
-    const { data, error } = await supabase
-      .from("properties")
-      .select("user_id")
-      .eq("id", demoParsed.data)
-      .maybeSingle()
-
-    if (!error && data?.user_id) {
-      const uid = z.string().uuid().safeParse(data.user_id)
-      if (uid.success) return uid.data
-    }
-  }
-
-  const { data: row, error: rowError } = await supabase
-    .from("properties")
-    .select("user_id")
-    .limit(1)
-    .maybeSingle()
-
-  if (!rowError && row?.user_id) {
-    const uid = z.string().uuid().safeParse(row.user_id)
-    if (uid.success) return uid.data
-  }
-
-  throw new Error(
-    "Could not resolve owner user id. Set PROPERTIES_OWNER_USER_ID in .env.local to the UUID in properties.user_id (Supabase), " +
-      "or set DEMO_PROPERTY_ID to an existing property id so user_id can be read from that row."
-  )
 }
 
 export async function createProperty(formData: FormData) {

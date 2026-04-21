@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Upload,
 } from "lucide-react"
+import { DocumentIntakeFab } from "@/components/dashboard/DocumentIntakeFab"
 import { getDashboardData } from "@/app/actions/get-dashboard-data"
 import { getCalendarDates } from "@/app/actions/get-calendar-dates"
 import { getUpcomingDeadlines } from "@/app/actions/get-upcoming-deadlines"
@@ -102,6 +103,13 @@ export default async function DashboardPage({
               >
                 <MapIcon className="h-4 w-4" />
                 Map View
+              </Link>
+              <Link
+                href="/intake"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-dashboard-primary"
+              >
+                <Upload className="h-4 w-4" />
+                Document intake
               </Link>
             </nav>
           </div>
@@ -264,9 +272,7 @@ export default async function DashboardPage({
           </div>
         </div>
       </div>
-      <button className="fixed bottom-8 right-8 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-dashboard-primary text-white shadow-lg transition-all hover:scale-105">
-        <Upload className="h-6 w-6" />
-      </button>
+      <DocumentIntakeFab />
     </div>
   )
 }
