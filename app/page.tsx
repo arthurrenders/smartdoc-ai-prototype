@@ -9,8 +9,8 @@ import {
   Map as MapIcon,
   Settings,
   LayoutDashboard,
-  Upload,
 } from "lucide-react"
+import { DocumentIntakeFab } from "@/components/dashboard/DocumentIntakeFab"
 import { getDashboardData } from "@/app/actions/get-dashboard-data"
 import { getCalendarDates } from "@/app/actions/get-calendar-dates"
 import { getUpcomingDeadlines } from "@/app/actions/get-upcoming-deadlines"
@@ -24,6 +24,7 @@ import { InAppNotificationsCard } from "@/components/dashboard/InAppNotification
 import { NotificationsBellDropdown } from "@/components/navigation/NotificationsBellDropdown"
 import { ExportDataButton } from "@/components/navigation/ExportDataButton"
 import { PropertySearchInput } from "@/components/navigation/PropertySearchInput"
+import { DeletePropertyDashboardButton } from "@/components/dashboard/DeletePropertyDashboardButton"
 import logoImage from "@/components/public/logo png.png"
 
 function formatPropertyName(id: string): string {
@@ -205,13 +206,16 @@ export default async function DashboardPage({
                   <Building2 className="h-5 w-5" />
                   Key Properties
                 </h2>
-                <Link
-                  href="/properties/new"
-                  className="saas-btn-primary inline-flex items-center gap-2 transition-all duration-200"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add property
-                </Link>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href="/properties/new"
+                    className="saas-btn-primary inline-flex items-center gap-2 transition-all duration-200"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add property
+                  </Link>
+                  <DeletePropertyDashboardButton properties={properties} />
+                </div>
               </div>
               {propertiesError && (
                 <div
@@ -264,9 +268,7 @@ export default async function DashboardPage({
           </div>
         </div>
       </div>
-      <button className="fixed bottom-8 right-8 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-dashboard-primary text-white shadow-lg transition-all hover:scale-105">
-        <Upload className="h-6 w-6" />
-      </button>
+      <DocumentIntakeFab />
     </div>
   )
 }
