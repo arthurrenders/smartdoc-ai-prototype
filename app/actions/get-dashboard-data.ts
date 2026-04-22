@@ -16,12 +16,19 @@ export type DocumentTypeRow = { id: string; name: string }
 
 export type PropertyStats = PropertyStatusResult
 
+export type PropertyAddressSnapshot = {
+  raw_line1?: string | null
+  latitude?: number | null
+  longitude?: number | null
+}
+
 export type DashboardData = {
   properties: { id: string; created_at?: string; display_name?: string | null }[]
   totalPropertiesCount: number
   propertiesError: string | null
   documentTypes: DocumentTypeRow[]
   propertyStats: Record<string, PropertyStats>
+  propertyAddresses: Record<string, PropertyAddressSnapshot>
 }
 
 type DocumentWithRelations = {
@@ -80,6 +87,7 @@ export async function getDashboardData(searchQuery?: string): Promise<DashboardD
       propertiesError,
       documentTypes: [],
       propertyStats: {},
+      propertyAddresses: {},
     }
   }
 
@@ -127,10 +135,11 @@ export async function getDashboardData(searchQuery?: string): Promise<DashboardD
         propertiesError: null,
         documentTypes: [],
         propertyStats: {},
+        propertyAddresses: {},
       }
     }
 
-    const [typesRes, docsRes] = await Promise.all([
+    const [typesRes, docsRes, addrRes] = await Promise.all([
     supabase.from("document_types").select("id, name").order("name"),
     supabase
       .from("documents")
@@ -139,7 +148,20 @@ export async function getDashboardData(searchQuery?: string): Promise<DashboardD
       )
       .in("property_id", properties.map((p) => p.id))
       .order("created_at", { foreignTable: "analysis_runs", ascending: false }),
+    supabase
+      .from("property_addresses")
+      .select("property_id, raw_line1, latitude, longitude")
+      .in("property_id", properties.map((p) => p.id)),
   ])
+
+  const propertyAddresses: Record<string, PropertyAddressSnapshot> = {}
+  for (const row of (addrRes.data ?? []) as Array<{ property_id: string; raw_line1?: string | null; latitude?: number | null; longitude?: number | null }>) {
+    propertyAddresses[row.property_id] = {
+      raw_line1: row.raw_line1,
+      latitude: row.latitude,
+      longitude: row.longitude,
+    }
+  }
 
   const documentTypes: DocumentTypeRow[] = (typesRes.data as DocumentTypeRow[]) || []
   const requiredNamesSet = new Set<string>(REQUIRED_DOCUMENT_TYPE_NAMES)
@@ -172,6 +194,7 @@ export async function getDashboardData(searchQuery?: string): Promise<DashboardD
     propertiesError: null,
     documentTypes,
     propertyStats,
+    propertyAddresses,
   }
   } catch {
     return {
@@ -190,6 +213,7 @@ export async function getDashboardData(searchQuery?: string): Promise<DashboardD
           },
         ])
       ),
+      propertyAddresses: {},
     }
   }
 }

@@ -7,6 +7,7 @@ import {
   Upload,
   FileText,
   AlertTriangle,
+  Cloud,
   Loader2,
   RefreshCw,
   FolderOpen,
@@ -123,6 +124,8 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
   const [dragOver, setDragOver] = useState(false)
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null)
   const [isWorking, setIsWorking] = useState(false)
+  const [driveImporting, setDriveImporting] = useState(false)
+  const [driveFeedback, setDriveFeedback] = useState<string | null>(null)
   const [manualFormIntakeId, setManualFormIntakeId] = useState<string | null>(null)
   /** Per-tab session: only rows created after this ISO time (stored in sessionStorage). */
   const [sessionCutoffIso, setSessionCutoffIso] = useState<string | null>(null)
@@ -199,8 +202,6 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
             errorParts.push(`${e.filename}: ${e.error}`)
           }
 
-          router.refresh()
-
           if (okIds.length) {
             const procRes = await processIntakeUploads(okIds)
             if (!procRes.ok) {
@@ -209,7 +210,6 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                 text: procRes.error ?? "Processing failed.",
               })
             }
-            router.refresh()
           }
         }
 
@@ -237,6 +237,25 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
     },
     [router]
   )
+
+  const handleGoogleDriveClick = useCallback(async () => {
+    setDriveImporting(true)
+    setDriveFeedback(null)
+    try {
+      const { pickGoogleDrivePdfFiles } = await import("@/lib/google-drive/picker-flow")
+      const files = await pickGoogleDrivePdfFiles()
+      if (files.length === 0) return
+      const mapped: PdfFileWithPath[] = files.map((f) => ({
+        file: f,
+        relativePath: f.name,
+      }))
+      await handlePdfRows(mapped)
+    } catch (e) {
+      setDriveFeedback(e instanceof Error ? e.message : "Google Drive import mislukt.")
+    } finally {
+      setDriveImporting(false)
+    }
+  }, [handlePdfRows])
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
@@ -341,8 +360,8 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           <button
             type="button"
             onClick={() => folderInputRef.current?.click()}
-            disabled={isWorking}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#519fc8]/50 bg-[#519fc8]/10 px-4 py-2.5 text-sm font-semibold text-[#0e3b6a] shadow-sm transition hover:bg-[#519fc8]/20 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isWorking || driveImporting}
+            className="inline-flex items-center gap-2 rounded-lg border border-brand-light/50 bg-brand-light/10 px-4 py-2.5 text-sm font-semibold text-brand-dark shadow-sm transition hover:bg-brand-light/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <FolderInput className="h-4 w-4" />
             Choose folder
@@ -373,6 +392,22 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
               e.target.value = ""
             }}
           />
+
+          <button
+            type="button"
+            onClick={() => void handleGoogleDriveClick()}
+            disabled={isWorking || driveImporting}
+            className="inline-flex items-center gap-2 rounded-lg border border-brand-light/50 bg-white px-4 py-2.5 text-sm font-semibold text-brand-dark shadow-sm ring-1 ring-brand-light/30 transition hover:bg-brand-light/10 disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Import PDFs from Google Drive"
+          >
+            {driveImporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Cloud className="h-4 w-4 text-brand-light" />
+            )}
+            {driveImporting ? "Importing from Drive…" : "Import from Google Drive"}
+          </button>
+
           <span className="text-xs text-muted-foreground">
             Non-PDF files in a folder are ignored. Duplicate paths in one batch are deduplicated.
           </span>
@@ -396,6 +431,15 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
             role="status"
           >
             {message.text}
+          </div>
+        )}
+        {driveFeedback && (
+          <div
+            className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            role="alert"
+          >
+            <span className="font-medium">Google Drive: </span>
+            {driveFeedback}
           </div>
         )}
 

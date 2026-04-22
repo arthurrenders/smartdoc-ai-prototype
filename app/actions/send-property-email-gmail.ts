@@ -1,29 +1,37 @@
 "use server"
 
+import { z } from "zod"
 import { createServerClient } from "@/lib/supabase/server"
 import { resolveOwnerUserId } from "@/lib/supabase/resolve-owner-user-id"
 import { getValidAccessTokenForUser } from "@/lib/gmail/store"
 import { buildRfc822Message, toGmailRawUrlSafe } from "@/lib/gmail/rfc822"
 
-type SendEmailParams = {
-  propertyId: string
-  to: string
-  subject: string
-  body: string
-}
+const SendEmailSchema = z.object({
+  propertyId: z.string().uuid(),
+  to: z.string().email("Invalid recipient email address"),
+  subject: z.string().min(1).max(200),
+  body: z.string().min(1).max(12000),
+})
+
+type SendEmailParams = z.infer<typeof SendEmailSchema>
 
 export async function sendPropertyEmailViaGmail(
   params: SendEmailParams
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = SendEmailSchema.safeParse(params)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? "Invalid input" }
+  }
+
   try {
     const supabase = createServerClient()
     const ownerId = await resolveOwnerUserId(supabase)
     const { accessToken, gmailEmail } = await getValidAccessTokenForUser(supabase, ownerId)
     const raw = buildRfc822Message({
       fromEmail: gmailEmail,
-      toEmail: params.to,
-      subject: params.subject,
-      body: params.body,
+      toEmail: parsed.data.to,
+      subject: parsed.data.subject,
+      body: parsed.data.body,
     })
     const encoded = toGmailRawUrlSafe(raw)
     const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {

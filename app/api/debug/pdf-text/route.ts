@@ -6,6 +6,10 @@ import {
 } from "@/lib/pdf/extractor"
 
 export async function POST(request: NextRequest) {
+  if (process.env.NODE_ENV !== "development") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
   try {
     const formData = await request.formData()
     const documentId = formData.get("documentId") as string

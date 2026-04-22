@@ -1,6 +1,6 @@
 import "server-only"
 import { z } from "zod"
-import { geminiClient, GEMINI_MODEL } from "@/lib/ai/gemini"
+import { generateContentWithRetry, GEMINI_MODEL } from "@/lib/ai/gemini"
 import type {
   PropertyEmailDraft,
   PropertyEmailDraftKind,
@@ -69,7 +69,7 @@ ${factsBlock}
 
 Return JSON: {"subject":"...","body":"..."}`
 
-  const response = await geminiClient.models.generateContent({
+  const response = await generateContentWithRetry({
     model: GEMINI_MODEL,
     contents: prompt,
   })

@@ -26,9 +26,11 @@ import { GenerateEmailDraftCard } from "@/components/property/GenerateEmailDraft
 import { GmailSentToast } from "@/components/property/GmailSentToast"
 import { getGmailConnectionStatus } from "@/app/actions/gmail-connection"
 import { StatusBadge } from "@/components/ui/StatusBadge"
+import { StreetViewImage } from "@/components/ui/StreetViewImage"
 import { NotificationsBellDropdown } from "@/components/navigation/NotificationsBellDropdown"
 import { ExportDataButton } from "@/components/navigation/ExportDataButton"
 import logoImage from "@/components/public/logo png.png"
+import { streetViewUrl } from "@/lib/streetview"
 
 const PropertiesMap = nextDynamic(() => import("@/components/map/PropertiesMap"), { ssr: false })
 
@@ -82,6 +84,13 @@ export default async function PropertyPage({
         },
       ]
     : []
+
+  const svUrl = (() => {
+    const addr = data.propertyAddress
+    if (addr?.latitude != null && addr?.longitude != null)
+      return streetViewUrl({ latitude: Number(addr.latitude), longitude: Number(addr.longitude) }, "640x320")
+    return ""
+  })()
 
   const allowMissingDocs = data.missingRequiredDocumentNames.length > 0
   const allowRedFlags = data.flags.some((f) => f.severity === "red" || f.severity === "orange")
@@ -168,7 +177,9 @@ export default async function PropertyPage({
                 <nav className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-dashboard-on-surface-variant">
                   <span>Properties</span>
                   <span>›</span>
-                  <span className="font-semibold text-dashboard-primary">Leuven</span>
+                  <span className="font-semibold text-dashboard-primary">
+                    {data.propertyAddress?.municipality || data.propertyAddress?.raw_line1 || data.propertyDisplayName}
+                  </span>
                 </nav>
                 <h1 className="font-headline text-4xl font-extrabold tracking-tight text-dashboard-primary">
                   {data.propertyDisplayName}
@@ -190,6 +201,24 @@ export default async function PropertyPage({
                 <DeletePropertyButton propertyId={data.propertyId} propertyName={data.propertyDisplayName} redirectToDashboard />
               </div>
             </section>
+
+            <div className="relative h-52 w-full overflow-hidden rounded-2xl bg-gradient-to-br from-dashboard-primary-container/90 via-dashboard-primary/80 to-dashboard-primary shadow-sm">
+              <StreetViewImage
+                src={svUrl}
+                alt={`Street view of ${data.propertyDisplayName}`}
+                imgClassName="object-cover brightness-90"
+                fallback={
+                  <div className="absolute inset-0 opacity-10 [background-image:radial-gradient(circle_at_32px_32px,white_2px,transparent_0)] [background-size:32px_32px]" />
+                }
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+              <div className="absolute bottom-4 left-5 text-white drop-shadow">
+                <p className="text-xs font-semibold uppercase tracking-widest opacity-75">Aerial View</p>
+                <p className="mt-0.5 text-sm font-bold">
+                  {data.propertyAddress?.normalized_full_address || data.propertyAddress?.raw_line1 || data.propertyDisplayName}
+                </p>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
               <div className="space-y-8 lg:col-span-8">

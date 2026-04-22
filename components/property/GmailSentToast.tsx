@@ -9,11 +9,17 @@ export function GmailSentToast() {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
     function handler() {
       setVisible(true)
+      clearTimeout(timer)
+      timer = setTimeout(() => setVisible(false), 4000)
     }
     window.addEventListener(GMAIL_SENT_EVENT, handler)
-    return () => window.removeEventListener(GMAIL_SENT_EVENT, handler)
+    return () => {
+      window.removeEventListener(GMAIL_SENT_EVENT, handler)
+      clearTimeout(timer)
+    }
   }, [])
 
   if (!visible) return null

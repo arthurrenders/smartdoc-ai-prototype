@@ -19,8 +19,8 @@ export function GmailSettingsSection({ initialStatus }: GmailSettingsSectionProp
 
   return (
     <section className="saas-card space-y-5">
-      <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-[#0e3b6a]">
-        <Mail className="h-5 w-5 text-[#519fc8]" />
+      <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
+        <Mail className="h-5 w-5 text-brand-light" />
         Gmail Integration
       </h2>
       <div className="space-y-3">
@@ -46,7 +46,7 @@ export function GmailSettingsSection({ initialStatus }: GmailSettingsSectionProp
         </p>
         <Link
           href="/api/auth/gmail/start"
-          className="inline-flex items-center justify-center rounded-lg bg-[#0e3b6a] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0b3158]"
+          className="inline-flex items-center justify-center rounded-lg bg-brand-dark px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90"
         >
           {connected ? "Reconnect Gmail" : "Connect Gmail"}
         </Link>

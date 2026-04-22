@@ -9,7 +9,6 @@ import {
   Map as MapIcon,
   PieChart,
   Plus,
-  Search,
   Settings,
   TriangleAlert,
 } from "lucide-react"
@@ -190,16 +189,7 @@ export default async function AnalyticsPage() {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="dashboard-topnav">
             <div className="flex items-center gap-8">
-              <div className="relative hidden w-64 lg:block">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dashboard-on-surface-variant" />
-                <input
-                  className="w-full cursor-not-allowed rounded-lg border border-dashboard-outline-variant/30 bg-white py-2 pl-10 pr-4 text-sm opacity-70"
-                  placeholder="Search not available on Analytics yet"
-                  type="text"
-                  disabled
-                  aria-disabled="true"
-                />
-              </div>
+              <p className="hidden text-sm text-dashboard-on-surface-variant lg:block">Analytics overzicht</p>
               <nav className="flex items-center gap-5">
                 <Link href="/" className="py-4 text-sm text-slate-500 transition-colors hover:text-dashboard-primary">
                   Overview
@@ -249,7 +239,7 @@ export default async function AnalyticsPage() {
                         <span className="text-dashboard-on-surface-variant">{count}</span>
                       </div>
                       <div className="h-2 rounded-full bg-dashboard-surface-low">
-                        <div className="h-2 rounded-full bg-[#519fc8]" style={{ width: `${pct(count, Math.max(totalDocuments, 1))}%` }} />
+                        <div className="h-2 rounded-full bg-brand-light" style={{ width: `${pct(count, Math.max(totalDocuments, 1))}%` }} />
                       </div>
                     </div>
                   ))}
@@ -310,7 +300,7 @@ export default async function AnalyticsPage() {
                         <span className="text-dashboard-on-surface-variant">{count}</span>
                       </div>
                       <div className="h-2 rounded-full bg-dashboard-surface-low">
-                        <div className="h-2 rounded-full bg-[#0e3b6a]" style={{ width: `${pct(count, Math.max(totalProperties, 1))}%` }} />
+                        <div className="h-2 rounded-full bg-brand-dark" style={{ width: `${pct(count, Math.max(totalProperties, 1))}%` }} />
                       </div>
                     </div>
                   ))}
@@ -341,7 +331,7 @@ export default async function AnalyticsPage() {
 
               <article className="rounded-xl border border-dashboard-outline-variant/20 bg-white p-6 shadow-sm">
                 <h2 className="inline-flex items-center gap-2 text-lg font-bold text-dashboard-primary">
-                  <TriangleAlert className="h-5 w-5 text-[#519fc8]" />
+                  <TriangleAlert className="h-5 w-5 text-brand-light" />
                   Recently created properties
                 </h2>
                 <ul className="mt-4 space-y-2">

@@ -26,6 +26,7 @@ import { ExportDataButton } from "@/components/navigation/ExportDataButton"
 import { PropertySearchInput } from "@/components/navigation/PropertySearchInput"
 import { DeletePropertyDashboardButton } from "@/components/dashboard/DeletePropertyDashboardButton"
 import logoImage from "@/components/public/logo png.png"
+import { streetViewUrl } from "@/lib/streetview"
 
 function formatPropertyName(id: string): string {
   return `Property ${id.slice(0, 8)}`
@@ -38,13 +39,14 @@ export default async function DashboardPage({
 }) {
   const resolvedSearchParams = (await searchParams) ?? {}
   const searchQuery = typeof resolvedSearchParams.q === "string" ? resolvedSearchParams.q.trim() : ""
-  const { error: syncError } = await syncNotificationsFromDocumentDates()
   const [
-    { properties, propertyStats, propertiesError, totalPropertiesCount },
+    { error: syncError },
+    { properties, propertyStats, propertiesError, totalPropertiesCount, propertyAddresses },
     { data: calendarEntries, error: calendarError },
     { data: upcomingRows, error: upcomingError },
     { data: notificationRows, error: notificationsError },
   ] = await Promise.all([
+    syncNotificationsFromDocumentDates(),
     getDashboardData(searchQuery),
     getCalendarDates(),
     getUpcomingDeadlines(200),
@@ -154,7 +156,6 @@ export default async function DashboardPage({
                 title="Total properties"
                 value={totalProperties}
                 icon={<Building2 className="h-5 w-5" />}
-                trendLabel="+4%"
                 tone="primary"
               />
               <StatCard
@@ -260,6 +261,11 @@ export default async function DashboardPage({
                           documentCount: 0,
                         }
                       }
+                      streetViewUrl={(() => {
+                        const addr = propertyAddresses[prop.id]
+                        if (!addr || addr.latitude == null || addr.longitude == null) return undefined
+                        return streetViewUrl({ latitude: addr.latitude, longitude: addr.longitude }, "400x200")
+                      })()}
                     />
                   ))}
                 </div>

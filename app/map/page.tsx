@@ -182,15 +182,11 @@ export default async function MapPage({
                   </p>
                 </div>
                 <div className="flex-1 space-y-1 overflow-y-auto bg-dashboard-surface-low/30 p-2">
-                  {markers.map((marker, idx) => (
+                  {markers.map((marker) => (
                     <Link
                       key={marker.propertyId}
                       href={`/properties/${marker.propertyId}`}
-                      className={`block rounded-xl border p-4 transition-all ${
-                        idx === 0
-                          ? "border-dashboard-outline-variant/20 bg-white shadow-sm"
-                          : "border-transparent hover:border-dashboard-surface hover:bg-white"
-                      }`}
+                      className="block rounded-xl border border-transparent p-4 transition-all hover:border-dashboard-surface hover:bg-white"
                     >
                       <div className="mb-1 flex items-start justify-between gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-dashboard-on-surface-variant">

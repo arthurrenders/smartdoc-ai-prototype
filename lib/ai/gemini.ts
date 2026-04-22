@@ -1,13 +1,23 @@
 import "server-only"
 import { ApiError, GoogleGenAI } from "@google/genai"
 
-const apiKey = process.env.GEMINI_API_KEY
+let _client: GoogleGenAI | undefined
 
-if (!apiKey) {
-  throw new Error("GEMINI_API_KEY is not set")
+function getClient(): GoogleGenAI {
+  if (!_client) {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not set")
+    _client = new GoogleGenAI({ apiKey })
+  }
+  return _client
 }
 
-export const geminiClient = new GoogleGenAI({ apiKey })
+/** Lazy-initialized Gemini client — does not throw at import time. */
+export const geminiClient: GoogleGenAI = new Proxy({} as GoogleGenAI, {
+  get(_target, prop) {
+    return getClient()[prop as keyof GoogleGenAI]
+  },
+})
 
 /** Primary model (override with GEMINI_MODEL in .env.local). */
 export const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash"

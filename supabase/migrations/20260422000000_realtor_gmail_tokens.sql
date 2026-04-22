@@ -9,3 +9,11 @@ CREATE TABLE IF NOT EXISTS realtor_gmail_tokens (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE realtor_gmail_tokens ENABLE ROW LEVEL SECURITY;
+
+-- Only the owning user may read or write their own token row.
+CREATE POLICY "owner_all" ON realtor_gmail_tokens
+  FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());

@@ -79,11 +79,14 @@ export async function renameProperty(formData: FormData) {
   const newName = parsed.data.displayName
   const propertyId = parsed.data.propertyId
 
+  // Escape ilike wildcards so a name containing % or _ is treated literally.
+  const escapedName = newName.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")
+
   // Enforce "no duplicate property names" (case-insensitive).
   // NOTE: We also enforce at DB level via a unique index, but this
   // allows a friendlier error message.
   const existing = await postgrest<Array<{ id: string }>>(
-    `/rest/v1/properties?select=id&display_name=ilike.${encodeURIComponent(newName)}&limit=1`,
+    `/rest/v1/properties?select=id&display_name=ilike.${encodeURIComponent(escapedName)}&limit=1`,
     {
       method: "GET",
     }

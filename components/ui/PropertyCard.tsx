@@ -1,21 +1,30 @@
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 import { StatusBadge } from "./StatusBadge"
+import { StreetViewImage } from "./StreetViewImage"
 import type { PropertyStats } from "@/app/actions/get-dashboard-data"
 
 type PropertyCardProps = {
   id: string
   nameOrAddress: string
   stats: PropertyStats
+  streetViewUrl?: string
 }
 
-export function PropertyCard({ id, nameOrAddress, stats }: PropertyCardProps) {
+export function PropertyCard({ id, nameOrAddress, stats, streetViewUrl }: PropertyCardProps) {
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-dashboard-outline-variant/25 bg-dashboard-surface shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
       <div className="relative h-36 overflow-hidden bg-gradient-to-br from-dashboard-primary-container/90 via-dashboard-primary/80 to-dashboard-primary text-white">
-        <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_24px_24px,white_2px,transparent_0)] [background-size:24px_24px]" />
+        <StreetViewImage
+          src={streetViewUrl ?? ""}
+          alt={`Street view of ${nameOrAddress}`}
+          imgClassName="object-cover brightness-75"
+          fallback={
+            <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_24px_24px,white_2px,transparent_0)] [background-size:24px_24px]" />
+          }
+        />
         <div className="relative flex h-full items-start justify-between p-4">
-          <p className="max-w-[70%] text-sm font-semibold text-white/90">Property profile</p>
+          <p className="max-w-[70%] text-sm font-semibold text-white/90 drop-shadow">Property profile</p>
           <StatusBadge status={stats.status} className="shrink-0 border-white/40 bg-white/90 text-dashboard-primary" />
         </div>
       </div>
