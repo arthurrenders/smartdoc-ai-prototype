@@ -56,6 +56,52 @@ export function extractBelgianAddressFromPdfText(text: string): ExtractedPropert
     .map((l) => l.trim())
     .filter((l) => l.length > 8)
 
+  // First-pass signal: when a line explicitly labels an address, trust it before generic heuristics.
+  // Examples: "adres: parkstraat 88" / "adress: parkstraat 88"
+  for (const line of lines) {
+    const labeled = line.match(/^[\"'“”]?(?:adres|address|adress)[\"'“”]?\s*:\s*[\"'“”]?(.+?)[\"'“”]?$/i)
+    if (!labeled) continue
+    const candidate = labeled[1]?.trim() ?? ""
+    if (!candidate) continue
+
+    const withPostalAndCity = candidate.match(
+      /^(.+?)(?:,\s*|\s+)([1-9]\d{3})\s+([A-Za-zÀ-ÿ0-9](?:[A-Za-zÀ-ÿ0-9\s\-'.]+[A-Za-zÀ-ÿ0-9])?)$/i
+    )
+    if (withPostalAndCity) {
+      const streetPart = withPostalAndCity[1].trim().replace(/\s+/g, " ")
+      const postal = withPostalAndCity[2]
+      const municipality = withPostalAndCity[3].trim().replace(/\s+/g, " ")
+
+      const numM = streetPart.match(/^(.+?)\s+(\d+[A-Za-z]?)$/i)
+      return {
+        raw_line1: candidate.slice(0, 500),
+        street_name: (numM ? numM[1] : streetPart).trim() || null,
+        house_number: numM?.[2]?.trim() || null,
+        box: null,
+        postal_code: postal,
+        municipality,
+        region: null,
+        confidence: 0.82,
+        extraction_source: "text_heuristic",
+      }
+    }
+
+    const streetOnly = candidate.match(/^(.+?)\s+(\d+[A-Za-z]?)$/i)
+    if (streetOnly) {
+      return {
+        raw_line1: candidate.slice(0, 500),
+        street_name: streetOnly[1].trim() || null,
+        house_number: streetOnly[2].trim(),
+        box: null,
+        postal_code: null,
+        municipality: null,
+        region: null,
+        confidence: 0.8,
+        extraction_source: "text_heuristic",
+      }
+    }
+  }
+
   type Hit = { line: string; streetPart: string; postal: string; municipality: string }
   const hits: Hit[] = []
 

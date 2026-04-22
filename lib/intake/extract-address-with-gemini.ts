@@ -8,12 +8,6 @@ import type { ExtractedPropertyAddress } from "@/lib/property-address/types"
 
 const PROMPT_VERSION = "1.0"
 
-/** Minimum model-reported confidence to accept Gemini extraction for intake. */
-const MIN_GEMINI_CONFIDENCE = 0.55
-
-/** After validation, treat as usable for property matching only at or above this level. */
-const MIN_USABLE_CONFIDENCE = 0.72
-
 const IntakeGeminiAddressSchema = z.object({
   street_name: z.string().nullable().optional(),
   house_number: z.string().nullable().optional(),
@@ -40,10 +34,6 @@ function normalizeBelgianPostal(raw: string | number | null | undefined): string
 }
 
 function toExtractedAddress(data: z.infer<typeof IntakeGeminiAddressSchema>): ExtractedPropertyAddress | null {
-  if (data.confidence < MIN_GEMINI_CONFIDENCE) {
-    return null
-  }
-
   const postal = normalizeBelgianPostal(data.postal_code ?? null)
   const municipality = data.municipality?.trim() || null
   const street = data.street_name?.trim() || ""
@@ -66,12 +56,12 @@ function toExtractedAddress(data: z.infer<typeof IntakeGeminiAddressSchema>): Ex
   const rawFromAi = data.raw_line1?.trim()
   const raw_line1 = (rawFromAi && rawFromAi.length > 5 ? rawFromAi : structured.raw_line1).slice(0, 500)
 
-  const blendedConfidence = Math.min(0.94, Math.max(MIN_USABLE_CONFIDENCE, data.confidence))
+  const confidence = Math.max(0, Math.min(1, data.confidence))
 
   return {
     ...structured,
     raw_line1,
-    confidence: blendedConfidence,
+    confidence,
     extraction_source: "structured_ai",
   }
 }
@@ -82,7 +72,13 @@ function toExtractedAddress(data: z.infer<typeof IntakeGeminiAddressSchema>): Ex
  */
 export async function extractIntakePropertyAddressWithGemini(
   documentText: string
-): Promise<{ address: ExtractedPropertyAddress | null; modelName: string; promptVersion: string }> {
+): Promise<{
+  address: ExtractedPropertyAddress | null
+  modelName: string
+  promptVersion: string
+  rawOutput: string | null
+  parsed: z.infer<typeof IntakeGeminiAddressSchema> | null
+}> {
   const modelName = GEMINI_MODEL
 
   try {
@@ -102,7 +98,7 @@ export async function extractIntakePropertyAddressWithGemini(
     const content = response.text
     if (!content?.trim()) {
       console.warn("[intake] Gemini address: empty response")
-      return { address: null, modelName, promptVersion: PROMPT_VERSION }
+      return { address: null, modelName, promptVersion: PROMPT_VERSION, rawOutput: null, parsed: null }
     }
 
     const cleaned = content
@@ -115,30 +111,26 @@ export async function extractIntakePropertyAddressWithGemini(
       parsed = JSON.parse(cleaned)
     } catch (e) {
       console.warn("[intake] Gemini address: JSON parse failed", e instanceof Error ? e.message : e)
-      return { address: null, modelName, promptVersion: PROMPT_VERSION }
+      return { address: null, modelName, promptVersion: PROMPT_VERSION, rawOutput: content, parsed: null }
     }
 
     const parsedResult = IntakeGeminiAddressSchema.safeParse(parsed)
     if (!parsedResult.success) {
       console.warn("[intake] Gemini address: schema validation failed", parsedResult.error.flatten())
-      return { address: null, modelName, promptVersion: PROMPT_VERSION }
+      return { address: null, modelName, promptVersion: PROMPT_VERSION, rawOutput: content, parsed: null }
     }
 
     const address = toExtractedAddress(parsedResult.data)
     if (address && parsedResult.data.extraction_notes) {
       console.info("[intake] Gemini address notes:", parsedResult.data.extraction_notes)
     }
-    if (address) {
-      console.info(`[intake] Gemini address ok model=${modelName} conf=${address.confidence.toFixed(2)}`)
-    } else {
-      console.info(
-        `[intake] Gemini address rejected (low confidence or invalid BE fields) raw_conf=${parsedResult.data.confidence}`
-      )
-    }
+    console.info(
+      `[intake] Gemini address model=${modelName} conf=${Math.max(0, Math.min(1, parsedResult.data.confidence)).toFixed(2)}`
+    )
 
-    return { address, modelName, promptVersion: PROMPT_VERSION }
+    return { address, modelName, promptVersion: PROMPT_VERSION, rawOutput: content, parsed: parsedResult.data }
   } catch (e) {
     console.warn("[intake] Gemini address: request failed", e instanceof Error ? e.message : e)
-    return { address: null, modelName, promptVersion: PROMPT_VERSION }
+    return { address: null, modelName, promptVersion: PROMPT_VERSION, rawOutput: null, parsed: null }
   }
 }

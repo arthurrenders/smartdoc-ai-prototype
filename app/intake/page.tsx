@@ -2,12 +2,14 @@ import Link from "next/link"
 import { ArrowLeft, Inbox } from "lucide-react"
 
 import { getIntakeUploads } from "@/app/actions/get-intake-uploads"
+import { getIntakePropertyOptions } from "@/app/actions/get-intake-property-options"
 import { BulkIntakeClient } from "@/components/intake/BulkIntakeClient"
 
 export const dynamic = "force-dynamic"
 
 export default async function IntakePage() {
   const { data: rows, error } = await getIntakeUploads()
+  const { data: propertyOptions } = await getIntakePropertyOptions()
 
   return (
     <div className="saas-page space-y-8">
@@ -36,7 +38,7 @@ export default async function IntakePage() {
         </div>
       </div>
 
-      <BulkIntakeClient initialRows={rows} loadError={error} />
+      <BulkIntakeClient initialRows={rows} loadError={error} propertyOptions={propertyOptions} />
     </div>
   )
 }

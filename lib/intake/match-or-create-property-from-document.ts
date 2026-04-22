@@ -5,7 +5,6 @@ import { extractTextFromPDF } from "@/lib/pdf/extractor"
 import type { ExtractedPropertyAddress } from "@/lib/property-address/types"
 import { extractBelgianAddressFromPdfText } from "@/lib/property-address/extract-from-analysis"
 import { extractIntakePropertyAddressWithGemini } from "@/lib/intake/extract-address-with-gemini"
-import { geocodeResetPatch } from "@/lib/property-address/geocode-reset"
 import type { IntakeDetectedDocumentType } from "@/lib/intake/types"
 import {
   assertNoConflictingPropertyAddressMatch,
@@ -21,7 +20,8 @@ import {
   assertPropertyExistsForUser,
   findPropertyIdByOwnerDisplayName,
 } from "@/lib/properties/display-name-match"
-import { attachDocumentToProperty } from "@/lib/documents/attach-document-to-property"
+import { attachDocumentToProperty as attachDocumentToPropertyRecord } from "@/lib/documents/attach-document-to-property"
+import { createProperty as createPropertyRecord } from "@/lib/properties/create-property"
 
 function isValidPropertyUuid(id: string | null | undefined): id is string {
   return typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
@@ -206,7 +206,7 @@ async function insertDocumentAndAnalysis(
   const documentId = document.id as string
   const analysisRunId = analysisRunRow.id as string
 
-  const attach = await attachDocumentToProperty(supabase, {
+  const attach = await attachDocumentToPropertyRecord(supabase, {
     documentId,
     propertyId: pid,
     intakeDetectedType: params.intakeDetectedDocumentType ?? null,
@@ -217,6 +217,56 @@ async function insertDocumentAndAnalysis(
   }
 
   return { documentId, analysisRunId }
+}
+
+async function findMatchingProperty(
+  supabase: SupabaseClient,
+  params: { userId: string; normalized: NormalizedAddressFields; rows?: DbAddressRow[] }
+): Promise<{ propertyId: string; tier: AddressMatchTier } | null> {
+  const rows = params.rows ?? (await fetchAllPropertyAddressesForUser(supabase, params.userId))
+  const m = findUniquePropertyAddressMatch(params.normalized, rows)
+  if (m.kind === "linked") {
+    return { propertyId: m.row.property_id, tier: m.tier }
+  }
+  return null
+}
+
+async function createProperty(
+  supabase: SupabaseClient,
+  params: {
+    userId: string
+    displayName: string
+    addressLine: string
+    normalized: NormalizedAddressFields
+    source: string
+  }
+): Promise<{ ok: true; propertyId: string; propertyAddressId: string } | { ok: false; error: string }> {
+  return createPropertyRecord(supabase, {
+    userId: params.userId,
+    displayName: params.displayName,
+    addressLine: params.addressLine,
+    structuredAddress: params.normalized,
+    source: params.source,
+  })
+}
+
+async function attachDocumentToProperty(
+  supabase: SupabaseClient,
+  params: {
+    intakeUploadId: string
+    storagePath: string
+    filename: string
+    propertyId: string
+    newPropertyIdForRollback: string | null
+    intakeDetectedDocumentType: IntakeDetectedDocumentType
+  }
+): Promise<
+  { ok: true; finalStoragePath: string; documentId: string; analysisRunId: string } | { ok: false; error: string }
+> {
+  if (!params.propertyId) {
+    throw new Error("Invalid propertyId before attaching document")
+  }
+  return commitIntakePdfToProperty(supabase, params)
 }
 
 /**
@@ -290,12 +340,25 @@ export async function matchOrCreatePropertyFromDocument(
     }
   }
 
-  const { address: geminiAddress } = await extractIntakePropertyAddressWithGemini(text)
+  const geminiResult = await extractIntakePropertyAddressWithGemini(text)
+  const geminiAddress = geminiResult.address
   const candidate =
     geminiAddress ?? extractBelgianAddressFromPdfText(text)
 
+  const parsed = geminiResult.parsed
+  const debugConfidence = typeof parsed?.confidence === "number" ? parsed.confidence : 0
+  console.info(`[AI ADDRESS EXTRACTION]
+Document: ${params.filename}
+Raw output: ${geminiResult.rawOutput ?? "<empty>"}
+Parsed:
+  Street: ${parsed?.street_name?.trim() || "<missing>"}
+  Number: ${parsed?.house_number?.trim() || "<missing>"}
+  City: ${parsed?.municipality?.trim() || "<missing>"}
+  Postal Code: ${parsed?.postal_code !== null && parsed?.postal_code !== undefined ? String(parsed.postal_code).trim() : "<missing>"}
+Confidence: ${debugConfidence}`)
+
   if (geminiAddress) {
-    console.info(`${logPrefix} address extraction=gemini conf=${geminiAddress.confidence.toFixed(2)}`)
+    console.info(`${logPrefix} address extraction=gemini conf=${debugConfidence.toFixed(2)}`)
   } else if (candidate) {
     console.info(`${logPrefix} address extraction=pdf_heuristic conf=${candidate.confidence.toFixed(2)}`)
   }
@@ -395,76 +458,43 @@ export async function matchOrCreatePropertyFromDocument(
   }
 
   if (!propertyId) {
-    const now = new Date().toISOString()
     const displayName =
       (extractedAddressRaw && extractedAddressRaw.length <= 80
         ? extractedAddressRaw
         : `${normalized.street_name} ${normalized.house_number}, ${normalized.postal_code} ${normalized.municipality}`
       ).slice(0, 80)
 
-    const { data: propRow, error: propErr } = await supabase
-      .from("properties")
-      .insert({
-        user_id: params.userId,
-        display_name: displayName,
-        updated_at: now,
-      })
-      .select("id")
-      .single()
-
-    if (propErr || !propRow?.id) {
-      console.error(`${logPrefix} property insert failed`, propErr?.message)
-      return {
-        outcome: "failed",
-        reason: propErr?.message ?? "property insert failed",
-        extractedTextLength,
-        detectedDocumentType,
-      }
-    }
-
-    propertyId = propRow.id as string
-    created = true
-
-    const addrPayload = {
-      ...geocodeResetPatch(now),
-      raw_line1: (extractedAddressRaw ?? displayName).slice(0, 500),
-      street_name: normalized.street_name,
-      house_number: normalized.house_number,
-      box: normalized.box,
-      postal_code: normalized.postal_code,
-      municipality: normalized.municipality,
-      region: null,
-      country_code: normalized.country_code,
+    const createdProperty = await createProperty(supabase, {
+      userId: params.userId,
+      displayName,
+      addressLine: extractedAddressRaw ?? displayName,
+      normalized,
       source: "intake_auto_create",
-      created_at: now,
-    }
+    })
 
-    const { data: addrIns, error: addrErr } = await supabase
-      .from("property_addresses")
-      .insert({
-        property_id: propertyId,
-        ...addrPayload,
-      })
-      .select("id")
-      .single()
-
-    if (addrErr || !addrIns?.id) {
-      console.error(`${logPrefix} address insert failed`, addrErr?.message)
-      await supabase.from("properties").delete().eq("id", propertyId)
+    if (!createdProperty.ok) {
+      console.error(`${logPrefix} property insert failed`, createdProperty.error)
       return {
         outcome: "failed",
-        reason: addrErr?.message ?? "address insert failed",
+        reason: createdProperty.error,
         extractedTextLength,
         detectedDocumentType,
       }
     }
-    propertyAddressId = addrIns.id as string
+
+    propertyId = createdProperty.propertyId
+    created = true
+    propertyAddressId = createdProperty.propertyAddressId
     console.info(`${logPrefix} created property=${propertyId} address=${propertyAddressId}`)
+  }
+
+  if (!propertyId) {
+    throw new Error("Invalid propertyId before attaching document")
   }
 
   const copyRes = await copyIntakeToPropertyStorage(supabase, {
     sourcePath: params.storagePath,
-    propertyId: propertyId!,
+    propertyId,
     intakeUploadId: params.intakeUploadId,
     filename: params.filename,
   })
@@ -484,7 +514,7 @@ export async function matchOrCreatePropertyFromDocument(
   }
 
   const docRes = await insertDocumentAndAnalysis(supabase, {
-    propertyId: propertyId!,
+    propertyId,
     storagePath: copyRes.destPath,
     intakeDetectedDocumentType: detectedDocumentType,
     sourceFileName: params.filename,
@@ -518,7 +548,7 @@ export async function matchOrCreatePropertyFromDocument(
 
   return {
     outcome,
-    propertyId: propertyId!,
+    propertyId,
     propertyAddressId,
     documentId: docRes.documentId,
     analysisRunId: docRes.analysisRunId,
@@ -535,10 +565,12 @@ export async function matchOrCreatePropertyFromDocument(
 export type LinkIntakeManualPropertyParams = {
   userId: string
   intakeUploadId: string
-  /** Shown in the app as the property label (required). */
+  /** Optional label from UI; address-derived fallback is used when omitted. */
   displayName: string
-  /** Optional free-form address line stored on `property_addresses.raw_line1`. */
+  /** Free-form address line stored on `property_addresses.raw_line1`. */
   addressLine: string | null
+  /** Optional direct selection from existing property dropdown. */
+  selectedPropertyId?: string | null
 }
 
 /**
@@ -608,10 +640,8 @@ export async function linkIntakeUploadToManualProperty(
   supabase: SupabaseClient,
   params: LinkIntakeManualPropertyParams
 ): Promise<{ ok: true; propertyId: string } | { ok: false; error: string }> {
-  const label = params.displayName.trim()
-  if (!label) {
-    return { ok: false, error: "Property name is required." }
-  }
+  const fallbackLabel = (params.addressLine?.trim() || "Manual intake property").slice(0, 80)
+  const label = (params.displayName.trim() || fallbackLabel).slice(0, 80)
 
   const { data: row, error: fetchErr } = await supabase
     .from("intake_uploads")
@@ -638,7 +668,6 @@ export async function linkIntakeUploadToManualProperty(
 
   const storagePath = row.storage_path as string
   const filename = row.filename as string
-  const now = new Date().toISOString()
   const rawLine = (params.addressLine?.trim() || label).slice(0, 500)
 
   const rows = await fetchAllPropertyAddressesForUser(supabase, params.userId)
@@ -647,34 +676,49 @@ export async function linkIntakeUploadToManualProperty(
   let matchedExisting = false
   let matchTier: AddressMatchTier | null = null
 
+  if (params.selectedPropertyId?.trim()) {
+    const chosen = params.selectedPropertyId.trim()
+    const ownerOk = await assertPropertyExistsForUser(supabase, params.userId, chosen)
+    if (!ownerOk) {
+      return { ok: false, error: "Selected property not found or access denied." }
+    }
+    resolvedPropertyId = chosen
+    matchedExisting = true
+    matchTier = "strong"
+  }
+
   /**
    * Manual intake used to INSERT first, then hit the unique index on lower(display_name) and surface
    * "choose a different name" — even when the user meant an existing property. We now MATCH first
    * (name, structured address, raw_line1 fuzzy) and only INSERT when no safe match exists.
    */
-  const nameMatchId = await findPropertyIdByOwnerDisplayName(supabase, params.userId, label.slice(0, 80))
-  if (nameMatchId) {
-    resolvedPropertyId = nameMatchId
-    matchedExisting = true
-    matchTier = "strong"
-  }
-
   const parsed =
     parsePartialAddressFromText(params.addressLine?.trim() ?? "") ?? parsePartialAddressFromText(label)
 
-  if (!resolvedPropertyId && parsed) {
-    let m = findUniquePropertyAddressMatch(parsed, rows)
+  if (parsed?.street_name && parsed?.house_number) {
+    // Street + house number is the primary identity key for manual intake.
+    const matched = await findMatchingProperty(supabase, {
+      userId: params.userId,
+      normalized: parsed,
+      rows,
+    })
+    const m = findUniquePropertyAddressMatch(parsed, rows)
+    if (matched) {
+      resolvedPropertyId = matched.propertyId
+      matchedExisting = true
+      matchTier = matched.tier
+    }
     if (m.kind === "ambiguous") {
       return {
         ok: false,
         error: `Multiple existing properties match this address (${m.strongCount} strong / ${m.mediumCount} medium signals). Add postcode and municipality, or correct the street line.`,
       }
     }
-    if (m.kind === "linked") {
+    if (!resolvedPropertyId && m.kind === "linked") {
       resolvedPropertyId = m.row.property_id
       matchedExisting = true
       matchTier = m.tier
-    } else {
+    } else if (!resolvedPropertyId) {
       const guard = await assertNoConflictingPropertyAddressMatch(supabase, params.userId, parsed)
       if (guard.kind === "ambiguous") {
         return {
@@ -687,6 +731,15 @@ export async function linkIntakeUploadToManualProperty(
         matchedExisting = true
         matchTier = guard.tier
       }
+    }
+  }
+
+  if (!resolvedPropertyId) {
+    const nameMatchId = await findPropertyIdByOwnerDisplayName(supabase, params.userId, label.slice(0, 80))
+    if (nameMatchId) {
+      resolvedPropertyId = nameMatchId
+      matchedExisting = true
+      matchTier = "strong"
     }
   }
 
@@ -709,21 +762,25 @@ export async function linkIntakeUploadToManualProperty(
   let newPropertyIdForRollback: string | null = null
 
   if (!resolvedPropertyId) {
-    const { data: propRow, error: propErr } = await supabase
-      .from("properties")
-      .insert({
-        user_id: params.userId,
-        display_name: label.slice(0, 80),
-        updated_at: now,
-      })
-      .select("id")
-      .single()
+    const structured = parsed ?? {
+      street_name: null,
+      house_number: null,
+      box: null,
+      postal_code: null,
+      municipality: null,
+      country_code: "BE" as const,
+    }
+    const created = await createProperty(supabase, {
+      userId: params.userId,
+      displayName: label.slice(0, 80),
+      addressLine: rawLine,
+      normalized: structured,
+      source: "manual_intake",
+    })
 
-    if (propErr || !propRow?.id) {
-      const msg = propErr?.message ?? "Could not create property."
-      const pgCode = (propErr as { code?: string } | undefined)?.code
+    if (!created.ok) {
+      const msg = created.error
       const dup =
-        pgCode === "23505" ||
         msg.toLowerCase().includes("unique") ||
         msg.toLowerCase().includes("duplicate")
       if (dup) {
@@ -744,54 +801,27 @@ export async function linkIntakeUploadToManualProperty(
       }
     }
 
-    if (!resolvedPropertyId && propRow?.id) {
-      const propertyId = propRow.id as string
+    if (!resolvedPropertyId && created.ok) {
+      const propertyId = created.propertyId
       newPropertyIdForRollback = propertyId
-
-      const structured = parsed ?? {
-        street_name: null,
-        house_number: null,
-        box: null,
-        postal_code: null,
-        municipality: null,
-        country_code: "BE" as const,
-      }
-
-      const { data: addrIns, error: addrErr } = await supabase
-        .from("property_addresses")
-        .insert({
-          property_id: propertyId,
-          ...geocodeResetPatch(now),
-          raw_line1: rawLine,
-          street_name: structured.street_name,
-          house_number: structured.house_number,
-          box: structured.box,
-          postal_code: structured.postal_code,
-          municipality: structured.municipality,
-          region: null,
-          country_code: structured.country_code || "BE",
-          source: "manual_intake",
-          created_at: now,
-        })
-        .select("id")
-        .single()
-
-      if (addrErr || !addrIns?.id) {
-        await supabase.from("properties").delete().eq("id", propertyId)
-        return { ok: false, error: addrErr?.message ?? "Could not save address for the new property." }
-      }
 
       const preCreateGuard = structured.street_name && structured.house_number
         ? await assertNoConflictingPropertyAddressMatch(supabase, params.userId, structured)
         : { kind: "none" as const }
 
       if (preCreateGuard.kind === "linked") {
-        await supabase.from("property_addresses").delete().eq("property_id", propertyId)
-        await supabase.from("properties").delete().eq("id", propertyId)
-        newPropertyIdForRollback = null
-        resolvedPropertyId = preCreateGuard.row.property_id
-        matchedExisting = true
-        matchTier = preCreateGuard.tier
+        // If guard points to the property we just created, keep it.
+        // Deleting first and then reusing that same id causes FK failures when attaching documents.
+        if (preCreateGuard.row.property_id === propertyId) {
+          resolvedPropertyId = propertyId
+        } else {
+          await supabase.from("property_addresses").delete().eq("property_id", propertyId)
+          await supabase.from("properties").delete().eq("id", propertyId)
+          newPropertyIdForRollback = null
+          resolvedPropertyId = preCreateGuard.row.property_id
+          matchedExisting = true
+          matchTier = preCreateGuard.tier
+        }
       } else if (preCreateGuard.kind === "ambiguous") {
         await supabase.from("property_addresses").delete().eq("property_id", propertyId)
         await supabase.from("properties").delete().eq("id", propertyId)
@@ -809,17 +839,12 @@ export async function linkIntakeUploadToManualProperty(
     return { ok: false, error: "Cannot attach document: invalid propertyId" }
   }
 
-  const ownerOk = await assertPropertyExistsForUser(supabase, params.userId, resolvedPropertyId)
-  if (!ownerOk) {
-    return { ok: false, error: "Property not found or access denied; cannot attach document." }
-  }
-
   const detected = (row.detected_document_type as IntakeDetectedDocumentType | null) ?? "unknown"
   const extractedRaw = params.addressLine?.trim() || null
 
   const propertyIdForCommit = resolvedPropertyId
 
-  const commit = await commitIntakePdfToProperty(supabase, {
+  const commit = await attachDocumentToProperty(supabase, {
     intakeUploadId: params.intakeUploadId,
     storagePath,
     filename,

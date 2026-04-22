@@ -6,6 +6,7 @@ import { createServerClient } from "@/lib/supabase/server"
 import { resolveOwnerUserId } from "@/lib/supabase/resolve-owner-user-id"
 import { z } from "zod"
 import { escapeForIlike } from "@/lib/properties/display-name-match"
+import { createProperty as createPropertyRecord } from "@/lib/properties/create-property"
 
 const CreatePropertySchema = z.object({
   displayName: z
@@ -47,42 +48,19 @@ export async function createProperty(formData: FormData) {
     throw new Error(DUPLICATE_NAME_MESSAGE)
   }
 
-  const now = new Date().toISOString()
-  const { data, error } = await supabase
-    .from("properties")
-    .insert({
-      user_id: ownerUserId,
-      display_name: displayName,
-      updated_at: now,
-    })
-    .select("id")
-    .single()
-
-  if (error) {
-    if (error.code === "23505") {
+  const created = await createPropertyRecord(supabase, {
+    userId: ownerUserId,
+    displayName,
+    addressLine: displayName,
+    source: "create_property",
+  })
+  if (!created.ok) {
+    if (created.error.toLowerCase().includes("duplicate") || created.error.toLowerCase().includes("unique")) {
       throw new Error(DUPLICATE_NAME_MESSAGE)
     }
-    throw new Error(error.message ?? "Failed to create property")
+    throw new Error(created.error)
   }
-
-  if (!data) {
-    throw new Error("Failed to create property")
-  }
-
-  const newId = data.id as string
-
-  const { error: addressError } = await supabase.from("property_addresses").insert({
-    property_id: newId,
-    source: "create_property",
-    raw_line1: displayName,
-    country_code: "BE",
-    updated_at: now,
-  })
-
-  if (addressError) {
-    await supabase.from("properties").delete().eq("id", newId)
-    throw new Error(addressError.message ?? "Failed to create property address.")
-  }
+  const newId = created.propertyId
 
   revalidatePath("/")
   revalidatePath(`/properties/${newId}`)

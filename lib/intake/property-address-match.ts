@@ -170,6 +170,39 @@ export function parsePartialAddressFromText(text: string): NormalizedAddressFiel
   const raw = text.trim().replace(/\s+/g, " ")
   if (!raw) return null
 
+  // Handle full-line forms before splitting, including comma-separated variants:
+  // "Parkstraat 88, 3000 Leuven" and "Parkstraat 88 3000 Leuven".
+  const fullWithPostal = raw.match(
+    /^(.+?)(?:,\s*|\s+)([1-9]\d{3})\s+([A-Za-zÀ-ÿ0-9](?:[A-Za-zÀ-ÿ0-9\s\-'.]+[A-Za-zÀ-ÿ0-9])?)$/i
+  )
+  if (fullWithPostal) {
+    const streetPart = fullWithPostal[1].trim().replace(/\s+/g, " ")
+    const postal = fullWithPostal[2]
+    const municipality = fullWithPostal[3].trim().replace(/\s+/g, " ")
+    const busM = streetPart.match(/^(.+?)\s+bus\s+([A-Za-z0-9]+)$/i)
+    if (busM) {
+      const front = busM[1].trim()
+      const numM = front.match(/^(.+?)\s+(\d+[A-Za-z]?)$/i)
+      return {
+        street_name: (numM ? numM[1] : front).trim() || null,
+        house_number: numM?.[2]?.trim() || null,
+        box: busM[2].trim() || null,
+        postal_code: postal,
+        municipality,
+        country_code: "BE",
+      }
+    }
+    const numM = streetPart.match(/^(.+?)\s+(\d+[A-Za-z]?)$/i)
+    return {
+      street_name: (numM ? numM[1] : streetPart).trim() || null,
+      house_number: numM?.[2]?.trim() || null,
+      box: null,
+      postal_code: postal,
+      municipality,
+      country_code: "BE",
+    }
+  }
+
   const segments = raw
     .split(/\n|,|;|\||\//)
     .map((s) => s.trim())
@@ -272,7 +305,8 @@ function postalMatchesWhenPresent(
     return { ok: true, strict: false }
   }
   if (!rowHas) {
-    return { ok: false, strict: true }
+    // Postal code is optional for identity matching; missing DB postal must not block street+number match.
+    return { ok: true, strict: false }
   }
   return { ok: normStr(inputPostal) === normStr(rowPostal), strict: true }
 }
@@ -298,17 +332,28 @@ export function findUniquePropertyAddressMatch(
   const medium: Scored[] = []
 
   for (const row of rows) {
-    if (!normHouse(row.house_number)) continue
-    if (normHouse(input.house_number) !== normHouse(row.house_number)) continue
-    if (!boxCompatible(input.box, row.box)) continue
+    // Some legacy rows only store `raw_line1` (e.g. "Parkstraat 88, 3000 Leuven").
+    // Derive structured fields from raw_line1 so street+number still match and avoid duplicate properties.
+    const derived = (!row.street_name || !row.house_number) && row.raw_line1
+      ? parsePartialAddressFromText(row.raw_line1)
+      : null
+    const rowStreet = row.street_name ?? derived?.street_name ?? null
+    const rowHouse = row.house_number ?? derived?.house_number ?? null
+    const rowBox = row.box ?? derived?.box ?? null
+    const rowPostal = row.postal_code ?? derived?.postal_code ?? null
+    const rowMunicipality = row.municipality ?? derived?.municipality ?? null
 
-    const { ok: postalOk } = postalMatchesWhenPresent(input.postal_code, row.postal_code)
+    if (!normHouse(rowHouse)) continue
+    if (normHouse(input.house_number) !== normHouse(rowHouse)) continue
+    if (!boxCompatible(input.box, rowBox)) continue
+
+    const { ok: postalOk } = postalMatchesWhenPresent(input.postal_code, rowPostal)
     if (!postalOk) continue
 
-    const sim = streetSimilarity(input.street_name, row.street_name)
-    const muniOk = municipalityMatchesWhenPresent(input.municipality, row.municipality)
+    const sim = streetSimilarity(input.street_name, rowStreet)
+    const muniOk = municipalityMatchesWhenPresent(input.municipality, rowMunicipality)
 
-    const hasPostal = hasValidBePostal(input.postal_code) && hasValidBePostal(row.postal_code)
+    const hasPostal = hasValidBePostal(input.postal_code) && hasValidBePostal(rowPostal)
     const strongSimThreshold = hasPostal && muniOk ? STRONG_STREET_SIMILARITY_POSTAL_BONUS : STRONG_STREET_SIMILARITY_MIN
 
     if (sim >= strongSimThreshold && muniOk) {

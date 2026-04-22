@@ -23,6 +23,7 @@ import {
 } from "@/lib/intake/collect-pdf-files"
 import { IntakeManualPropertyForm } from "@/components/intake/IntakeManualPropertyForm"
 import { cn } from "@/lib/utils"
+import type { IntakePropertyOption } from "@/app/actions/get-intake-property-options"
 
 /** Batch size per server round-trip to keep FormData and processing bounded for large folders. */
 const UPLOAD_CHUNK_SIZE = 30
@@ -112,9 +113,10 @@ function formatIntakeMatchSummary(row: IntakeUploadRow): string {
 type BulkIntakeClientProps = {
   initialRows: IntakeUploadRow[]
   loadError: string | null
+  propertyOptions: IntakePropertyOption[]
 }
 
-export function BulkIntakeClient({ initialRows, loadError }: BulkIntakeClientProps) {
+export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: BulkIntakeClientProps) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement | null>(null)
@@ -536,6 +538,7 @@ export function BulkIntakeClient({ initialRows, loadError }: BulkIntakeClientPro
                             {manualFormIntakeId === row.id ? (
                               <IntakeManualPropertyForm
                                 intakeUploadId={row.id}
+                                propertyOptions={propertyOptions}
                                 onDone={() => setManualFormIntakeId(null)}
                               />
                             ) : (
