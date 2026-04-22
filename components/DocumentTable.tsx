@@ -3,9 +3,9 @@
 import { useState, useRef, useEffect } from "react"
 import { Upload, Play, FileQuestion, FileText } from "lucide-react"
 import { uploadDocument } from "@/app/actions/upload-document"
+import { verifyDocumentAddress } from "@/app/actions/verify-document-address"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
 import { runAnalysis } from "@/app/actions/run-analysis"
-import { pickGoogleDrivePdfFiles } from "@/lib/google-drive/picker-flow"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
 
 type DocumentType = {
@@ -55,6 +55,13 @@ type Document = {
   storage_path: string
   status: string
   created_at: string
+  expected_property_id?: string | null
+  expected_address?: string | null
+  extracted_document_address?: string | null
+  address_match_status?: string | null
+  address_match_confidence?: number | null
+  address_match_reason?: string | null
+  address_match_user_overridden?: boolean | null
   document_types: DocumentType | null
   analysis_runs: AnalysisRun[] | null
 }
@@ -149,6 +156,24 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     return { documentId: result.documentId, analysisRunId: result.analysisRunId }
   }
 
+  /**
+   * Same path as the per-row file input: FormData upload → refresh list → run analysis.
+   * Optional hook runs after loadData (e.g. clear row uploading state before analysis).
+   */
+  async function uploadPdfThroughManualPipeline(
+    file: File,
+    documentTypeId: string,
+    afterLoadData?: () => void
+  ) {
+    const { documentId, analysisRunId } = await uploadPdfFile(file, documentTypeId)
+    const verifyFd = new FormData()
+    verifyFd.append("documentId", documentId)
+    await verifyDocumentAddress(verifyFd)
+    await loadData()
+    afterLoadData?.()
+    await handleRunAnalysis(documentTypeId, documentId, analysisRunId)
+  }
+
   function getDocumentData(documentTypeId: string) {
     // Intake-linked PDFs get a real `document_type_id` in `attachDocumentToProperty`; pick the latest row per type
     // so verification rows match manual uploads (including re-uploads).
@@ -237,7 +262,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     })
 
     try {
-      await uploadPdfFile(file, documentTypeId)
+      await uploadPdfThroughManualPipeline(file, documentTypeId, () => setUploading(null))
       await loadData()
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Upload mislukt."
@@ -254,6 +279,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     setDriveImporting(true)
     setDriveFeedback(null)
     try {
+      const { pickGoogleDrivePdfFiles } = await import("@/lib/google-drive/picker-flow")
       const files = await pickGoogleDrivePdfFiles()
       if (files.length === 0) return
 
@@ -264,7 +290,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
             "Geen documenttype herkend in de bestandsnaam. Hernoem het bestand (bijv. epc, asbest, elektrisch) of upload via de juiste rij."
           )
         }
-        await uploadPdfFile(file, documentTypeId)
+        await uploadPdfThroughManualPipeline(file, documentTypeId, () => setUploading(null))
         await loadData()
       }
     } catch (error) {
@@ -278,6 +304,20 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
 
   function handleUploadClick(documentTypeId: string) {
     fileInputRefs.current[documentTypeId]?.click()
+  }
+
+  function addressVerificationDotClass(status: string | null | undefined): string {
+    switch (status) {
+      case "match":
+        return "bg-emerald-500"
+      case "mismatch":
+        return "bg-red-500"
+      case "unknown":
+      case "possible_match":
+        return "bg-orange-500"
+      default:
+        return "bg-muted-foreground/40"
+    }
   }
 
   function getStatusColor(status: string): string {
@@ -391,6 +431,37 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold text-foreground">{docType.name}</h3>
+                  {document?.address_match_status != null && (
+                    <div className="mt-2 space-y-2 text-sm">
+                      <div className="flex items-center gap-2 text-foreground">
+                        <span
+                          className={`inline-block h-2 w-2 shrink-0 rounded-full ${addressVerificationDotClass(
+                            document.address_match_status
+                          )}`}
+                          aria-hidden
+                        />
+                        <span className="font-medium">Address</span>
+                      </div>
+                      {(document.address_match_status === "unknown" ||
+                        document.address_match_status === "possible_match") &&
+                        document.address_match_reason && (
+                          <p className="pl-4 text-muted-foreground">{document.address_match_reason}</p>
+                        )}
+                      {document.address_match_status === "mismatch" && (
+                        <div className="space-y-2 pl-4 text-muted-foreground">
+                          <p>The address is not identical.</p>
+                          <p>
+                            <span className="font-medium text-foreground">Property address: </span>
+                            {document.expected_address?.trim() || "—"}
+                          </p>
+                          <p>
+                            <span className="font-medium text-foreground">Address found in document: </span>
+                            {document.extracted_document_address?.trim() || "—"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {rowFeedback && (
                     <div
                       className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"

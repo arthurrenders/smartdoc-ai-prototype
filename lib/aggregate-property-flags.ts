@@ -36,7 +36,13 @@ function isWrongDocumentTypeFlag(flag: FlagInput): boolean {
 function isManualReviewFlag(flag: FlagInput): boolean {
   const t = (flag.title || "").toLowerCase()
   const d = (flag.details || "").toLowerCase()
-  return t.includes(TITLE_MANUAL_REVIEW) || d.includes(TITLE_MANUAL_REVIEW)
+  return (
+    t.includes(TITLE_MANUAL_REVIEW) ||
+    d.includes(TITLE_MANUAL_REVIEW) ||
+    t.includes("analysis incomplete") ||
+    t.includes("api quota exceeded") ||
+    t.includes("empty model response")
+  )
 }
 
 function isSpecificFlag(flag: FlagInput): boolean {

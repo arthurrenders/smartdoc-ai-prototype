@@ -1,7 +1,8 @@
 import "server-only"
 import { z } from "zod"
 import { LLMAnalysisResultSchema, type LLMAnalysisResult } from "./llm-schema"
-import { geminiClient, GEMINI_MODEL } from "@/lib/ai/gemini"
+import { GEMINI_MODEL, generateContentWithRetry } from "@/lib/ai/gemini"
+import { getTextFromGeminiResponse, parseJsonFromModelOutput } from "@/lib/ai/json-from-model"
 import type { AnalysisResult } from "./detectors"
 import { analyzeEPCWithAI } from "./epc-analyzer"
 import { analyzeElectricalWithAI } from "./electrical-analyzer"
@@ -71,21 +72,18 @@ export async function analyzeWithLLM(
 
   try {
     const prompt = `${getSystemPrompt(documentType)}\n\n${getUserPrompt(documentType, text)}`
-    const response = await geminiClient.models.generateContent({
+    const response = await generateContentWithRetry({
       model: GEMINI_MODEL,
       contents: prompt,
     })
-    const content = response.text
+    const content = getTextFromGeminiResponse(response)
     if (!content) {
       throw new Error("No content in LLM response")
     }
 
-    // Parse JSON
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(content)
-    } catch (parseError) {
-      throw new Error(`Failed to parse LLM JSON response: ${parseError instanceof Error ? parseError.message : "Unknown error"}`)
+    const parsed = parseJsonFromModelOutput(content)
+    if (parsed === null) {
+      throw new Error("Failed to parse LLM JSON response")
     }
 
     // Validate with Zod

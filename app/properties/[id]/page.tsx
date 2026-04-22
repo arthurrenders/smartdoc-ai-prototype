@@ -16,19 +16,33 @@ import {
 } from "lucide-react"
 import { getPropertyDetail } from "@/app/actions/get-property-detail"
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
-import DocumentTable from "@/components/DocumentTable"
 import { PropertyAddressCard } from "@/components/property/PropertyAddressCard"
 import { PropertyLocationEnrichmentCard } from "@/components/property/PropertyLocationEnrichmentCard"
 import { RenamePropertyButton } from "@/components/property/RenamePropertyButton"
 import { DeletePropertyButton } from "@/components/property/DeletePropertyButton"
 import { RedFlagsList } from "@/components/property/RedFlagsList"
 import { SuggestedActionsCard } from "@/components/property/SuggestedActionsCard"
+import { GenerateEmailDraftCard } from "@/components/property/GenerateEmailDraftCard"
 import { StatusBadge } from "@/components/ui/StatusBadge"
 import { NotificationsBellDropdown } from "@/components/navigation/NotificationsBellDropdown"
 import { ExportDataButton } from "@/components/navigation/ExportDataButton"
 import logoImage from "@/components/public/logo png.png"
 
 const PropertiesMap = nextDynamic(() => import("@/components/map/PropertiesMap"), { ssr: false })
+
+/** Client-only: avoids pulling the Drive Picker / GAPI subgraph into the server RSC payload and reduces ChunkLoadError races on soft navigation. */
+const DocumentTable = nextDynamic(() => import("@/components/DocumentTable"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+      <div
+        className="h-8 w-8 animate-spin rounded-full border-2 border-dashboard-primary border-t-transparent"
+        aria-hidden
+      />
+      <p className="text-sm text-dashboard-on-surface-variant">Loading documents…</p>
+    </div>
+  ),
+})
 
 export default async function PropertyPage({
   params,
@@ -65,6 +79,14 @@ export default async function PropertyPage({
         },
       ]
     : []
+
+  const allowMissingDocs = data.missingRequiredDocumentNames.length > 0
+  const allowRedFlags = data.flags.some((f) => f.severity === "red" || f.severity === "orange")
+  const allowDocumentMismatch = data.flags.some(
+    (f) =>
+      f.title.toLowerCase().includes("wrong document type") ||
+      f.details.toLowerCase().includes("wrong document")
+  )
 
   return (
     <div className="-mt-10 overflow-hidden sm:-mt-12 lg:-mt-16">
@@ -223,6 +245,12 @@ export default async function PropertyPage({
                 </div>
 
                 <RedFlagsList flags={data.flags} className="rounded-xl border border-dashboard-outline-variant/10 bg-white shadow-sm" />
+                <GenerateEmailDraftCard
+                  propertyId={id}
+                  allowMissingDocs={allowMissingDocs}
+                  allowRedFlags={allowRedFlags}
+                  allowDocumentMismatch={allowDocumentMismatch}
+                />
                 <SuggestedActionsCard actions={data.suggestedActions} className="rounded-xl" />
               </div>
             </div>

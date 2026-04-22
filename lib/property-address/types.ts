@@ -10,7 +10,11 @@ export type ExtractedPropertyAddress = {
   municipality: string | null
   region: string | null
   confidence: number
-  extraction_source: "structured_ai" | "text_heuristic"
+  extraction_source:
+    | "structured_ai"
+    | "text_heuristic"
+    | "embedded_json"
+    | "keyword_context"
 }
 
 export type PropertyAddressRecord = {
