@@ -1,5 +1,8 @@
+import { Suspense } from "react"
 import { Save, User, SlidersHorizontal, KeyRound, Bell } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
+import { getGmailConnectionStatus } from "@/app/actions/gmail-connection"
+import { GmailSettingsSection } from "@/components/settings/GmailSettingsSection"
 
 type SettingsAccount = {
   name: string
@@ -45,7 +48,7 @@ async function getAccountInfo(): Promise<SettingsAccount> {
 }
 
 export default async function SettingsPage() {
-  const account = await getAccountInfo()
+  const [account, gmailStatus] = await Promise.all([getAccountInfo(), getGmailConnectionStatus()])
 
   return (
     <div className="saas-page space-y-8">
@@ -57,6 +60,12 @@ export default async function SettingsPage() {
           Manage account details and SmartDoc preferences.
         </p>
       </header>
+
+      <Suspense
+        fallback={<section className="saas-card h-32 animate-pulse rounded-xl bg-muted/30" aria-hidden />}
+      >
+        <GmailSettingsSection initialStatus={gmailStatus} />
+      </Suspense>
 
       <form className="space-y-6">
         <section className="saas-card space-y-5">

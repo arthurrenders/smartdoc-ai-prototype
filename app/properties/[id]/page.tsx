@@ -23,6 +23,8 @@ import { DeletePropertyButton } from "@/components/property/DeletePropertyButton
 import { RedFlagsList } from "@/components/property/RedFlagsList"
 import { SuggestedActionsCard } from "@/components/property/SuggestedActionsCard"
 import { GenerateEmailDraftCard } from "@/components/property/GenerateEmailDraftCard"
+import { GmailSentToast } from "@/components/property/GmailSentToast"
+import { getGmailConnectionStatus } from "@/app/actions/gmail-connection"
 import { StatusBadge } from "@/components/ui/StatusBadge"
 import { NotificationsBellDropdown } from "@/components/navigation/NotificationsBellDropdown"
 import { ExportDataButton } from "@/components/navigation/ExportDataButton"
@@ -50,9 +52,10 @@ export default async function PropertyPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [data, { data: notificationRows, error: notificationsError }] = await Promise.all([
+  const [data, { data: notificationRows, error: notificationsError }, gmailStatus] = await Promise.all([
     getPropertyDetail(id),
     getDashboardNotifications(12),
+    getGmailConnectionStatus(),
   ])
 
   if (!data) {
@@ -250,6 +253,8 @@ export default async function PropertyPage({
                   allowMissingDocs={allowMissingDocs}
                   allowRedFlags={allowRedFlags}
                   allowDocumentMismatch={allowDocumentMismatch}
+                  gmailConnected={gmailStatus.ok && gmailStatus.connected}
+                  gmailEmail={gmailStatus.ok && gmailStatus.connected ? gmailStatus.gmailEmail : null}
                 />
                 <SuggestedActionsCard actions={data.suggestedActions} className="rounded-xl" />
               </div>
@@ -257,6 +262,7 @@ export default async function PropertyPage({
           </div>
         </main>
       </div>
+      <GmailSentToast />
     </div>
   )
 }

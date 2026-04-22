@@ -1,8 +1,10 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { Copy, Loader2, Mail } from "lucide-react"
+import { Copy, Loader2, Mail, Send } from "lucide-react"
 import { generatePropertyEmailDraft } from "@/app/actions/generate-property-email-draft"
+import { sendPropertyEmailViaGmail } from "@/app/actions/send-property-email-gmail"
+import { GMAIL_SENT_EVENT } from "@/components/property/GmailSentToast"
 import type {
   PropertyEmailDraftKind,
   PropertyEmailDraftLanguage,
@@ -52,6 +54,9 @@ type GenerateEmailDraftCardProps = {
   allowMissingDocs: boolean
   allowRedFlags: boolean
   allowDocumentMismatch: boolean
+  gmailConnected?: boolean
+  gmailEmail?: string | null
+  appLanguage?: PropertyEmailDraftLanguage
 }
 
 type EmailDraftAvailability = Pick<
@@ -77,6 +82,9 @@ export function GenerateEmailDraftCard({
   allowMissingDocs,
   allowRedFlags,
   allowDocumentMismatch,
+  gmailConnected = false,
+  gmailEmail = null,
+  appLanguage = "en",
 }: GenerateEmailDraftCardProps) {
   const availability = { allowMissingDocs, allowRedFlags, allowDocumentMismatch }
   const defaultKind =
@@ -84,17 +92,22 @@ export function GenerateEmailDraftCard({
 
   const [isOpen, setIsOpen] = useState(false)
   const [kind, setKind] = useState<PropertyEmailDraftKind>(defaultKind)
-  const [language, setLanguage] = useState<PropertyEmailDraftLanguage>("en")
+  const [language, setLanguage] = useState<PropertyEmailDraftLanguage>(appLanguage)
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
+  const [toEmail, setToEmail] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [copyHint, setCopyHint] = useState<string | null>(null)
+  const [sendStatus, setSendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle")
+  const [sendError, setSendError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   function open() {
     setIsOpen(true)
     setError(null)
     setCopyHint(null)
+    setSendStatus("idle")
+    setSendError(null)
     const first =
       EMAIL_KINDS.find((k) => k.requires == null || kindAllowed(k.id, availability))?.id ?? "follow_up"
     setKind(first)
@@ -105,6 +118,8 @@ export function GenerateEmailDraftCard({
   function generate() {
     setError(null)
     setCopyHint(null)
+    setSendStatus("idle")
+    setSendError(null)
     if (!kindAllowed(kind, availability)) {
       setError("This email type is not available for the current property state.")
       return
@@ -118,6 +133,32 @@ export function GenerateEmailDraftCard({
       setSubject(res.draft.subject)
       setBody(res.draft.body)
     })
+  }
+
+  async function handleSendViaGmail() {
+    if (!subject.trim() || !body.trim()) {
+      setSendError("Generate a draft first before sending.")
+      return
+    }
+    if (!toEmail.trim()) {
+      setSendError("Enter a recipient email address.")
+      return
+    }
+    setSendStatus("sending")
+    setSendError(null)
+    const res = await sendPropertyEmailViaGmail({
+      propertyId,
+      to: toEmail.trim(),
+      subject: subject.trim(),
+      body: body.trim(),
+    })
+    if (!res.ok) {
+      setSendStatus("error")
+      setSendError(res.error)
+      return
+    }
+    setSendStatus("sent")
+    window.dispatchEvent(new Event(GMAIL_SENT_EVENT))
   }
 
   async function copyText(label: string, text: string) {
@@ -336,10 +377,66 @@ export function GenerateEmailDraftCard({
                       id="draft-body"
                       value={body}
                       onChange={(e) => setBody(e.target.value)}
-                      rows={12}
+                      rows={10}
                       className="w-full resize-y rounded-md border border-[hsl(var(--border))] bg-background px-3 py-2 text-sm leading-relaxed shadow-sm outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
+
+                  {gmailConnected && (
+                    <div className="space-y-2 border-t pt-3">
+                      <label htmlFor="draft-to" className="text-xs font-medium text-muted-foreground">
+                        Send to (recipient email)
+                      </label>
+                      <input
+                        id="draft-to"
+                        type="email"
+                        value={toEmail}
+                        onChange={(e) => setToEmail(e.target.value)}
+                        placeholder="recipient@example.com"
+                        className="w-full rounded-md border border-[hsl(var(--border))] bg-background px-3 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring"
+                        disabled={sendStatus === "sending"}
+                      />
+                      {gmailEmail && (
+                        <p className="text-[11px] text-muted-foreground">Sending from: {gmailEmail}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void handleSendViaGmail()}
+                        disabled={sendStatus === "sending" || !toEmail.trim()}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:pointer-events-none disabled:opacity-50"
+                      >
+                        {sendStatus === "sending" ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                            Sending…
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-4 w-4" aria-hidden />
+                            Send via Gmail
+                          </>
+                        )}
+                      </button>
+                      {sendStatus === "sent" && (
+                        <p className="text-sm font-medium text-emerald-600">Email sent successfully.</p>
+                      )}
+                      {(sendStatus === "error") && sendError && (
+                        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                          {sendError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!gmailConnected && (
+                    <p className="text-xs text-muted-foreground">
+                      To send directly, connect Gmail in{" "}
+                      <a href="/settings" className="underline hover:text-foreground">
+                        Settings
+                      </a>
+                      .
+                    </p>
+                  )}
                 </div>
               )}
             </div>
