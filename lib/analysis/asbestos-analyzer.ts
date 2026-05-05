@@ -7,6 +7,11 @@ import { userFacingAnalysisFailureFromError } from "@/lib/ai/gemini-errors"
 import { getTextFromGeminiResponse, parseJsonFromModelOutput } from "@/lib/ai/json-from-model"
 
 const PROMPT_VERSION = "1.0"
+const DEBUG_ANALYSIS_LOGS = process.env.DEBUG_ANALYSIS_LOGS === "1"
+
+function debugLog(...args: unknown[]) {
+  if (DEBUG_ANALYSIS_LOGS) console.debug(...args)
+}
 
 type AsbestosInventoryItem = {
   material_type?: string | null
@@ -178,16 +183,16 @@ export async function analyzeAsbestosWithAI(
   const modelName = GEMINI_MODEL
 
   const normalizedText = normalizeText(text)
-  console.log("=== ASBESTOS NORMALIZED TEXT FOR AI ===")
-  console.log("Normalized text length:", normalizedText.length)
-  console.log("First 1000 chars of normalized text:", normalizedText.substring(0, 1000))
-  console.log("=== END ASBESTOS NORMALIZED TEXT ===")
+  debugLog("=== ASBESTOS NORMALIZED TEXT FOR AI ===")
+  debugLog("Normalized text length:", normalizedText.length)
+  debugLog("First 1000 chars of normalized text:", normalizedText.substring(0, 1000))
+  debugLog("=== END ASBESTOS NORMALIZED TEXT ===")
 
   const textToSend = normalizedText.substring(0, 12000)
   const isTruncated = normalizedText.length > 12000
 
   try {
-    console.log("Sending asbestos text to AI (length:", textToSend.length, isTruncated ? ", truncated)" : ", full)")
+    debugLog("Sending asbestos text to AI (length:", textToSend.length, isTruncated ? ", truncated)" : ", full)")
     const prompt = `${ASBESTOS_PROMPT}\n\nExtract information from this asbestos certificate:\n\n${textToSend}${
       isTruncated ? "\n\n[Document truncated for length]" : ""
     }`
@@ -200,26 +205,26 @@ export async function analyzeAsbestosWithAI(
       throw new Error("No content in asbestos LLM response")
     }
 
-    console.log("=== RAW ASBESTOS AI RESPONSE ===")
-    console.log(content)
-    console.log("=== END RAW ASBESTOS AI RESPONSE ===")
+    debugLog("=== RAW ASBESTOS AI RESPONSE ===")
+    debugLog(content)
+    debugLog("=== END RAW ASBESTOS AI RESPONSE ===")
 
     const parsed = parseJsonFromModelOutput(content)
     if (parsed !== null) {
-      console.log("=== PARSED ASBESTOS JSON ===")
-      console.log(JSON.stringify(parsed, null, 2))
-      console.log("=== END PARSED ASBESTOS JSON ===")
+      debugLog("=== PARSED ASBESTOS JSON ===")
+      debugLog(JSON.stringify(parsed, null, 2))
+      debugLog("=== END PARSED ASBESTOS JSON ===")
     } else {
       console.warn("Asbestos AI output was not valid JSON; using empty coercion")
     }
 
     const asbestosData = coerceAsbestosData(parsed)
 
-    console.log("Transforming asbestos AI data to analysis result...")
+    debugLog("Transforming asbestos AI data to analysis result...")
     const result = transformAsbestosToAnalysisResult(asbestosData)
-    console.log("=== FINAL ASBESTOS ANALYSIS RESULT ===")
-    console.log(JSON.stringify(result, null, 2))
-    console.log("=== END FINAL ASBESTOS ANALYSIS RESULT ===")
+    debugLog("=== FINAL ASBESTOS ANALYSIS RESULT ===")
+    debugLog(JSON.stringify(result, null, 2))
+    debugLog("=== END FINAL ASBESTOS ANALYSIS RESULT ===")
 
     return {
       result,

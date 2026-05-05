@@ -5,6 +5,8 @@ import { createServerClient } from "@/lib/supabase/server"
 import { resolveOwnerUserId } from "@/lib/supabase/resolve-owner-user-id"
 import { getValidAccessTokenForUser } from "@/lib/gmail/store"
 import { buildRfc822Message, toGmailRawUrlSafe } from "@/lib/gmail/rfc822"
+import { assertOwnerProperty } from "@/lib/supabase/ownership"
+import { rejectControlChars } from "@/lib/validation"
 
 const SendEmailSchema = z.object({
   propertyId: z.string().uuid(),
@@ -26,11 +28,12 @@ export async function sendPropertyEmailViaGmail(
   try {
     const supabase = createServerClient()
     const ownerId = await resolveOwnerUserId(supabase)
+    await assertOwnerProperty(supabase, parsed.data.propertyId)
     const { accessToken, gmailEmail } = await getValidAccessTokenForUser(supabase, ownerId)
     const raw = buildRfc822Message({
       fromEmail: gmailEmail,
       toEmail: parsed.data.to,
-      subject: parsed.data.subject,
+      subject: rejectControlChars(parsed.data.subject),
       body: parsed.data.body,
     })
     const encoded = toGmailRawUrlSafe(raw)
@@ -51,3 +54,4 @@ export async function sendPropertyEmailViaGmail(
     return { ok: false, error: e instanceof Error ? e.message : "Unknown error" }
   }
 }
+

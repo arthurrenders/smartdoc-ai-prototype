@@ -46,7 +46,7 @@ function shortId(id: string | null): string {
 function statusBadgeClass(status: IntakeProcessingStatus): string {
   switch (status) {
     case "uploaded":
-      return "border-[#519fc8]/40 bg-[#519fc8]/15 text-[#0e3b6a]"
+      return "border-brand-light/40 bg-brand-light/15 text-brand-dark"
     case "processing":
       return "border-amber-300/80 bg-amber-100 text-amber-900"
     case "processed":
@@ -283,7 +283,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
       <section className="saas-card space-y-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-[#0e3b6a]">Upload documents</h2>
+            <h2 className="text-lg font-semibold text-brand-dark">Upload documents</h2>
             <p className="text-sm text-muted-foreground">
               PDFs only — EPC, asbestos, electrical certificates. Files are stored and queued for processing.
             </p>
@@ -291,7 +291,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           <button
             type="button"
             onClick={() => refresh()}
-            className="inline-flex items-center gap-2 self-start rounded-lg border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm font-medium text-[#0e3b6a] shadow-sm transition hover:bg-muted/40"
+            className="inline-flex items-center gap-2 self-start rounded-lg border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm font-medium text-brand-dark shadow-sm transition hover:bg-muted/40"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -321,14 +321,14 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           className={cn(
             "flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-14 text-center transition-colors",
             dragOver
-              ? "border-[#519fc8] bg-[#519fc8]/10"
-              : "border-[hsl(var(--border))] bg-muted/20 hover:border-[#519fc8]/50 hover:bg-[#519fc8]/5"
+              ? "border-brand-light bg-brand-light/10"
+              : "border-[hsl(var(--border))] bg-muted/20 hover:border-brand-light/50 hover:bg-brand-light/5"
           )}
         >
-          <div className="rounded-full bg-[#0e3b6a]/10 p-4 text-[#0e3b6a]">
+          <div className="rounded-full bg-brand-dark/10 p-4 text-brand-dark">
             <Upload className="h-8 w-8" />
           </div>
-          <p className="mt-4 font-medium text-[#0e3b6a]">Drag & drop PDFs or folders here</p>
+          <p className="mt-4 font-medium text-brand-dark">Drag & drop PDFs or folders here</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Click to pick files, or use the Choose folder control below. Nested folders are scanned (PDFs only; up to 500
             files per drop).
@@ -415,7 +415,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
 
         {isWorking && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin text-[#519fc8]" />
+            <Loader2 className="h-4 w-4 animate-spin text-brand-light" />
             Uploading and matching properties…
           </div>
         )}
@@ -454,8 +454,8 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
       <section className="saas-card space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <FolderOpen className="h-5 w-5 text-[#519fc8]" />
-            <h2 className="text-lg font-semibold text-[#0e3b6a]">Intake queue</h2>
+            <FolderOpen className="h-5 w-5 text-brand-light" />
+            <h2 className="text-lg font-semibold text-brand-dark">Intake queue</h2>
           </div>
           <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
             <input
@@ -485,7 +485,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
             <button
               type="button"
               onClick={() => setShowFullHistory(true)}
-              className="mt-3 text-sm font-medium text-[#519fc8] underline-offset-2 hover:underline"
+              className="mt-3 text-sm font-medium text-brand-light underline-offset-2 hover:underline"
             >
               Show all uploads
             </button>
@@ -495,16 +495,16 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
             <table className="w-full min-w-[1280px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[hsl(var(--border))] bg-muted/30">
-                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">File</th>
-                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Folder path</th>
-                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Status</th>
-                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Type</th>
-                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Address (raw)</th>
-                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Match result</th>
-                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Confidence</th>
-                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Property</th>
-                  <th className="min-w-[280px] px-4 py-3 font-semibold text-[#0e3b6a]">Review</th>
-                  <th className="px-4 py-3 font-semibold text-[#0e3b6a]">Size</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">File</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Folder path</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Status</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Type</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Address (raw)</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Match result</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Confidence</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Property</th>
+                  <th className="min-w-[280px] px-4 py-3 font-semibold text-brand-dark">Review</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Size</th>
                 </tr>
               </thead>
               <tbody>
@@ -521,7 +521,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                     >
                       <td className="max-w-[200px] px-4 py-3">
                         <div className="flex items-start gap-2">
-                          <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#519fc8]" />
+                          <FileText className="mt-0.5 h-4 w-4 shrink-0 text-brand-light" />
                           <span className="break-all font-medium text-foreground">{row.filename}</span>
                         </div>
                       </td>
@@ -566,7 +566,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                         {propId ? (
                           <Link
                             href={`/properties/${propId}`}
-                            className="font-mono text-[#519fc8] underline-offset-2 hover:underline"
+                            className="font-mono text-brand-light underline-offset-2 hover:underline"
                           >
                             {shortId(propId)}
                           </Link>
@@ -594,7 +594,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                                 <button
                                   type="button"
                                   onClick={() => setManualFormIntakeId(row.id)}
-                                  className="flex w-full max-w-xs items-center justify-center rounded-lg bg-[#0e3b6a] px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md transition hover:bg-[#0e3b6a]/90"
+                                  className="flex w-full max-w-xs items-center justify-center rounded-lg bg-brand-dark px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md transition hover:bg-brand-dark/90"
                                 >
                                   Enter property manually
                                 </button>
@@ -624,3 +624,4 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
     </div>
   )
 }
+

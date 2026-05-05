@@ -2,6 +2,8 @@
 
 import { createServerClient } from "@/lib/supabase/server"
 import { labelForDocumentDateType } from "@/lib/document-dates/date-type-label"
+import { pickName, pickDocTypeName } from "@/lib/supabase-helpers"
+import { getOwnerPropertyIds } from "@/lib/supabase/ownership"
 
 export type UpcomingDeadlineRow = {
   id: string
@@ -14,34 +16,14 @@ export type UpcomingDeadlineRow = {
   labelDisplay: string
 }
 
-function pickName<T extends { display_name?: string | null }>(
-  row: T | T[] | null | undefined
-): string | null {
-  if (!row) return null
-  const one = Array.isArray(row) ? row[0] : row
-  return one?.display_name ?? null
-}
-
-function pickDocTypeName(
-  doc:
-    | { document_types?: { name?: string } | { name?: string }[] | null }
-    | null
-    | undefined
-): string | null {
-  if (!doc) return null
-  const one = Array.isArray(doc) ? doc[0] : doc
-  if (!one?.document_types) return null
-  const dt = one.document_types
-  const t = Array.isArray(dt) ? dt[0] : dt
-  return t?.name ?? null
-}
-
 export async function getUpcomingDeadlines(limit = 20): Promise<{
   data: UpcomingDeadlineRow[]
   error: string | null
 }> {
   try {
     const supabase = createServerClient()
+    const propertyIds = await getOwnerPropertyIds(supabase)
+    if (propertyIds.length === 0) return { data: [], error: null }
     const today = new Date().toISOString().slice(0, 10)
 
     const { data, error } = await supabase
@@ -57,6 +39,7 @@ export async function getUpcomingDeadlines(limit = 20): Promise<{
         documents ( document_types ( name ) )
       `
       )
+      .in("property_id", propertyIds)
       .gte("date_on", today)
       .order("date_on", { ascending: true })
       .limit(limit)
@@ -102,3 +85,4 @@ export async function getUpcomingDeadlines(limit = 20): Promise<{
     }
   }
 }
+

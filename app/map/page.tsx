@@ -26,7 +26,7 @@ const PropertiesMap = nextDynamic(() => import("@/components/map/PropertiesMap")
       className="flex h-full w-full items-center justify-center bg-dashboard-surface-low text-sm text-dashboard-on-surface-variant"
       aria-busy="true"
     >
-      Kaart laden…
+      Kaart ladenâ€¦
     </div>
   ),
 })
@@ -123,7 +123,7 @@ export default async function MapPage({
               <div>
                 <nav className="mb-2 flex items-center gap-2 text-xs text-dashboard-on-surface-variant">
                   <span>Properties</span>
-                  <span>›</span>
+                  <span>â€º</span>
                   <span className="font-semibold text-dashboard-primary">Map View</span>
                 </nav>
                 <h1 className="text-3xl font-extrabold tracking-tight text-dashboard-primary">
@@ -156,7 +156,7 @@ export default async function MapPage({
               <p className="mt-2 max-w-md text-sm leading-relaxed text-dashboard-on-surface-variant">
                 {searchQuery
                   ? `No geocoded property matches "${searchQuery}". Try name, street, postcode, or municipality.`
-                  : "Geocode een adres op een panddetailpagina (knop \"Geocode adres (België)\"). Daarna verschijnt het pand hier."}
+                  : "Geocode een adres op een panddetailpagina (knop \"Geocode adres (BelgiÃ«)\"). Daarna verschijnt het pand hier."}
               </p>
               {searchQuery ? (
                 <Link

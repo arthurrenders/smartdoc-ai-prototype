@@ -1,6 +1,7 @@
 "use server"
 
 import { createServerClient } from "@/lib/supabase/server"
+import { getOwnerUserId } from "@/lib/supabase/ownership"
 
 export type DashboardNotificationRow = {
   id: string
@@ -19,10 +20,12 @@ export async function getDashboardNotifications(limit = 25): Promise<{
 }> {
   try {
     const supabase = createServerClient()
+    const ownerUserId = await getOwnerUserId(supabase)
 
     const { data, error } = await supabase
       .from("notifications")
       .select("id, property_id, document_id, title, body, read_at, created_at, properties(display_name)")
+      .eq("user_id", ownerUserId)
       .order("created_at", { ascending: false })
       .limit(limit)
 
@@ -58,3 +61,4 @@ export async function getDashboardNotifications(limit = 25): Promise<{
     }
   }
 }
+

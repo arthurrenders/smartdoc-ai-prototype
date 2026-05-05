@@ -3,6 +3,7 @@
 import { createServerClient } from "@/lib/supabase/server"
 import { z } from "zod"
 import { executeAnalysisRunPipeline } from "@/lib/analysis/execute-analysis-run"
+import { assertOwnerDocument } from "@/lib/supabase/ownership"
 
 const runAnalysisSchema = z.object({
   analysisRunId: z.string().uuid(),
@@ -28,6 +29,7 @@ export async function runAnalysis(formData: FormData) {
 
     const { analysisRunId, documentId, propertyId } = validation.data
     const supabase = createServerClient()
+    await assertOwnerDocument(supabase, documentId, propertyId)
 
     const pipelineResult = await executeAnalysisRunPipeline(supabase, {
       analysisRunId,
@@ -50,3 +52,4 @@ export async function runAnalysis(formData: FormData) {
     }
   }
 }
+

@@ -1,6 +1,7 @@
 "use server"
 
 import { createServerClient } from "@/lib/supabase/server"
+import { assertOwnerProperty } from "@/lib/supabase/ownership"
 
 export async function getDocumentTypes() {
   const supabase = createServerClient()
@@ -19,6 +20,7 @@ export async function getDocumentTypes() {
 
 export async function getDocumentsForProperty(propertyId: string) {
   const supabase = createServerClient()
+  await assertOwnerProperty(supabase, propertyId)
 
   const { data, error } = await supabase
     .from("documents")
@@ -59,4 +61,5 @@ export async function getDocumentsForProperty(propertyId: string) {
 
   return { data, error: null }
 }
+
 

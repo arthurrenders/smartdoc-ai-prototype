@@ -49,8 +49,8 @@ export function PropertyDetailHeader({
           <StatusBadge status={stats.status} />
           <span className="max-w-xs text-right text-sm leading-relaxed text-muted-foreground sm:text-left">
             {stats.documentCount} document{stats.documentCount !== 1 ? "s" : ""}
-            {stats.missingCount > 0 && ` · ${stats.missingCount} missing`}
-            {stats.expiriesCount > 0 && ` · ${stats.expiriesCount} expir${stats.expiriesCount !== 1 ? "ies" : "y"} soon`}
+            {stats.missingCount > 0 && ` Â· ${stats.missingCount} missing`}
+            {stats.expiriesCount > 0 && ` Â· ${stats.expiriesCount} expir${stats.expiriesCount !== 1 ? "ies" : "y"} soon`}
           </span>
         </div>
       </div>

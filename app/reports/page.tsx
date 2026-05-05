@@ -7,12 +7,9 @@ import { NotificationsBellDropdown } from "@/components/navigation/Notifications
 import { ExportDataButton } from "@/components/navigation/ExportDataButton"
 import { CreateReportForm } from "@/components/reports/CreateReportForm"
 import logoImage from "@/components/public/logo png.png"
+import { formatDateTimeNl } from "@/lib/date-formatting"
 
-function formatDateTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return "—"
-  return date.toLocaleString()
-}
+export const dynamic = "force-dynamic"
 
 export default async function ReportsPage() {
   const [{ reports, properties, error }, { data: notificationRows, error: notificationsError }] =
@@ -140,8 +137,8 @@ export default async function ReportsPage() {
                           </p>
                         </div>
                         <div className="text-right text-xs text-dashboard-on-surface-variant">
-                          <p>Created: {formatDateTime(report.created_at)}</p>
-                          <p>Updated: {formatDateTime(report.updated_at)}</p>
+                          <p>Created: {formatDateTimeNl(report.created_at)}</p>
+                          <p>Updated: {formatDateTimeNl(report.updated_at)}</p>
                         </div>
                       </div>
                       <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-dashboard-on-surface">
@@ -161,4 +158,6 @@ export default async function ReportsPage() {
     </div>
   )
 }
+
+
 

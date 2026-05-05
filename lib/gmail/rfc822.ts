@@ -19,8 +19,9 @@ export function buildRfc822Message(params: {
 }
 
 function rfc2047Subject(subject: string): string {
-  if (!/[^\x20-\x7E]/.test(subject)) return subject
-  return `=?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`
+  const safeSubject = subject.replace(/[\r\n\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, " ").trim()
+  if (!/[^\x20-\x7E]/.test(safeSubject)) return safeSubject
+  return `=?UTF-8?B?${Buffer.from(safeSubject, "utf8").toString("base64")}?=`
 }
 
 function wrapBase64(b64: string): string {

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep *)",
+      "Bash(mkdir -p \"/c/Users/Arthu/OneDrive/Bureaublad/GITHUB REPOS/smartdoc/smartdoc-ai-prototype/lib/gmail\")",
+      "Bash(mkdir -p \"/c/Users/Arthu/OneDrive/Bureaublad/GITHUB REPOS/smartdoc/smartdoc-ai-prototype/components/settings\")",
+      "Bash(mkdir -p \"/c/Users/Arthu/OneDrive/Bureaublad/GITHUB REPOS/smartdoc/smartdoc-ai-prototype/app/api/auth/gmail/start\")",
+      "Bash(mkdir -p \"/c/Users/Arthu/OneDrive/Bureaublad/GITHUB REPOS/smartdoc/smartdoc-ai-prototype/app/api/auth/gmail/callback\")",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

@@ -4,18 +4,18 @@ import Link from "next/link"
 import Image from "next/image"
 import {
   Building2,
-  Filter,
   LayoutDashboard,
   Layers3,
   Map as MapIcon,
   Plus,
   Search,
   Settings,
-  MapPin,
   AlertTriangle,
+  Clock,
 } from "lucide-react"
 import { getPropertyDetail } from "@/app/actions/get-property-detail"
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
+import { getPropertyTimeline } from "@/app/actions/get-property-timeline"
 import { PropertyAddressCard } from "@/components/property/PropertyAddressCard"
 import { PropertyLocationEnrichmentCard } from "@/components/property/PropertyLocationEnrichmentCard"
 import { RenamePropertyButton } from "@/components/property/RenamePropertyButton"
@@ -24,6 +24,7 @@ import { RedFlagsList } from "@/components/property/RedFlagsList"
 import { SuggestedActionsCard } from "@/components/property/SuggestedActionsCard"
 import { GenerateEmailDraftCard } from "@/components/property/GenerateEmailDraftCard"
 import { GmailSentToast } from "@/components/property/GmailSentToast"
+import { PropertyTimeline } from "@/components/property/PropertyTimeline"
 import { getGmailConnectionStatus } from "@/app/actions/gmail-connection"
 import { StatusBadge } from "@/components/ui/StatusBadge"
 import { StreetViewImage } from "@/components/ui/StreetViewImage"
@@ -54,16 +55,18 @@ export default async function PropertyPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [data, { data: notificationRows, error: notificationsError }, gmailStatus] = await Promise.all([
+  const [data, { data: notificationRows, error: notificationsError }, gmailStatus, { data: timelineEvents, error: timelineError }] = await Promise.all([
     getPropertyDetail(id),
     getDashboardNotifications(12),
     getGmailConnectionStatus(),
+    getPropertyTimeline(id),
   ])
 
   if (!data) {
     notFound()
   }
 
+  const propertyOption = [{ id: data.propertyId, display_name: data.propertyDisplayName }]
   const requiredTotal = data.summaryCounts.requiredTotal || 0
   const validCount = data.summaryCounts.validCount || 0
   const criticalIssues =
@@ -288,6 +291,19 @@ export default async function PropertyPage({
                 <SuggestedActionsCard actions={data.suggestedActions} className="rounded-xl" />
               </div>
             </div>
+
+            <section aria-label="Tijdlijn" className="mt-8">
+              <h3 className="mb-4 flex items-center gap-2 text-base font-bold text-dashboard-primary">
+                <Clock className="h-5 w-5" />
+                Activiteitstijdlijn
+              </h3>
+              <PropertyTimeline
+                events={timelineEvents}
+                propertyId={id}
+                properties={propertyOption}
+                error={timelineError}
+              />
+            </section>
           </div>
         </main>
       </div>
@@ -295,3 +311,4 @@ export default async function PropertyPage({
     </div>
   )
 }
+

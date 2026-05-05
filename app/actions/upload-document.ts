@@ -5,6 +5,7 @@ import { createServerClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { attachDocumentToProperty } from "@/lib/documents/attach-document-to-property"
+import { assertOwnerProperty } from "@/lib/supabase/ownership"
 
 const uploadSchema = z.object({
   propertyId: z.string().uuid({ message: "propertyId must be a valid UUID" }),
@@ -17,14 +18,13 @@ const uploadSchema = z.object({
   file: z.instanceof(File, { message: "File is required and must be a File object" }),
 })
 
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
 export async function uploadDocument(formData: FormData) {
   try {
     const propertyIdRaw = formData.get("propertyId")
     const documentTypeIdRaw = formData.get("documentTypeId")
     const file = formData.get("file") as File | null
-
-    console.log("raw propertyId from formData:", propertyIdRaw)
-    console.log("process.env.DEMO_PROPERTY_ID:", process.env.DEMO_PROPERTY_ID)
 
     // Validate file first (required)
     if (!file || !(file instanceof File)) {
@@ -41,6 +41,14 @@ export async function uploadDocument(formData: FormData) {
         ok: false,
         error: "Invalid file type",
         details: { file: "Only PDF files are allowed" },
+      }
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return {
+        ok: false,
+        error: "File too large",
+        details: { file: "PDF files must be 25 MB or smaller" },
       }
     }
 
@@ -88,6 +96,7 @@ export async function uploadDocument(formData: FormData) {
     const { propertyId, documentTypeId } = validation.data
 
     const supabase = createServerClient()
+    await assertOwnerProperty(supabase, propertyId)
 
     // Generate unique file path
     const fileExt = file.name.split(".").pop() || "pdf"
@@ -150,6 +159,13 @@ export async function uploadDocument(formData: FormData) {
 
     if (analysisError || !analysisRunRow?.id) {
       console.error("Analysis run insert failed:", analysisError)
+      const { error: cleanupDocError } = await supabase
+        .from("documents")
+        .delete()
+        .eq("id", document.id)
+      if (cleanupDocError) console.error("Failed to cleanup document row:", cleanupDocError)
+      const { error: cleanupFileError } = await supabase.storage.from("documents").remove([fileName])
+      if (cleanupFileError) console.error("Failed to cleanup uploaded file:", cleanupFileError)
       return {
         ok: false,
         error: `Failed to create analysis run: ${analysisError?.message ?? "Unknown error"}`,
@@ -167,6 +183,7 @@ export async function uploadDocument(formData: FormData) {
     }
 
     revalidatePath(`/properties/${propertyId}`)
+    revalidatePath("/")
 
     return { ok: true, documentId: document.id, analysisRunId: analysisRunRow.id as string }
   } catch (error) {
@@ -178,4 +195,5 @@ export async function uploadDocument(formData: FormData) {
     }
   }
 }
+
 

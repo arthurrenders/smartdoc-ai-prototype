@@ -3,6 +3,9 @@ import { Save, User, SlidersHorizontal, KeyRound, Bell } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { getGmailConnectionStatus } from "@/app/actions/gmail-connection"
 import { GmailSettingsSection } from "@/components/settings/GmailSettingsSection"
+import { getOwnerUserId } from "@/lib/supabase/ownership"
+
+export const dynamic = "force-dynamic"
 
 type SettingsAccount = {
   name: string
@@ -17,16 +20,10 @@ async function getAccountInfo(): Promise<SettingsAccount> {
 
   try {
     const supabase = createServerClient()
-    const { data: propRow, error: propErr } = await supabase
-      .from("properties")
-      .select("user_id")
-      .limit(1)
-      .maybeSingle()
-
-    if (propErr || !propRow?.user_id) return fallback
+    const ownerUserId = await getOwnerUserId(supabase)
 
     const { data: userData, error: userErr } = await supabase.auth.admin.getUserById(
-      String(propRow.user_id)
+      ownerUserId
     )
     if (userErr || !userData?.user) return fallback
 
@@ -53,7 +50,7 @@ export default async function SettingsPage() {
   return (
     <div className="saas-page space-y-8">
       <header className="space-y-2">
-        <h1 className="font-headline text-3xl font-bold tracking-tight text-[#0e3b6a] sm:text-4xl">
+        <h1 className="font-headline text-3xl font-bold tracking-tight text-brand-dark sm:text-4xl">
           Settings
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -69,8 +66,8 @@ export default async function SettingsPage() {
 
       <form className="space-y-6">
         <section className="saas-card space-y-5">
-          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-[#0e3b6a]">
-            <User className="h-5 w-5 text-[#519fc8]" />
+          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
+            <User className="h-5 w-5 text-brand-light" />
             Account Information
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -101,8 +98,8 @@ export default async function SettingsPage() {
         </section>
 
         <section className="saas-card space-y-5">
-          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-[#0e3b6a]">
-            <SlidersHorizontal className="h-5 w-5 text-[#519fc8]" />
+          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
+            <SlidersHorizontal className="h-5 w-5 text-brand-light" />
             App Preferences
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -133,8 +130,8 @@ export default async function SettingsPage() {
         </section>
 
         <section className="saas-card space-y-5">
-          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-[#0e3b6a]">
-            <KeyRound className="h-5 w-5 text-[#519fc8]" />
+          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
+            <KeyRound className="h-5 w-5 text-brand-light" />
             Future-ready
           </h2>
           <div className="space-y-4">
@@ -146,7 +143,7 @@ export default async function SettingsPage() {
             </div>
             <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-muted/20 p-4">
               <p className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-                <Bell className="h-4 w-4 text-[#519fc8]" />
+                <Bell className="h-4 w-4 text-brand-light" />
                 Notification preferences
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -159,7 +156,7 @@ export default async function SettingsPage() {
         <div className="flex justify-end">
           <button
             type="button"
-            className="inline-flex items-center gap-2 rounded-lg bg-[#0e3b6a] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0b3158]"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-dark px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0b3158]"
           >
             <Save className="h-4 w-4" />
             Save settings
@@ -169,4 +166,5 @@ export default async function SettingsPage() {
     </div>
   )
 }
+
 

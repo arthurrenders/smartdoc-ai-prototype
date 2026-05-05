@@ -72,6 +72,7 @@ export async function executeAnalysisRunPipeline(
     .from("analysis_runs")
     .update({ status: "processing" })
     .eq("id", analysisRunId)
+    .eq("document_id", documentId)
 
   if (processingError) {
     return {
@@ -312,7 +313,19 @@ export async function executeAnalysisRunPipeline(
       throw new Error(`Failed to update analysis: ${updateError.message}`)
     }
 
-    if (result.status === "orange" || result.status === "red") {
+    const { error: clearFlagsError } = await supabase
+      .from("red_flags")
+      .delete()
+      .eq("document_id", documentId)
+    if (clearFlagsError) {
+      console.error("Failed to clear old red flags:", clearFlagsError)
+    }
+
+    if (
+      (result.status === "orange" || result.status === "red") &&
+      Array.isArray(result.flags) &&
+      result.flags.length > 0
+    ) {
       const flagsToInsert = result.flags.map((flag: { severity: string; title: string; details: string }) => ({
         document_id: documentId,
         severity: flag.severity,
@@ -350,6 +363,7 @@ export async function executeAnalysisRunPipeline(
     }
 
     revalidatePath(`/properties/${propertyId}`)
+    revalidatePath("/")
 
     return { success: true, result }
   } catch (pipelineError) {

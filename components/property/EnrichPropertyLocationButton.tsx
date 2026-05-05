@@ -40,7 +40,7 @@ export function EnrichPropertyLocationButton({ propertyId, disabled }: Props) {
         className="saas-btn-secondary inline-flex w-full items-center justify-center gap-2 text-sm transition-all duration-200 disabled:opacity-60 sm:w-auto"
       >
         <Sparkles className="h-4 w-4" aria-hidden />
-        {isPending ? "Bezig met verrijken…" : "Locatie verrijken (België)"}
+        {isPending ? "Bezig met verrijkenâ€¦" : "Locatie verrijken (BelgiÃ«)"}
       </button>
       <p className="text-xs text-muted-foreground">
         Eenmalig op aanvraag: resultaat wordt opgeslagen (OpenStreetMap). Geen live call bij elke

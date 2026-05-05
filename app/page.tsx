@@ -14,12 +14,14 @@ import { DocumentIntakeFab } from "@/components/dashboard/DocumentIntakeFab"
 import { getDashboardData } from "@/app/actions/get-dashboard-data"
 import { getCalendarDates } from "@/app/actions/get-calendar-dates"
 import { getUpcomingDeadlines } from "@/app/actions/get-upcoming-deadlines"
+import { getAppointments } from "@/app/actions/get-appointments"
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
 import { syncNotificationsFromDocumentDates } from "@/app/actions/sync-notifications"
 import { StatCard } from "@/components/ui/StatCard"
 import { PropertyCard } from "@/components/ui/PropertyCard"
 import { DocumentCalendar } from "@/components/dashboard/DocumentCalendar"
 import { UpcomingDeadlines } from "@/components/dashboard/UpcomingDeadlines"
+import { UpcomingAppointments } from "@/components/dashboard/UpcomingAppointments"
 import { InAppNotificationsCard } from "@/components/dashboard/InAppNotificationsCard"
 import { NotificationsBellDropdown } from "@/components/navigation/NotificationsBellDropdown"
 import { ExportDataButton } from "@/components/navigation/ExportDataButton"
@@ -45,12 +47,14 @@ export default async function DashboardPage({
     { data: calendarEntries, error: calendarError },
     { data: upcomingRows, error: upcomingError },
     { data: notificationRows, error: notificationsError },
+    { data: appointmentRows, error: appointmentsError },
   ] = await Promise.all([
     syncNotificationsFromDocumentDates(),
     getDashboardData(searchQuery),
     getCalendarDates(),
     getUpcomingDeadlines(200),
     getDashboardNotifications(25),
+    getAppointments({ limit: 50 }),
   ])
 
   const totalProperties = properties.length
@@ -68,6 +72,10 @@ export default async function DashboardPage({
   const totalExpiries = upcomingRows.filter(
     (row) => row.date_on >= todayIso && row.date_on <= next30Iso
   ).length
+  const todayAppointments = appointmentRows.filter(
+    (a) => a.start_at.slice(0, 10) === todayIso
+  ).length
+  const propertyOptions = properties.map((p) => ({ id: p.id, display_name: p.display_name ?? null }))
 
   return (
     <div className="-mt-10 sm:-mt-12 lg:-mt-16">
@@ -181,8 +189,36 @@ export default async function DashboardPage({
               />
             </section>
 
-            <section className="grid grid-cols-1 gap-8 lg:grid-cols-3" aria-label="Deadlines and notifications">
-              <UpcomingDeadlines rows={upcomingRows.slice(0, 20)} error={upcomingError} />
+            {/* Today's appointments strip */}
+            {todayAppointments > 0 && (
+              <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm">
+                <CalendarClock className="h-5 w-5 shrink-0 text-blue-600" aria-hidden />
+                <span className="font-semibold text-blue-800">
+                  {todayAppointments === 1
+                    ? "1 afspraak vandaag"
+                    : `${todayAppointments} afspraken vandaag`}
+                </span>
+                <span className="text-blue-600">
+                  {appointmentRows
+                    .filter((a) => a.start_at.slice(0, 10) === todayIso)
+                    .map((a) => {
+                      const sm = a.start_at.match(/T(\d{2}:\d{2})/)
+                      return `${sm ? sm[1] : ""} ${a.title}`
+                    })
+                    .join(" · ")}
+                </span>
+              </div>
+            )}
+
+            <section className="grid grid-cols-1 gap-8 lg:grid-cols-3" aria-label="Deadlines en afspraken">
+              <div className="space-y-6">
+                <UpcomingDeadlines rows={upcomingRows.slice(0, 20)} error={upcomingError} />
+                <UpcomingAppointments
+                  rows={appointmentRows.slice(0, 5)}
+                  error={appointmentsError}
+                  properties={propertyOptions}
+                />
+              </div>
               <InAppNotificationsCard
                 notifications={notificationRows}
                 error={notificationsError}
@@ -197,7 +233,12 @@ export default async function DashboardPage({
                     Kalenderdatums konden niet geladen worden: {calendarError}
                   </div>
                 )}
-                <DocumentCalendar entries={calendarEntries} mapHref="/map" />
+                <DocumentCalendar
+                  entries={calendarEntries}
+                  appointments={appointmentRows}
+                  properties={propertyOptions}
+                  mapHref="/map"
+                />
               </div>
             </section>
 
@@ -278,3 +319,4 @@ export default async function DashboardPage({
     </div>
   )
 }
+

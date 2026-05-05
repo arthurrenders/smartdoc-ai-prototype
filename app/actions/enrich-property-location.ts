@@ -4,6 +4,7 @@ import "server-only"
 import { revalidatePath } from "next/cache"
 import { createServerClient } from "@/lib/supabase/server"
 import { runAndPersistPropertyLocationEnrichment } from "@/lib/location-enrichment/run-enrichment"
+import { assertOwnerProperty } from "@/lib/supabase/ownership"
 
 function requiredUserAgent(): string {
   const ua = process.env.NOMINATIM_USER_AGENT?.trim()
@@ -27,6 +28,8 @@ export async function enrichPropertyLocation(formData: FormData): Promise<void> 
 
   const userAgent = requiredUserAgent()
   const supabase = createServerClient()
+  await assertOwnerProperty(supabase, propertyId)
   await runAndPersistPropertyLocationEnrichment(supabase, propertyId, userAgent)
   revalidatePath(`/properties/${propertyId}`)
 }
+

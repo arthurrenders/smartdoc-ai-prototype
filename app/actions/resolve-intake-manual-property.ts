@@ -7,6 +7,7 @@ import { z } from "zod"
 import { createServerClient } from "@/lib/supabase/server"
 import { resolveOwnerUserId } from "@/lib/supabase/resolve-owner-user-id"
 import { linkIntakeUploadToManualProperty } from "@/lib/intake/match-or-create-property-from-document"
+import { assertOwnerProperty } from "@/lib/supabase/ownership"
 
 const schema = z.object({
   intakeUploadId: z.string().uuid(),
@@ -35,13 +36,17 @@ export async function resolveIntakeManualProperty(input: z.infer<typeof schema>)
   try {
     const supabase = createServerClient()
     const userId = await resolveOwnerUserId(supabase)
+    const selectedPropertyId = parsed.data.selectedPropertyId?.trim() || null
+    if (selectedPropertyId) {
+      await assertOwnerProperty(supabase, selectedPropertyId)
+    }
 
     const res = await linkIntakeUploadToManualProperty(supabase, {
       userId,
       intakeUploadId: parsed.data.intakeUploadId,
       displayName: parsed.data.propertyName?.trim() || "",
       addressLine: parsed.data.address?.trim() ? parsed.data.address.trim() : null,
-      selectedPropertyId: parsed.data.selectedPropertyId?.trim() || null,
+      selectedPropertyId,
     })
 
     if (!res.ok) {
@@ -56,3 +61,4 @@ export async function resolveIntakeManualProperty(input: z.infer<typeof schema>)
     return { ok: false, error: e instanceof Error ? e.message : "Unexpected error." }
   }
 }
+

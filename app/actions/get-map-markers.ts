@@ -9,6 +9,7 @@ import {
 } from "@/lib/property-status"
 import { getCurrentDocumentsByType } from "@/lib/current-documents"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
+import { getOwnerUserId } from "@/lib/supabase/ownership"
 
 export type MapMarkerRow = {
   propertyId: string
@@ -67,13 +68,15 @@ export async function getMapMarkers(searchQuery?: string): Promise<{
 }> {
   try {
     const supabase = createServerClient()
+    const ownerUserId = await getOwnerUserId(supabase)
     const normalizedQuery = normalizeSearchTerm(searchQuery)
 
     const { data: rows, error: qErr } = await supabase
       .from("property_addresses")
       .select(
-        "property_id, latitude, longitude, raw_line1, normalized_full_address, street_name, postal_code, municipality"
+        "property_id, latitude, longitude, raw_line1, normalized_full_address, street_name, postal_code, municipality, properties!inner(user_id)"
       )
+      .eq("properties.user_id", ownerUserId)
 
     if (qErr) {
       console.warn("[getMapMarkers] Supabase query error:", qErr.message)
@@ -81,16 +84,6 @@ export async function getMapMarkers(searchQuery?: string): Promise<{
     }
 
     const list = (rows as AddrRow[]) || []
-    const sample = list[0]
-      ? {
-          property_id: list[0].property_id,
-          latitude: list[0].latitude,
-          longitude: list[0].longitude,
-          raw_line1: list[0].raw_line1?.slice(0, 80),
-        }
-      : null
-    console.warn("[getMapMarkers] rows from Supabase:", list.length, "sample:", sample)
-
     const base: Omit<MapMarkerRow, "status">[] = []
     for (const row of list) {
       const lat = toNum(row.latitude)
@@ -109,10 +102,7 @@ export async function getMapMarkers(searchQuery?: string): Promise<{
       })
     }
 
-    console.warn("[getMapMarkers] rows after lat/lon filter:", base.length)
-
     if (base.length === 0) {
-      console.warn("[getMapMarkers] final marker count: 0 (no coordinates)")
       return { markers: [], error: null }
     }
 
@@ -121,6 +111,7 @@ export async function getMapMarkers(searchQuery?: string): Promise<{
     const { data: propRows, error: propErr } = await supabase
       .from("properties")
       .select("id, display_name")
+      .eq("user_id", ownerUserId)
       .in("id", propertyIds)
 
     if (propErr) {
@@ -202,8 +193,6 @@ export async function getMapMarkers(searchQuery?: string): Promise<{
       })
     }
 
-    console.warn("[getMapMarkers] final marker count:", markers.length)
-
     return { markers, error: null }
   } catch (e) {
     console.warn("[getMapMarkers] catch:", e)
@@ -213,4 +202,5 @@ export async function getMapMarkers(searchQuery?: string): Promise<{
     }
   }
 }
+
 

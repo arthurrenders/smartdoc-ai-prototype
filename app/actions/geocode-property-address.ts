@@ -9,6 +9,7 @@ import {
   encodeGeocodeCandidatesState,
 } from "@/lib/geocoding/geocode-candidate-state"
 import { runAndPersistPropertyLocationEnrichment } from "@/lib/location-enrichment/run-enrichment"
+import { assertOwnerProperty } from "@/lib/supabase/ownership"
 
 function requiredUserAgent(): string {
   const ua = process.env.NOMINATIM_USER_AGENT?.trim()
@@ -33,6 +34,7 @@ export async function geocodePropertyAddress(formData: FormData): Promise<void> 
 
   const userAgent = requiredUserAgent()
   const supabase = createServerClient()
+  await assertOwnerProperty(supabase, propertyId)
   const now = new Date().toISOString()
 
   const { data: row, error: fetchErr } = await supabase
@@ -324,6 +326,7 @@ export async function chooseGeocodeCandidate(formData: FormData): Promise<void> 
 
   const now = new Date().toISOString()
   const supabase = createServerClient()
+  await assertOwnerProperty(supabase, propertyId)
   const { data: row, error: fetchErr } = await supabase
     .from("property_addresses")
     .select("geocode_error")
@@ -367,3 +370,4 @@ export async function chooseGeocodeCandidate(formData: FormData): Promise<void> 
   revalidatePath("/map")
   revalidatePath("/")
 }
+

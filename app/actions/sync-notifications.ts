@@ -10,6 +10,7 @@ import {
   lastShowDate,
 } from "@/lib/notifications/reminder-window"
 import { ruleAppliesToDateType } from "@/lib/notifications/supported-date-types"
+import { getOwnerUserId } from "@/lib/supabase/ownership"
 
 const GRACE_DAYS_AFTER_DEADLINE = 14
 
@@ -35,8 +36,8 @@ function syncDebugDocId(): string | undefined {
 
 function syncLog(message: string, extra?: Record<string, unknown>) {
   if (!syncDebugEnabled()) return
-  if (extra) console.log(`[syncNotifications] ${message}`, extra)
-  else console.log(`[syncNotifications] ${message}`)
+  if (extra) console.debug(`[syncNotifications] ${message}`, extra)
+  else console.debug(`[syncNotifications] ${message}`)
 }
 
 type RuleRow = {
@@ -75,6 +76,7 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
 }> {
   try {
     const supabase = createServerClient()
+    const ownerUserId = await getOwnerUserId(supabase)
     const today = calendarTodayIsoInTimeZone(NOTIFICATION_CALENDAR_TIMEZONE)
     const windowStart = addUtcDays(today, -PAST_LOOKBACK_DAYS)
     const windowEnd = addUtcDays(today, FUTURE_LOOKAHEAD_DAYS)
@@ -100,7 +102,7 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
         document_id,
         date_type,
         date_on,
-        properties ( user_id, display_name )
+        properties!inner ( user_id, display_name )
       `
 
     const dates: DateRow[] = []
@@ -109,6 +111,7 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
       const { data: page, error: datesError } = await supabase
         .from("document_dates")
         .select(datesSelect)
+        .eq("properties.user_id", ownerUserId)
         .gte("date_on", windowStart)
         .lte("date_on", windowEnd)
         .order("date_on", { ascending: true })
@@ -142,6 +145,7 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
         const { data: direct, error: directErr } = await supabase
           .from("document_dates")
           .select(datesSelect)
+          .eq("properties.user_id", ownerUserId)
           .eq("id", dbgId)
           .maybeSingle()
         syncLog(`doc_date ${dbgId} direct fetch`, {
@@ -226,6 +230,7 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
     const { data: existing, error: exErr } = await supabase
       .from("notifications")
       .select("document_date_id, rule_id")
+      .eq("user_id", ownerUserId)
       .in("document_date_id", ids)
 
     if (exErr) {
@@ -293,3 +298,4 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
     }
   }
 }
+

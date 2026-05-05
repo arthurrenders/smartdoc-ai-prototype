@@ -64,7 +64,7 @@ export function NotificationsBellDropdown({ notifications, error }: Props) {
       >
         <Bell className="h-5 w-5" />
         {unread.length > 0 ? (
-          <span className="absolute -right-0.5 -top-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[#0e3b6a] px-1.5 text-[10px] font-bold text-white">
+          <span className="absolute -right-0.5 -top-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-brand-dark px-1.5 text-[10px] font-bold text-white">
             {unread.length > 9 ? "9+" : unread.length}
           </span>
         ) : null}
@@ -77,7 +77,7 @@ export function NotificationsBellDropdown({ notifications, error }: Props) {
           className="absolute right-0 z-50 mt-2 w-[360px] overflow-hidden rounded-xl border border-dashboard-outline-variant/30 bg-white shadow-xl"
         >
           <div className="flex items-center justify-between border-b border-dashboard-outline-variant/20 px-4 py-3">
-            <p className="text-sm font-semibold text-[#0e3b6a]">Notifications</p>
+            <p className="text-sm font-semibold text-brand-dark">Notifications</p>
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -106,7 +106,7 @@ export function NotificationsBellDropdown({ notifications, error }: Props) {
                     className={`mb-2 rounded-lg border p-3 ${
                       n.read_at
                         ? "border-dashboard-outline-variant/20 bg-dashboard-surface-low/50"
-                        : "border-[#519fc8]/30 bg-[#519fc8]/10"
+                        : "border-brand-light/30 bg-brand-light/10"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -118,14 +118,14 @@ export function NotificationsBellDropdown({ notifications, error }: Props) {
                         </p>
                       </div>
                       {!n.read_at ? (
-                        <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#0e3b6a]" aria-hidden />
+                        <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-dark" aria-hidden />
                       ) : null}
                     </div>
                     <div className="mt-3 flex items-center gap-3">
                       <Link
                         href={`/properties/${n.property_id}`}
                         onClick={() => setOpen(false)}
-                        className="text-xs font-semibold text-[#0e3b6a] hover:underline"
+                        className="text-xs font-semibold text-brand-dark hover:underline"
                       >
                         Go to property
                       </Link>
@@ -154,4 +154,5 @@ export function NotificationsBellDropdown({ notifications, error }: Props) {
     </div>
   )
 }
+
 

@@ -4,6 +4,7 @@ import {
   extractTextFromPDF,
   extractTextFromPDFFallback,
 } from "@/lib/pdf/extractor"
+import { assertOwnerDocument } from "@/lib/supabase/ownership"
 
 export async function POST(request: NextRequest) {
   if (process.env.NODE_ENV !== "development") {
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient()
+    await assertOwnerDocument(supabase, documentId)
 
     // Fetch document
     const { data: document, error: documentError } = await supabase
@@ -104,6 +106,7 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
 
 
 

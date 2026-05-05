@@ -8,6 +8,7 @@ import { extractAddressFromPdfBuffer } from "@/lib/address-matching/extract-from
 import { buildCanonicalExpectedAddress } from "@/lib/address-matching/expected-address"
 import { verifyUploadAddressCoreFields } from "@/lib/address-matching/verify-upload-core-fields"
 import type { PropertyAddressRecord } from "@/lib/property-address/types"
+import { assertOwnerDocument } from "@/lib/supabase/ownership"
 
 const schema = z.object({
   documentId: z.string().uuid(),
@@ -26,6 +27,7 @@ export async function verifyDocumentAddress(formData: FormData) {
   const supabase = createServerClient()
 
   try {
+    await assertOwnerDocument(supabase, documentId)
     const { data: document, error: docErr } = await supabase
       .from("documents")
       .select("id, property_id, storage_path")
@@ -121,3 +123,4 @@ export async function verifyDocumentAddress(formData: FormData) {
     return { ok: false as const, error: e instanceof Error ? e.message : "Verification failed" }
   }
 }
+

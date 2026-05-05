@@ -50,11 +50,11 @@ export function IntakeManualPropertyForm({ intakeUploadId, propertyOptions, onDo
   return (
     <form
       onSubmit={(e) => void onSubmit(e)}
-      className="mt-2 space-y-2 rounded-lg border border-[#519fc8]/40 bg-[#519fc8]/5 p-3 text-left shadow-sm"
+      className="mt-2 space-y-2 rounded-lg border border-brand-light/40 bg-brand-light/5 p-3 text-left shadow-sm"
       onClick={(e) => e.stopPropagation()}
     >
       <div>
-        <label htmlFor={`intake-prop-${intakeUploadId}`} className="text-xs font-semibold text-[#0e3b6a]">
+        <label htmlFor={`intake-prop-${intakeUploadId}`} className="text-xs font-semibold text-brand-dark">
           Existing property <span className="font-normal text-muted-foreground">(optional)</span>
         </label>
         <select
@@ -73,7 +73,7 @@ export function IntakeManualPropertyForm({ intakeUploadId, propertyOptions, onDo
         </select>
       </div>
       <div>
-        <label htmlFor={`intake-addr-${intakeUploadId}`} className="text-xs font-semibold text-[#0e3b6a]">
+        <label htmlFor={`intake-addr-${intakeUploadId}`} className="text-xs font-semibold text-brand-dark">
           Address{" "}
           <span className="font-normal text-muted-foreground">
             {selectedPropertyId ? "(optional when property selected)" : "(required if no property selected)"}
@@ -97,8 +97,8 @@ export function IntakeManualPropertyForm({ intakeUploadId, propertyOptions, onDo
           className={cn(
             "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition",
             submitting || (!selectedPropertyId && !address.trim())
-              ? "cursor-not-allowed bg-[#519fc8]/50"
-              : "bg-[#0e3b6a] hover:bg-[#0e3b6a]/90"
+              ? "cursor-not-allowed bg-brand-light/50"
+              : "bg-brand-dark hover:bg-brand-dark/90"
           )}
         >
           {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -116,3 +116,4 @@ export function IntakeManualPropertyForm({ intakeUploadId, propertyOptions, onDo
     </form>
   )
 }
+

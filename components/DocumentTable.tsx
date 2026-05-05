@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Upload, Play, FileQuestion, FileText } from "lucide-react"
 import { uploadDocument } from "@/app/actions/upload-document"
 import { verifyDocumentAddress } from "@/app/actions/verify-document-address"
@@ -83,11 +83,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   const [driveFeedback, setDriveFeedback] = useState<string | null>(null)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
-  useEffect(() => {
-    loadData()
-  }, [propertyId])
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
       const [typesResult, docsResult] = await Promise.all([
@@ -107,7 +103,11 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     } finally {
       setLoading(false)
     }
-  }
+  }, [propertyId])
+
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
 
   function inferDocumentTypeIdFromFileName(fileName: string): string | null {
     if (documentTypes.length === 0) return null
@@ -587,3 +587,4 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
 
   return <>{content}</>
 }
+

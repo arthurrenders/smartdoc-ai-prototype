@@ -5,13 +5,11 @@ import { revalidatePath } from "next/cache"
 import { createServerClient } from "@/lib/supabase/server"
 import { geocodeResetPatch } from "@/lib/property-address/geocode-reset"
 import { z } from "zod"
+import { assertOwnerProperty } from "@/lib/supabase/ownership"
+import { escapeForIlike } from "@/lib/properties/display-name-match"
 
 const DUPLICATE_NAME_MESSAGE =
   "Een pand met deze naam bestaat al. Kies een andere pandtitel of vink de optie uit."
-
-function escapeForIlike(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")
-}
 
 /**
  * Update raw address line; optionally sync properties.display_name.
@@ -61,6 +59,7 @@ export async function updatePropertyAddress(formData: FormData): Promise<void> {
   }
 
   const supabase = createServerClient()
+  const { ownerUserId } = await assertOwnerProperty(supabase, propertyId)
   const now = new Date().toISOString()
 
   const { data: addrRow, error: addrFetchErr } = await supabase
@@ -81,6 +80,7 @@ export async function updatePropertyAddress(formData: FormData): Promise<void> {
       .from("properties")
       .select("id")
       .ilike("display_name", escapeForIlike(rawLine1))
+      .eq("user_id", ownerUserId)
       .neq("id", propertyId)
       .limit(1)
 
@@ -125,6 +125,7 @@ export async function updatePropertyAddress(formData: FormData): Promise<void> {
         updated_at: now,
       })
       .eq("id", propertyId)
+      .eq("user_id", ownerUserId)
 
     if (propErr) {
       if (propErr.code === "23505") {
@@ -139,3 +140,4 @@ export async function updatePropertyAddress(formData: FormData): Promise<void> {
   revalidatePath("/map")
   revalidatePath(`/properties/${propertyId}`)
 }
+

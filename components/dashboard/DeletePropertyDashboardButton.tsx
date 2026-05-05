@@ -100,7 +100,7 @@ export function DeletePropertyDashboardButton({ properties }: { properties: Dash
               onChange={(e) => setSelectedId(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900"
             >
-              <option value="">Select a property…</option>
+              <option value="">Select a propertyâ€¦</option>
               {properties.map((p) => (
                 <option key={p.id} value={p.id}>
                   {formatLabel(p)}
@@ -129,7 +129,7 @@ export function DeletePropertyDashboardButton({ properties }: { properties: Dash
                 disabled={!selectedId || pending}
                 className="rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
               >
-                {pending ? "Deleting…" : "Delete permanently"}
+                {pending ? "Deletingâ€¦" : "Delete permanently"}
               </button>
             </div>
           </div>

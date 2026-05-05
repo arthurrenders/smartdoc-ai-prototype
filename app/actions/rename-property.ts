@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import { createServerClient } from "@/lib/supabase/server"
+import { assertOwnerProperty } from "@/lib/supabase/ownership"
 
 const RenamePropertySchema = z.object({
   propertyId: z.string().uuid(),
@@ -78,6 +80,8 @@ export async function renameProperty(formData: FormData) {
 
   const newName = parsed.data.displayName
   const propertyId = parsed.data.propertyId
+  const supabase = createServerClient()
+  const { ownerUserId } = await assertOwnerProperty(supabase, propertyId)
 
   // Escape ilike wildcards so a name containing % or _ is treated literally.
   const escapedName = newName.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")
@@ -86,7 +90,7 @@ export async function renameProperty(formData: FormData) {
   // NOTE: We also enforce at DB level via a unique index, but this
   // allows a friendlier error message.
   const existing = await postgrest<Array<{ id: string }>>(
-    `/rest/v1/properties?select=id&display_name=ilike.${encodeURIComponent(escapedName)}&limit=1`,
+    `/rest/v1/properties?select=id&display_name=ilike.${encodeURIComponent(escapedName)}&user_id=eq.${encodeURIComponent(ownerUserId)}&limit=1`,
     {
       method: "GET",
     }
@@ -97,7 +101,7 @@ export async function renameProperty(formData: FormData) {
   }
 
   await postgrest(
-    `/rest/v1/properties?id=eq.${propertyId}`,
+    `/rest/v1/properties?id=eq.${propertyId}&user_id=eq.${encodeURIComponent(ownerUserId)}`,
     {
       method: "PATCH",
       headers: {
@@ -116,4 +120,5 @@ export async function renameProperty(formData: FormData) {
 
   return { ok: true as const }
 }
+
 

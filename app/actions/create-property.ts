@@ -38,6 +38,7 @@ export async function createProperty(formData: FormData) {
     .from("properties")
     .select("id")
     .ilike("display_name", escapeForIlike(displayName))
+    .eq("user_id", ownerUserId)
     .limit(1)
 
   if (dupError) {
@@ -67,3 +68,4 @@ export async function createProperty(formData: FormData) {
 
   return { id: newId }
 }
+

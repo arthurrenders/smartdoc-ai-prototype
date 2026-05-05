@@ -8,6 +8,11 @@ import { userFacingAnalysisFailureFromError } from "@/lib/ai/gemini-errors"
 import { getTextFromGeminiResponse, parseJsonFromModelOutput } from "@/lib/ai/json-from-model"
 
 const PROMPT_VERSION = "2.0"
+const DEBUG_ANALYSIS_LOGS = process.env.DEBUG_ANALYSIS_LOGS === "1"
+
+function debugLog(...args: unknown[]) {
+  if (DEBUG_ANALYSIS_LOGS) console.debug(...args)
+}
 
 /**
  * Normalizes text by removing excessive whitespace and line breaks
@@ -33,17 +38,17 @@ export async function analyzeEPCWithAI(
 
   // Normalize text to handle formatting issues
   const normalizedText = normalizeText(text)
-  console.log("=== NORMALIZED TEXT FOR AI ===")
-  console.log("Normalized text length:", normalizedText.length)
-  console.log("First 1000 chars of normalized text:", normalizedText.substring(0, 1000))
-  console.log("=== END NORMALIZED TEXT ===")
+  debugLog("=== NORMALIZED TEXT FOR AI ===")
+  debugLog("Normalized text length:", normalizedText.length)
+  debugLog("First 1000 chars of normalized text:", normalizedText.substring(0, 1000))
+  debugLog("=== END NORMALIZED TEXT ===")
 
   // Use up to 12000 chars for better context (increased from 8000)
   const textToSend = normalizedText.substring(0, 12000)
   const isTruncated = normalizedText.length > 12000
 
   try {
-    console.log("Sending text to AI (length:", textToSend.length, isTruncated ? ", truncated)" : ", full)")
+    debugLog("Sending text to AI (length:", textToSend.length, isTruncated ? ", truncated)" : ", full)")
     const prompt = `${EPC_PROMPT}\n\nExtract information from this EPC document:\n\n${textToSend}${
       isTruncated ? "\n\n[Document truncated for length]" : ""
     }`
@@ -56,19 +61,19 @@ export async function analyzeEPCWithAI(
       throw new Error("No content in LLM response")
     }
 
-    console.log("=== RAW AI RESPONSE ===")
-    console.log(content)
-    console.log("=== END RAW AI RESPONSE ===")
+    debugLog("=== RAW AI RESPONSE ===")
+    debugLog(content)
+    debugLog("=== END RAW AI RESPONSE ===")
 
     const parsed = parseJsonFromModelOutput(content)
-    console.log("=== PARSED JSON ===")
-    console.log(parsed !== null ? JSON.stringify(parsed, null, 2) : "(parse failed, using empty coercion)")
-    console.log("=== END PARSED JSON ===")
+    debugLog("=== PARSED JSON ===")
+    debugLog(parsed !== null ? JSON.stringify(parsed, null, 2) : "(parse failed, using empty coercion)")
+    debugLog("=== END PARSED JSON ===")
 
     const epcData = normalizeParsedEpcResponse(parsed)
-    console.log("=== COERCED EPC DATA ===")
-    console.log(JSON.stringify(epcData, null, 2))
-    console.log("=== END COERCED EPC DATA ===")
+    debugLog("=== COERCED EPC DATA ===")
+    debugLog(JSON.stringify(epcData, null, 2))
+    debugLog("=== END COERCED EPC DATA ===")
 
     // If the certificate is expired, immediately return a red status
     if (epcData.is_expired === true) {
@@ -92,9 +97,9 @@ export async function analyzeEPCWithAI(
         ...(property_address ? { property_address } : {}),
       }
 
-      console.log("=== FINAL ANALYSIS RESULT (EXPIRED) ===")
-      console.log(JSON.stringify(expiredResult, null, 2))
-      console.log("=== END FINAL ANALYSIS RESULT (EXPIRED) ===")
+      debugLog("=== FINAL ANALYSIS RESULT (EXPIRED) ===")
+      debugLog(JSON.stringify(expiredResult, null, 2))
+      debugLog("=== END FINAL ANALYSIS RESULT (EXPIRED) ===")
 
       return {
         result: expiredResult,
@@ -105,11 +110,11 @@ export async function analyzeEPCWithAI(
     }
 
     // Transform EPC data into standard AnalysisResult format
-    console.log("Transforming EPC data to analysis result...")
+    debugLog("Transforming EPC data to analysis result...")
     const result = transformEPCToAnalysisResult(epcData)
-    console.log("=== FINAL ANALYSIS RESULT ===")
-    console.log(JSON.stringify(result, null, 2))
-    console.log("=== END FINAL ANALYSIS RESULT ===")
+    debugLog("=== FINAL ANALYSIS RESULT ===")
+    debugLog(JSON.stringify(result, null, 2))
+    debugLog("=== END FINAL ANALYSIS RESULT ===")
 
     return {
       result,

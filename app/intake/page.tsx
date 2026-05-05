@@ -17,17 +17,17 @@ export default async function IntakePage() {
         <div className="space-y-2">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-[#519fc8] hover:text-[#0e3b6a]"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-light hover:text-brand-dark"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to dashboard
           </Link>
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0e3b6a] text-white shadow-md">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-dark text-white shadow-md">
               <Inbox className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="font-headline text-3xl font-bold tracking-tight text-[#0e3b6a] sm:text-4xl">
+              <h1 className="font-headline text-3xl font-bold tracking-tight text-brand-dark sm:text-4xl">
                 Document intake
               </h1>
               <p className="text-sm text-muted-foreground">
@@ -42,3 +42,4 @@ export default async function IntakePage() {
     </div>
   )
 }
+

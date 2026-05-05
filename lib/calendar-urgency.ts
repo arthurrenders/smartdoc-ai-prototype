@@ -73,3 +73,23 @@ export function urgencyBadgeClass(level: UrgencyLevel): string {
       return "border-[hsl(var(--border))] bg-muted text-muted-foreground"
   }
 }
+
+export function urgencyForAppointment(startAt: string): UrgencyLevel {
+  const days = daysFromTodayUtc(startAt.slice(0, 10))
+  if (days < 0) return "neutral"
+  if (days === 0) return "critical"
+  if (days <= 2) return "warning"
+  return "info"
+}
+
+export function appointmentDayCellClass(): string {
+  return "border-blue-400 bg-blue-50 text-blue-900"
+}
+
+export function appointmentBadgeClass(): string {
+  return "border-blue-200/80 bg-blue-100 text-blue-800"
+}
+
+export function mixedDayCellClass(): string {
+  return "border-purple-400 bg-purple-50 text-purple-900"
+}

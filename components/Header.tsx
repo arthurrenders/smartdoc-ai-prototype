@@ -46,7 +46,7 @@ export function Header() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground" aria-label="Main">
-            <Link href="/intake" className="transition-colors hover:text-[#0e3b6a]">
+            <Link href="/intake" className="transition-colors hover:text-brand-dark">
               Document intake
             </Link>
           </nav>
@@ -59,3 +59,4 @@ export function Header() {
     </header>
   )
 }
+

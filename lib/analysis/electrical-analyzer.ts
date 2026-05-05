@@ -7,6 +7,11 @@ import { userFacingAnalysisFailureFromError } from "@/lib/ai/gemini-errors"
 import { getTextFromGeminiResponse, parseJsonFromModelOutput } from "@/lib/ai/json-from-model"
 
 const PROMPT_VERSION = "1.0"
+const DEBUG_ANALYSIS_LOGS = process.env.DEBUG_ANALYSIS_LOGS === "1"
+
+function debugLog(...args: unknown[]) {
+  if (DEBUG_ANALYSIS_LOGS) console.debug(...args)
+}
 
 type ElectricalAIResponse = {
   document_type?: string
@@ -117,16 +122,16 @@ export async function analyzeElectricalWithAI(
   const modelName = GEMINI_MODEL
 
   const normalizedText = normalizeText(text)
-  console.log("=== ELECTRICAL NORMALIZED TEXT FOR AI ===")
-  console.log("Normalized text length:", normalizedText.length)
-  console.log("First 1000 chars of normalized text:", normalizedText.substring(0, 1000))
-  console.log("=== END ELECTRICAL NORMALIZED TEXT ===")
+  debugLog("=== ELECTRICAL NORMALIZED TEXT FOR AI ===")
+  debugLog("Normalized text length:", normalizedText.length)
+  debugLog("First 1000 chars of normalized text:", normalizedText.substring(0, 1000))
+  debugLog("=== END ELECTRICAL NORMALIZED TEXT ===")
 
   const textToSend = normalizedText.substring(0, 12000)
   const isTruncated = normalizedText.length > 12000
 
   try {
-    console.log("Sending electrical text to AI (length:", textToSend.length, isTruncated ? ", truncated)" : ", full)")
+    debugLog("Sending electrical text to AI (length:", textToSend.length, isTruncated ? ", truncated)" : ", full)")
     const prompt = `${ELECTRICAL_PROMPT}\n\nExtract information from this electrical inspection document:\n\n${textToSend}${
       isTruncated ? "\n\n[Document truncated for length]" : ""
     }`
@@ -139,26 +144,26 @@ export async function analyzeElectricalWithAI(
       throw new Error("No content in electrical LLM response")
     }
 
-    console.log("=== RAW ELECTRICAL AI RESPONSE ===")
-    console.log(content)
-    console.log("=== END RAW ELECTRICAL AI RESPONSE ===")
+    debugLog("=== RAW ELECTRICAL AI RESPONSE ===")
+    debugLog(content)
+    debugLog("=== END RAW ELECTRICAL AI RESPONSE ===")
 
     const parsed = parseJsonFromModelOutput(content)
     if (parsed !== null) {
-      console.log("=== PARSED ELECTRICAL JSON ===")
-      console.log(JSON.stringify(parsed, null, 2))
-      console.log("=== END PARSED ELECTRICAL JSON ===")
+      debugLog("=== PARSED ELECTRICAL JSON ===")
+      debugLog(JSON.stringify(parsed, null, 2))
+      debugLog("=== END PARSED ELECTRICAL JSON ===")
     } else {
       console.warn("Electrical AI output was not valid JSON; using empty coercion")
     }
 
     const electricalData = coerceElectricalData(parsed)
 
-    console.log("Transforming electrical AI data to analysis result...")
+    debugLog("Transforming electrical AI data to analysis result...")
     const result = transformElectricalToAnalysisResult(electricalData)
-    console.log("=== FINAL ELECTRICAL ANALYSIS RESULT ===")
-    console.log(JSON.stringify(result, null, 2))
-    console.log("=== END FINAL ELECTRICAL ANALYSIS RESULT ===")
+    debugLog("=== FINAL ELECTRICAL ANALYSIS RESULT ===")
+    debugLog(JSON.stringify(result, null, 2))
+    debugLog("=== END FINAL ELECTRICAL ANALYSIS RESULT ===")
 
     return {
       result,

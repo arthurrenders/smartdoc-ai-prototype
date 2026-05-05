@@ -14,7 +14,7 @@ type Props = {
 }
 
 function propertyLabel(r: UpcomingDeadlineRow): string {
-  return r.propertyDisplayName?.trim() || `Pand ${r.property_id.slice(0, 8)}…`
+  return r.propertyDisplayName?.trim() || `Pand ${r.property_id.slice(0, 8)}â€¦`
 }
 
 export function UpcomingDeadlines({ rows, error }: Props) {
@@ -59,7 +59,7 @@ export function UpcomingDeadlines({ rows, error }: Props) {
                       <p className="text-xs text-dashboard-on-surface-variant">{propertyLabel(r)}</p>
                       <p className="text-xs text-dashboard-on-surface-variant">
                         {r.labelDisplay}
-                        {r.documentTypeName ? ` · ${r.documentTypeName}` : ""}
+                        {r.documentTypeName ? ` Â· ${r.documentTypeName}` : ""}
                       </p>
                     </div>
                     <span className="text-right">

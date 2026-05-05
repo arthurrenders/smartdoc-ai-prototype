@@ -25,7 +25,7 @@ function enrichmentStale(address: PropertyAddressRecord | null, enrichedAt: stri
 
 function tri(v: boolean | null, okLabel: string, naLabel: string): string {
   if (v === null) return naLabel
-  return v ? okLabel : "Afwijking — controleer adres of kaartcontext"
+  return v ? okLabel : "Afwijking â€” controleer adres of kaartcontext"
 }
 
 export function PropertyLocationEnrichmentCard({ propertyId, address, enrichment }: Props) {
@@ -41,7 +41,7 @@ export function PropertyLocationEnrichmentCard({ propertyId, address, enrichment
           <MapPinned className="h-5 w-5 text-brand-dark dark:text-brand-light" aria-hidden />
           <Sparkles className="h-4 w-4 text-amber-500 dark:text-amber-400" aria-hidden />
         </span>
-        Locatiecontext (België)
+        Locatiecontext (BelgiÃ«)
       </h2>
       <p className="saas-section-subheading mb-6 text-muted-foreground/90">
         Eerste verrijkingslaag: validatie tegen kaartdata, genormaliseerde context uit OSM, nabijheid
@@ -95,8 +95,8 @@ export function PropertyLocationEnrichmentCard({ propertyId, address, enrichment
               <li>
                 Land:{" "}
                 {p.validation.inBelgium
-                  ? "België (OSM)"
-                  : "Niet BE volgens reverse geocode — controleer coördinaten"}
+                  ? "BelgiÃ« (OSM)"
+                  : "Niet BE volgens reverse geocode â€” controleer coÃ¶rdinaten"}
               </li>
               <li>
                 Postcode t.o.v. kaart:{" "}
@@ -131,7 +131,7 @@ export function PropertyLocationEnrichmentCard({ propertyId, address, enrichment
               Bronnen
             </p>
             <p className="mt-1 text-muted-foreground">
-              Nominatim reverse: {p.sources.nominatimReverse ? "ja" : "nee"} · Overpass (OV in de
+              Nominatim reverse: {p.sources.nominatimReverse ? "ja" : "nee"} Â· Overpass (OV in de
               buurt): {p.sources.overpass ? "ja" : "nee (of geen resultaten)"}
             </p>
           </div>
@@ -142,7 +142,7 @@ export function PropertyLocationEnrichmentCard({ propertyId, address, enrichment
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Treinstations (≈ 1,2 km)
+                  Treinstations (â‰ˆ 1,2 km)
                 </p>
                 <ul className="mt-2 space-y-1">
                   {p.nearbyTransport.nearestRailStations.map((s) => (
@@ -155,7 +155,7 @@ export function PropertyLocationEnrichmentCard({ propertyId, address, enrichment
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Bushaltes (≈ 800 m)
+                  Bushaltes (â‰ˆ 800 m)
                 </p>
                 <ul className="mt-2 space-y-1">
                   {p.nearbyTransport.nearestBusStops.map((s) => (
@@ -169,7 +169,7 @@ export function PropertyLocationEnrichmentCard({ propertyId, address, enrichment
             </div>
           ) : p.sources.overpass ? (
             <p className="text-muted-foreground">
-              Geen treinstations of bushaltes gevonden binnen de zoekradius (OSM-dekking kan variëren).
+              Geen treinstations of bushaltes gevonden binnen de zoekradius (OSM-dekking kan variÃ«ren).
             </p>
           ) : (
             <p className="text-muted-foreground">

@@ -1,6 +1,8 @@
 "use server"
 
 import { createServerClient } from "@/lib/supabase/server"
+import { pickName, pickDocTypeName } from "@/lib/supabase-helpers"
+import { getOwnerPropertyIds } from "@/lib/supabase/ownership"
 
 export type CalendarDateEntry = {
   id: string
@@ -13,35 +15,14 @@ export type CalendarDateEntry = {
   documentTypeName: string | null
 }
 
-function pickName<T extends { display_name?: string | null }>(
-  row: T | T[] | null | undefined
-): string | null {
-  if (!row) return null
-  const one = Array.isArray(row) ? row[0] : row
-  return one?.display_name ?? null
-}
-
-function pickDocTypeName(
-  doc:
-    | { document_types?: { name?: string } | { name?: string }[] | null }
-    | { document_types?: { name?: string } | { name?: string }[] | null }[]
-    | null
-    | undefined
-): string | null {
-  if (!doc) return null
-  const one = Array.isArray(doc) ? doc[0] : doc
-  if (!one?.document_types) return null
-  const dt = one.document_types
-  const t = Array.isArray(dt) ? dt[0] : dt
-  return t?.name ?? null
-}
-
 export async function getCalendarDates(): Promise<{
   data: CalendarDateEntry[]
   error: string | null
 }> {
   try {
     const supabase = createServerClient()
+    const propertyIds = await getOwnerPropertyIds(supabase)
+    if (propertyIds.length === 0) return { data: [], error: null }
     const start = new Date()
     start.setUTCFullYear(start.getUTCFullYear() - 1)
     const end = new Date()
@@ -63,6 +44,7 @@ export async function getCalendarDates(): Promise<{
         documents ( id, document_types ( name ) )
       `
       )
+      .in("property_id", propertyIds)
       .gte("date_on", isoStart)
       .lte("date_on", isoEnd)
       .order("date_on", { ascending: true })
@@ -109,3 +91,4 @@ export async function getCalendarDates(): Promise<{
     }
   }
 }
+

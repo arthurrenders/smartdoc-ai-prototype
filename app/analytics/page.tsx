@@ -23,6 +23,8 @@ import logoImage from "@/components/public/logo png.png"
 import { NotificationsBellDropdown } from "@/components/navigation/NotificationsBellDropdown"
 import { ExportDataButton } from "@/components/navigation/ExportDataButton"
 
+export const dynamic = "force-dynamic"
+
 type RawDocRow = {
   id: string
   property_id: string
@@ -57,14 +59,16 @@ export default async function AnalyticsPage() {
   const supabase = createServerClient()
   const propertyIds = properties.map((p) => p.id)
 
-  const { data: docsData } = await supabase
-    .from("documents")
-    .select(
-      "id, property_id, document_type_id, created_at, document_types(id, name), analysis_runs(id, created_at, result_json)"
-    )
-    .in("property_id", propertyIds)
-    .order("created_at", { ascending: false })
-    .order("created_at", { foreignTable: "analysis_runs", ascending: false })
+  const { data: docsData } = propertyIds.length
+    ? await supabase
+        .from("documents")
+        .select(
+          "id, property_id, document_type_id, created_at, document_types(id, name), analysis_runs(id, created_at, result_json)"
+        )
+        .in("property_id", propertyIds)
+        .order("created_at", { ascending: false })
+        .order("created_at", { foreignTable: "analysis_runs", ascending: false })
+    : { data: [] }
 
   const docs = ((docsData as RawDocRow[] | null) ?? []).filter(
     (d): d is RawDocRow => Boolean(d?.property_id)
@@ -356,4 +360,5 @@ export default async function AnalyticsPage() {
     </div>
   )
 }
+
 

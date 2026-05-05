@@ -12,6 +12,7 @@ import { aggregatePropertyFlags } from "@/lib/aggregate-property-flags"
 import { getCurrentDocumentsByType } from "@/lib/current-documents"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
 import type { PropertyAddressRecord } from "@/lib/property-address/types"
+import { assertOwnerProperty } from "@/lib/supabase/ownership"
 import {
   isLocationEnrichmentPayloadV1,
   type PropertyLocationEnrichmentView,
@@ -93,8 +94,9 @@ type DocumentWithRelations = {
 export async function getPropertyDetail(propertyId: string): Promise<PropertyDetailData | null> {
   try {
     const supabase = createServerClient()
+    await assertOwnerProperty(supabase, propertyId)
 
-    // Validate the property exists (RLS already ensures access for the current user).
+    // Validate the property exists for the configured owner.
     // Property display name is optional; we fall back to a generated label.
     const { data: propertyIdRow, error: propertyIdError } = await supabase
       .from("properties")
@@ -178,7 +180,7 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
     for (const doc of currentDocuments) {
       const run = pickLatestAnalysisRun((doc as DocumentWithRelations).analysis_runs)
       const result = run?.result_json
-      const typeName = (doc as any).document_types?.name ?? "Document"
+      const typeName = (doc as DocumentWithRelations).document_types?.name ?? "Document"
       const st = result?.status
       const analysisStatus =
         st === "red" || st === "orange" || st === "green" ? st : undefined
@@ -216,7 +218,7 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
       }
       perDocumentFlags.push({
         documentTypeName: typeName,
-        documentId: (doc as any).id,
+        documentId: (doc as DocumentWithRelations).id,
         flags: docFlags,
       })
     }
@@ -389,3 +391,4 @@ function buildSuggestedActions(
   const followUps = list.slice(1, 4)
   return { primary, followUps }
 }
+

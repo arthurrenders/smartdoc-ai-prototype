@@ -107,16 +107,16 @@ export function PropertyAddressCard({ propertyId, address }: Props) {
               </p>
             ) : null}
             {address.geocode_status === "ok" ? (
-              <div className="mt-3 rounded-lg border border-[#519fc8]/30 bg-[#519fc8]/10 px-3 py-2 text-sm text-[#0e3b6a]">
+              <div className="mt-3 rounded-lg border border-brand-light/30 bg-brand-light/10 px-3 py-2 text-sm text-brand-dark">
                 Locatie bevestigd en opgeslagen.
                 {address.normalized_full_address ? (
-                  <span className="block text-xs text-[#0e3b6a]/80">{address.normalized_full_address}</span>
+                  <span className="block text-xs text-brand-dark/80">{address.normalized_full_address}</span>
                 ) : null}
               </div>
             ) : null}
             {candidateState && candidateState.candidates.length > 0 ? (
-              <div className="mt-3 space-y-3 rounded-lg border border-[#519fc8]/30 bg-[#519fc8]/5 p-4">
-                <p className="text-sm font-semibold text-[#0e3b6a]">
+              <div className="mt-3 space-y-3 rounded-lg border border-brand-light/30 bg-brand-light/5 p-4">
+                <p className="text-sm font-semibold text-brand-dark">
                   {candidateState.kind === "ambiguous_candidates"
                     ? "We found several possible matches. Please choose the correct one."
                     : "Did you mean one of these locations?"}
@@ -126,7 +126,7 @@ export function PropertyAddressCard({ propertyId, address }: Props) {
                     <li key={`${c.latitude}-${c.longitude}-${idx}`}>
                       <form
                         action={chooseGeocodeCandidate}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-[#0e3b6a]/10 bg-white p-3"
+                        className="flex items-center justify-between gap-3 rounded-lg border border-brand-dark/10 bg-white p-3"
                       >
                         <input type="hidden" name="propertyId" value={propertyId} />
                         <input type="hidden" name="candidateIndex" value={String(idx)} />
@@ -140,7 +140,7 @@ export function PropertyAddressCard({ propertyId, address }: Props) {
                         </div>
                         <button
                           type="submit"
-                          className="inline-flex whitespace-nowrap rounded-md bg-[#0e3b6a] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#0b3158]"
+                          className="inline-flex whitespace-nowrap rounded-md bg-brand-dark px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#0b3158]"
                         >
                           Gebruik
                         </button>
@@ -210,3 +210,4 @@ export function PropertyAddressCard({ propertyId, address }: Props) {
     </div>
   )
 }
+

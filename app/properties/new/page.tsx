@@ -87,7 +87,7 @@ export default function NewPropertyPage() {
               className="saas-btn-primary inline-flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
-              {submitting ? "Creating…" : "Create property"}
+              {submitting ? "Creatingâ€¦" : "Create property"}
             </button>
           </div>
         </form>

@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Upload } from "lucide-react"
 
 /**
- * Dashboard floating action — same placement as the legacy upload control; navigates to document intake.
+ * Dashboard floating action â€” same placement as the legacy upload control; navigates to document intake.
  */
 export function DocumentIntakeFab() {
   return (
