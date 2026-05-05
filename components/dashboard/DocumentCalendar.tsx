@@ -284,8 +284,8 @@ export function DocumentCalendar({ entries, appointments, properties, mapHref }:
       </div>
 
       {/* Nav + Filter */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="mb-4 flex flex-col items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-2">
           <button
             type="button"
             onClick={goPrevMonth}
@@ -597,4 +597,3 @@ export function DocumentCalendar({ entries, appointments, properties, mapHref }:
     </div>
   )
 }
-
