@@ -14,7 +14,7 @@ type Props = {
 }
 
 function propertyLabel(r: UpcomingDeadlineRow): string {
-  return r.propertyDisplayName?.trim() || `Pand ${r.property_id.slice(0, 8)}â€¦`
+  return r.propertyDisplayName?.trim() || `Pand ${r.property_id.slice(0, 8)}…`
 }
 
 export function UpcomingDeadlines({ rows, error }: Props) {
@@ -28,7 +28,7 @@ export function UpcomingDeadlines({ rows, error }: Props) {
     <div className="space-y-4">
       <h2 className="dashboard-section-title">
         <CalendarClock className="h-5 w-5" aria-hidden />
-        Upcoming Deadlines
+        Aankomende deadlines
       </h2>
       {error && (
         <div
@@ -59,7 +59,7 @@ export function UpcomingDeadlines({ rows, error }: Props) {
                       <p className="text-xs text-dashboard-on-surface-variant">{propertyLabel(r)}</p>
                       <p className="text-xs text-dashboard-on-surface-variant">
                         {r.labelDisplay}
-                        {r.documentTypeName ? ` Â· ${r.documentTypeName}` : ""}
+                        {r.documentTypeName ? ` · ${r.documentTypeName}` : ""}
                       </p>
                     </div>
                     <span className="text-right">

@@ -167,7 +167,7 @@ export function GenerateEmailDraftCard({
       setCopyHint(`${label} copied`)
       setTimeout(() => setCopyHint(null), 2000)
     } catch {
-      setCopyHint("Copy failed â€” select the text manually.")
+      setCopyHint("Kopiëren mislukt — selecteer de tekst handmatig.")
     }
   }
 
@@ -184,7 +184,7 @@ export function GenerateEmailDraftCard({
           <div className="min-w-0 flex-1 space-y-2">
             <h2 className="font-headline text-base font-bold text-dashboard-primary">Generate email draft</h2>
             <p className="text-sm text-dashboard-on-surface-variant">
-              Create a subject and body from this property&apos;s documents and analysis. Nothing is sent automatically â€”
+              Create a subject and body from this property&apos;s documents and analysis. Nothing is sent automatically —
               review and edit before you copy or send.
             </p>
             <button
@@ -200,7 +200,7 @@ export function GenerateEmailDraftCard({
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 py-8"
           role="dialog"
           aria-modal="true"
           aria-labelledby="email-draft-title"
@@ -216,7 +216,7 @@ export function GenerateEmailDraftCard({
                   Generate email draft
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Draft only â€” not legal advice. Verify before sending.
+                  Alleen concept — geen juridisch advies. Controleer voor verzending.
                 </p>
               </div>
               <button
@@ -225,7 +225,7 @@ export function GenerateEmailDraftCard({
                 className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 aria-label="Close"
               >
-                Ã—
+                ×
               </button>
             </div>
 
@@ -305,7 +305,7 @@ export function GenerateEmailDraftCard({
                   {isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                      Generatingâ€¦
+                      Genereren…
                     </>
                   ) : (
                     <>
@@ -408,7 +408,7 @@ export function GenerateEmailDraftCard({
                         {sendStatus === "sending" ? (
                           <>
                             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                            Sendingâ€¦
+                            Versturen…
                           </>
                         ) : (
                           <>

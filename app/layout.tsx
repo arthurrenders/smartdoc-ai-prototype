@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import { Inter, Manrope } from "next/font/google"
-import { Header } from "@/components/Header"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
@@ -17,10 +16,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} ${manrope.variable} ${inter.className}`}>
-        <Header />
-        <main className="saas-main">{children}</main>
+    <html lang="nl">
+      <body className={`${inter.variable} ${manrope.variable} ${inter.className} bg-[#f8fafb]`}>
+        {children}
       </body>
     </html>
   )

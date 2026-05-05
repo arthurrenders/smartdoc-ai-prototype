@@ -2,8 +2,20 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { CalendarDays, ChevronDown, ChevronUp, Clock, User, Plus } from "lucide-react"
+import { CalendarDays, ChevronDown, ChevronUp, Clock, User, Plus, ExternalLink } from "lucide-react"
 import type { AppointmentEntry } from "@/app/actions/get-appointments"
+
+function gcalLink(appt: AppointmentEntry): string {
+  const fmt = (iso: string) => iso.replace(/[-:]/g, "").slice(0, 15)
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: appt.title,
+    dates: `${fmt(appt.start_at)}/${fmt(appt.end_at)}`,
+  })
+  if (appt.location) params.set("location", appt.location)
+  if (appt.description) params.set("details", appt.description)
+  return `https://calendar.google.com/calendar/render?${params}`
+}
 import type { PropertyOption } from "@/lib/app-types"
 import { AppointmentModal } from "@/components/dashboard/AppointmentModal"
 import { formatTimeRange, formatDateNl } from "@/lib/date-formatting"
@@ -94,6 +106,15 @@ export function UpcomingAppointments({ rows, error, properties }: Props) {
                           {row.propertyDisplayName ?? `Pand ${row.property_id.slice(0, 8)}…`}
                         </Link>
                       )}
+                      <a
+                        href={gcalLink(row)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-slate-400 underline-offset-2 hover:text-blue-600 hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" aria-hidden />
+                        Toevoegen aan Google Calendar
+                      </a>
                     </div>
                   </div>
                 </li>

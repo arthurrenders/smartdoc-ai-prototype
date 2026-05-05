@@ -134,7 +134,7 @@ export function RenamePropertyButton({
                   disabled={isPending}
                   className="saas-btn-primary"
                 >
-                  {isPending ? "Savingâ€¦" : "Save"}
+                  {isPending ? "Opslaan…" : "Opslaan"}
                 </button>
               </div>
             </form>

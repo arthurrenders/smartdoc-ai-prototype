@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Home } from "lucide-react"
 import { createProperty } from "@/app/actions/create-property"
+import { AppShell } from "@/components/AppShell"
 
 export default function NewPropertyPage() {
   const router = useRouter()
@@ -29,8 +30,9 @@ export default function NewPropertyPage() {
   }
 
   return (
-    <div className="saas-page">
-      <div className="saas-card max-w-xl">
+    <AppShell>
+    <div className="mx-auto max-w-xl p-8">
+      <div className="saas-card">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
@@ -87,11 +89,12 @@ export default function NewPropertyPage() {
               className="saas-btn-primary inline-flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
-              {submitting ? "Creatingâ€¦" : "Create property"}
+              {submitting ? "Aanmaken…" : "Pand aanmaken"}
             </button>
           </div>
         </form>
       </div>
     </div>
+    </AppShell>
   )
 }

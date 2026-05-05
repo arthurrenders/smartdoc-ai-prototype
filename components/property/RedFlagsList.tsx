@@ -36,7 +36,7 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
             className="h-12 w-12 text-green-600/70 dark:text-green-400/80"
             aria-hidden
           />
-          <p className="mt-4 text-sm font-semibold text-foreground">All clear â€” no action needed.</p>
+          <p className="mt-4 text-sm font-semibold text-foreground">All clear — no action needed.</p>
         </div>
       </div>
     )

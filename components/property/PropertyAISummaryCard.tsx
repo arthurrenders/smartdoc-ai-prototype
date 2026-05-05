@@ -59,46 +59,46 @@ export function PropertyAISummaryCard({
           <FileText className="h-5 w-5" aria-hidden />
         </div>
         <div>
-          <h2 className="saas-section-heading text-xl sm:text-2xl">Document summary</h2>
+          <h2 className="saas-section-heading text-xl sm:text-2xl">Documentsamenvatting</h2>
           <p className="saas-section-subheading">
-            Status of required documents for this property
+            Status vereiste documenten voor dit pand
           </p>
         </div>
       </div>
 
       {(requiredTotal > 0 || validCount > 0 || missingCount > 0 || manualReviewCount > 0) && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4" aria-label="Document counts">
-          <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-4 py-3 shadow-sm">
-            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+        <div className="grid grid-cols-2 gap-3" aria-label="Document counts">
+          <div className="flex items-center gap-2.5 rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-3 py-2.5 shadow-sm">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
             <div className="min-w-0">
-              <p className="text-xl font-semibold tabular-nums text-foreground sm:text-2xl">{validCount}</p>
-              <p className="text-xs text-muted-foreground">Valid</p>
+              <p className="text-lg font-bold tabular-nums text-foreground">{validCount}</p>
+              <p className="text-[11px] text-muted-foreground">Geldig</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-4 py-3 shadow-sm">
-            <FileQuestion className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+          <div className="flex items-center gap-2.5 rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-3 py-2.5 shadow-sm">
+            <FileQuestion className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
             <div className="min-w-0">
-              <p className="text-xl font-semibold tabular-nums text-foreground sm:text-2xl">{missingCount}</p>
-              <p className="text-xs text-muted-foreground">Missing</p>
+              <p className="text-lg font-bold tabular-nums text-foreground">{missingCount}</p>
+              <p className="text-[11px] text-muted-foreground">Ontbreekt</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-4 py-3 shadow-sm">
-            <AlertCircle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+          <div className="flex items-center gap-2.5 rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-3 py-2.5 shadow-sm">
+            <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
             <div className="min-w-0">
-              <p className="text-xl font-semibold tabular-nums text-foreground sm:text-2xl">{manualReviewCount}</p>
-              <p className="text-xs text-muted-foreground">Manual review</p>
+              <p className="text-lg font-bold tabular-nums text-foreground">{manualReviewCount}</p>
+              <p className="text-[11px] text-muted-foreground">Handm. review</p>
             </div>
           </div>
-          <div className="flex flex-col justify-center rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-4 py-3 shadow-sm">
+          <div className="flex flex-col justify-center rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-3 py-2.5 shadow-sm">
             {urgentActionNeeded ? (
               <>
-                <p className="text-sm font-semibold text-red-700 dark:text-red-300">Urgent action needed</p>
-                <p className="text-xs text-muted-foreground">Address issues before closing</p>
+                <p className="text-xs font-semibold leading-tight text-red-700 dark:text-red-300">Urgente actie</p>
+                <p className="text-[11px] text-muted-foreground">Los op voor afsluiting</p>
               </>
             ) : (
               <>
-                <p className="text-sm font-medium text-foreground">No urgent action</p>
-                <p className="text-xs text-muted-foreground">Review suggested steps</p>
+                <p className="text-xs font-medium leading-tight text-foreground">Geen urgentie</p>
+                <p className="text-[11px] text-muted-foreground">Zie actiepunten</p>
               </>
             )}
           </div>
@@ -106,7 +106,7 @@ export function PropertyAISummaryCard({
       )}
 
       <div className="rounded-lg border border-[hsl(var(--card-border))] bg-card/50 p-4">
-        <p className="text-sm font-medium text-muted-foreground">Summary</p>
+        <p className="text-sm font-medium text-muted-foreground">Samenvatting</p>
         <p className="mt-2 leading-relaxed text-foreground">{paragraph}</p>
       </div>
     </div>

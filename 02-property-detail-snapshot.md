@@ -1,0 +1,274 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e455]:
+      - complementary [ref=e456]:
+        - generic [ref=e457]:
+          - img "SmartDoc AI logo" [ref=e459]
+          - navigation [ref=e460]:
+            - link "Dashboard" [ref=e461] [cursor=pointer]:
+              - /url: /
+              - img [ref=e462]
+              - text: Dashboard
+            - link "Map View" [ref=e467] [cursor=pointer]:
+              - /url: /map
+              - img [ref=e468]
+              - text: Map View
+            - link "Properties" [ref=e470] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=e471]
+              - text: Properties
+          - link "New Property" [ref=e476] [cursor=pointer]:
+            - /url: /properties/new
+            - img [ref=e477]
+            - text: New Property
+        - link "Settings" [ref=e479] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e480]
+          - text: Settings
+      - main [ref=e483]:
+        - generic [ref=e484]:
+          - generic [ref=e485]:
+            - generic [ref=e486]:
+              - img [ref=e487]
+              - textbox "Use search on Dashboard or Map View" [disabled] [ref=e490]
+            - navigation [ref=e491]:
+              - link "Overview" [ref=e492] [cursor=pointer]:
+                - /url: "#"
+              - link "Analytics" [ref=e493] [cursor=pointer]:
+                - /url: /analytics
+          - generic [ref=e494]:
+            - button "Export data (coming soon)" [ref=e496] [cursor=pointer]:
+              - img [ref=e497]
+              - text: Export Data
+            - button "Open notifications" [ref=e502] [cursor=pointer]:
+              - img [ref=e503]
+              - generic [ref=e506]: "3"
+        - generic [ref=e507]:
+          - generic [ref=e508]:
+            - generic [ref=e509]:
+              - navigation [ref=e510]:
+                - generic [ref=e511]: Properties
+                - generic [ref=e512]: ›
+                - generic [ref=e513]: Leuven
+              - heading "Parkstraat 88, 3000 Leuven" [level=1] [ref=e514]
+              - generic [ref=e515]:
+                - generic [ref=e516]: "ID: 2734801D"
+                - generic [ref=e517]: Attention
+            - generic [ref=e518]:
+              - button "Rename" [ref=e519] [cursor=pointer]:
+                - img [ref=e520]
+                - text: Rename
+              - button "Delete Parkstraat 88, 3000 Leuven" [ref=e524] [cursor=pointer]:
+                - img [ref=e525]
+          - generic [ref=e528]:
+            - img "Street view of Parkstraat 88, 3000 Leuven" [ref=e529]
+            - generic [ref=e531]:
+              - paragraph [ref=e532]: Aerial View
+              - paragraph [ref=e533]: 88, Parkstraat, Leuven, Vlaams-Brabant, Vlaanderen, 3000, België / Belgique / Belgien
+          - generic [ref=e534]:
+            - generic [ref=e535]:
+              - generic [ref=e537]:
+                - button [ref=e538] [cursor=pointer]
+                - generic:
+                  - generic [ref=e540]:
+                    - button "Zoom in" [ref=e541] [cursor=pointer]: +
+                    - button "Zoom out" [ref=e542] [cursor=pointer]: −
+                  - generic [ref=e543]:
+                    - link "Leaflet" [ref=e544] [cursor=pointer]:
+                      - /url: https://leafletjs.com
+                      - img [ref=e545]
+                      - text: Leaflet
+                    - text: "| ©"
+                    - link "OpenStreetMap" [ref=e549] [cursor=pointer]:
+                      - /url: https://www.openstreetmap.org/copyright
+              - generic [ref=e550]:
+                - generic [ref=e551]:
+                  - heading "Adres" [level=2] [ref=e552]:
+                    - img [ref=e553]
+                    - text: Adres
+                  - paragraph [ref=e556]:
+                    - text: "Gestructureerd adres (België); coördinaten via onderstaande knop. Kaart volgt later. Bron:"
+                    - code [ref=e557]: manual_intake
+                  - generic [ref=e558]:
+                    - generic [ref=e559]:
+                      - generic [ref=e560]:
+                        - paragraph [ref=e561]: Geocoding
+                        - 'generic "Geocodestatus: Geocoding gelukt" [ref=e562]': Geocoding gelukt
+                      - generic [ref=e563]:
+                        - text: Locatie bevestigd en opgeslagen.
+                        - generic [ref=e564]: 88, Parkstraat, Leuven, Vlaams-Brabant, Vlaanderen, 3000, België / Belgique / Belgien
+                      - generic [ref=e566]:
+                        - button "Geocode adres (België)" [ref=e567] [cursor=pointer]:
+                          - img [ref=e568]
+                          - text: Geocode adres (België)
+                        - paragraph [ref=e572]: Eenmalig op aanvraag (OpenStreetMap Nominatim). Geen automatische aanroep bij elke pagina.
+                    - generic [ref=e573]:
+                      - generic [ref=e574]:
+                        - paragraph [ref=e575]: Ruwe invoer
+                        - button "Adres bewerken" [ref=e576] [cursor=pointer]:
+                          - img [ref=e577]
+                          - text: Adres bewerken
+                      - paragraph [ref=e580]: Parkstraat 88, 3000 Leuven
+                    - generic [ref=e581]:
+                      - paragraph [ref=e582]: Genormaliseerd (canonical)
+                      - paragraph [ref=e583]: 88, Parkstraat, Leuven, Vlaams-Brabant, Vlaanderen, 3000, België / Belgique / Belgien
+                    - generic [ref=e584]:
+                      - paragraph [ref=e585]: Gestructureerd
+                      - generic [ref=e586]:
+                        - generic [ref=e587]: Parkstraat 88
+                        - generic [ref=e588]: 3000 Leuven
+                        - generic [ref=e589]: Vlaams-Brabant
+                    - paragraph [ref=e590]:
+                      - text: "Coördinaten: 50.87224, 4.70341"
+                      - generic [ref=e591]: "· geocode: 2026-05-04T15:46:45.637+00:00"
+                - generic [ref=e592]:
+                  - heading "Locatiecontext (België)" [level=2] [ref=e593]:
+                    - generic [ref=e594]:
+                      - img [ref=e595]
+                      - img [ref=e599]
+                    - text: Locatiecontext (België)
+                  - paragraph [ref=e601]: "Eerste verrijkingslaag: validatie tegen kaartdata, genormaliseerde context uit OSM, nabijheid van treinstation en bushaltes. Geschikt als basis voor latere risico- of buurtdata."
+                  - generic [ref=e603]:
+                    - button "Locatie verrijken (België)" [ref=e604] [cursor=pointer]:
+                      - img [ref=e605]
+                      - text: Locatie verrijken (België)
+                    - paragraph [ref=e607]: "Eenmalig op aanvraag: resultaat wordt opgeslagen (OpenStreetMap). Geen live call bij elke paginaweergave."
+                  - generic [ref=e608]:
+                    - generic [ref=e609]:
+                      - paragraph [ref=e610]: Validatie (postcode / gemeente)
+                      - list [ref=e611]:
+                        - listitem [ref=e612]: "Land: België (OSM)"
+                        - listitem [ref=e613]: "Postcode t.o.v. kaart: Komt overeen met opgeslagen postcode"
+                        - listitem [ref=e614]: "Gemeente t.o.v. kaart: Sluit aan bij opgeslagen gemeente"
+                    - generic [ref=e615]:
+                      - paragraph [ref=e616]: Kaartlabel (Nominatim)
+                      - paragraph [ref=e617]: 88, Parkstraat, Leuven, Vlaams-Brabant, Vlaanderen, 3000, België
+                    - generic [ref=e618]:
+                      - paragraph [ref=e619]: Bronnen
+                      - paragraph [ref=e620]: "Nominatim reverse: ja · Overpass (OV in de buurt): ja"
+                    - generic [ref=e621]:
+                      - generic [ref=e622]:
+                        - paragraph [ref=e623]: Treinstations (≈ 1,2 km)
+                        - list
+                      - generic [ref=e624]:
+                        - paragraph [ref=e625]: Bushaltes (≈ 800 m)
+                        - list [ref=e626]:
+                          - listitem [ref=e627]:
+                            - text: Leuven H.Consciencestraat
+                            - generic [ref=e628]: (116 m)
+                          - listitem [ref=e629]:
+                            - text: Leuven H.Consciencestraat
+                            - generic [ref=e630]: (122 m)
+                          - listitem [ref=e631]:
+                            - text: Leuven Rustoord Remy
+                            - generic [ref=e632]: (247 m)
+                          - listitem [ref=e633]:
+                            - text: Leuven Heilig Hartkliniek
+                            - generic [ref=e634]: (256 m)
+                          - listitem [ref=e635]:
+                            - text: Leuven Heilig Hartkliniek
+                            - generic [ref=e636]: (268 m)
+                    - paragraph [ref=e637]: "Opgeslagen: 2026-05-04T15:46:46.278+00:00"
+              - region "Documents" [ref=e638]:
+                - generic [ref=e639]:
+                  - heading "Verification Documents" [level=3] [ref=e640]
+                  - generic [ref=e641]: 3 total document types
+                - generic [ref=e643]:
+                  - generic [ref=e644]:
+                    - generic [ref=e645]:
+                      - paragraph [ref=e646]: Import from Google Drive
+                      - paragraph [ref=e647]: Sign in with Google, choose PDFs from your Drive, then upload and analyze them like local files.
+                    - button "Import from Google Drive" [ref=e649] [cursor=pointer]:
+                      - img [ref=e651]
+                      - generic [ref=e654]: Import from Google Drive
+                  - generic [ref=e656]:
+                    - generic [ref=e657]:
+                      - heading "ASBESTOS" [level=3] [ref=e658]
+                      - paragraph [ref=e659]: "Status: orange"
+                      - generic [ref=e661]:
+                        - paragraph [ref=e662]: Summary
+                        - paragraph [ref=e663]: Gemini API rate limit or daily quota exceeded.
+                    - button "Upload" [ref=e665] [cursor=pointer]:
+                      - img [ref=e666]
+                      - text: Upload
+                  - generic [ref=e670]:
+                    - generic [ref=e671]:
+                      - heading "ELECTRICAL" [level=3] [ref=e672]
+                      - paragraph [ref=e673]: "Status: orange"
+                      - generic [ref=e675]:
+                        - paragraph [ref=e676]: Summary
+                        - paragraph [ref=e677]: Gemini API rate limit or daily quota exceeded.
+                    - button "Upload" [ref=e679] [cursor=pointer]:
+                      - img [ref=e680]
+                      - text: Upload
+                  - generic [ref=e684]:
+                    - generic [ref=e685]:
+                      - heading "EPC" [level=3] [ref=e686]
+                      - paragraph [ref=e687]: "Status: orange"
+                      - generic [ref=e688]:
+                        - generic [ref=e689]:
+                          - paragraph [ref=e690]: Summary
+                          - paragraph [ref=e691]: Gemini API rate limit or daily quota exceeded.
+                        - paragraph [ref=e693]: EPC Details
+                    - button "Upload" [ref=e695] [cursor=pointer]:
+                      - img [ref=e696]
+                      - text: Upload
+            - generic [ref=e699]:
+              - generic [ref=e700]:
+                - generic [ref=e701]:
+                  - generic [ref=e702]:
+                    - generic [ref=e703]: 0%
+                    - img [ref=e704]
+                  - heading "Compliance Score" [level=4] [ref=e709]
+                - generic [ref=e711]:
+                  - generic [ref=e712]: "0"
+                  - generic [ref=e713]: Valid Points
+                - generic [ref=e714]:
+                  - generic [ref=e715]: "0"
+                  - generic [ref=e716]: Critical Issues
+              - generic [ref=e717]:
+                - heading "Issues & flags" [level=2] [ref=e718]
+                - generic [ref=e719]:
+                  - generic [ref=e720]:
+                    - heading "EPC" [level=3] [ref=e721]
+                    - list [ref=e722]:
+                      - listitem [ref=e723]:
+                        - generic [ref=e724]: "!"
+                        - generic [ref=e725]:
+                          - generic [ref=e727]: API quota exceeded
+                          - paragraph [ref=e728]: The free tier allows a limited number of requests per day per model. Wait a few minutes and try again, enable billing for a higher limit, or set GEMINI_MODEL / GEMINI_MODEL_FALLBACK in .env.local. See https://ai.google.dev/gemini-api/docs/rate-limits
+                  - generic [ref=e729]:
+                    - heading "ASBESTOS" [level=3] [ref=e730]
+                    - list [ref=e731]:
+                      - listitem [ref=e732]:
+                        - generic [ref=e733]: "!"
+                        - generic [ref=e734]:
+                          - generic [ref=e736]: API quota exceeded
+                          - paragraph [ref=e737]: The free tier allows a limited number of requests per day per model. Wait a few minutes and try again, enable billing for a higher limit, or set GEMINI_MODEL / GEMINI_MODEL_FALLBACK in .env.local. See https://ai.google.dev/gemini-api/docs/rate-limits
+                  - generic [ref=e738]:
+                    - heading "ELECTRICAL" [level=3] [ref=e739]
+                    - list [ref=e740]:
+                      - listitem [ref=e741]:
+                        - generic [ref=e742]: "!"
+                        - generic [ref=e743]:
+                          - generic [ref=e745]: API quota exceeded
+                          - paragraph [ref=e746]: The free tier allows a limited number of requests per day per model. Wait a few minutes and try again, enable billing for a higher limit, or set GEMINI_MODEL / GEMINI_MODEL_FALLBACK in .env.local. See https://ai.google.dev/gemini-api/docs/rate-limits
+              - region "Generate email draft" [ref=e747]:
+                - generic [ref=e748]:
+                  - img [ref=e750]
+                  - generic [ref=e753]:
+                    - heading "Generate email draft" [level=2] [ref=e754]
+                    - paragraph [ref=e755]: Create a subject and body from this property's documents and analysis. Nothing is sent automatically — review and edit before you copy or send.
+                    - button "Open draft generator" [ref=e756] [cursor=pointer]
+              - region "Suggested next actions" [ref=e757]:
+                - generic [ref=e758]:
+                  - generic [ref=e759]:
+                    - img [ref=e761]
+                    - generic [ref=e763]:
+                      - heading "Recommended next step" [level=2] [ref=e764]
+                      - paragraph [ref=e765]: Based on document status and analysis
+                  - paragraph [ref=e767]:
+                    - generic [ref=e768]: "1"
+                    - generic [ref=e769]: Follow up on asbestos risk findings with a specialist or seller.
+                    - img [ref=e770]
+  - alert [ref=e448]

@@ -7,7 +7,18 @@
       "Bash(mkdir -p \"/c/Users/Arthu/OneDrive/Bureaublad/GITHUB REPOS/smartdoc/smartdoc-ai-prototype/app/api/auth/gmail/start\")",
       "Bash(mkdir -p \"/c/Users/Arthu/OneDrive/Bureaublad/GITHUB REPOS/smartdoc/smartdoc-ai-prototype/app/api/auth/gmail/callback\")",
       "Bash(npx tsc *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Arthu\\\\OneDrive\\\\Bureaublad\\\\GITHUB REPOS\\\\smartdoc\\\\smartdoc-ai-prototype\" -Recurse -Filter \"*.tsx\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Arthu\\\\OneDrive\\\\Bureaublad\\\\GITHUB REPOS\\\\smartdoc\\\\smartdoc-ai-prototype\" -Recurse -Directory)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Arthu\\\\OneDrive\\\\Bureaublad\\\\GITHUB REPOS\\\\smartdoc\\\\prebuiltcomponen\" -Recurse -File)",
+      "Bash(Select-Object FullName)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Arthu\\\\OneDrive\\\\Bureaublad\\\\GITHUB REPOS\\\\smartdoc\\\\smartdoc-ai-prototype\\\\prebuiltcomponents\" -Recurse -File)",
+      "mcp__plugin_playwright_playwright__browser_resize",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_click"
     ]
   }
 }

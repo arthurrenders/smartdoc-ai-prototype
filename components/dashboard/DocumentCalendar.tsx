@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
-  MapPin,
   Plus,
   Pencil,
   Trash2,
@@ -16,6 +15,7 @@ import {
   Phone,
   Mail,
   MapPinned,
+  ExternalLink,
 } from "lucide-react"
 import type { CalendarDateEntry } from "@/app/actions/get-calendar-dates"
 import type { AppointmentEntry } from "@/app/actions/get-appointments"
@@ -39,6 +39,18 @@ type Filter = "all" | "deadlines" | "appointments"
 type DeadlineEvent = CalendarDateEntry & { kind: "deadline" }
 type AppointmentCalEvent = AppointmentEntry & { kind: "appointment" }
 type CalendarEvent = DeadlineEvent | AppointmentCalEvent
+
+function gcalLink(appt: AppointmentCalEvent): string {
+  const fmt = (iso: string) => iso.replace(/[-:]/g, "").slice(0, 15)
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: appt.title,
+    dates: `${fmt(appt.start_at)}/${fmt(appt.end_at)}`,
+  })
+  if (appt.location) params.set("location", appt.location)
+  if (appt.description) params.set("details", appt.description)
+  return `https://calendar.google.com/calendar/render?${params}`
+}
 
 const WEEKDAYS = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"]
 
@@ -268,15 +280,6 @@ export function DocumentCalendar({ entries, appointments, properties, mapHref }:
             <Plus className="h-4 w-4" aria-hidden />
             Afspraak
           </button>
-          {mapHref ? (
-            <Link
-              href={mapHref}
-              className="inline-flex items-center gap-2 rounded-lg border border-dashboard-outline-variant/40 bg-white px-3 py-2 text-sm text-dashboard-primary transition-all hover:bg-dashboard-surface-low"
-            >
-              <MapPin className="h-4 w-4" aria-hidden />
-              Kaart
-            </Link>
-          ) : null}
         </div>
       </div>
 
@@ -340,7 +343,7 @@ export function DocumentCalendar({ entries, appointments, properties, mapHref }:
       </div>
 
       {/* Calendar grid */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto px-1 py-1">
         <div className="min-w-[280px]">
           <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-dashboard-on-surface-variant">
             {WEEKDAYS.map((d) => (
@@ -523,6 +526,15 @@ export function DocumentCalendar({ entries, appointments, properties, mapHref }:
                           {e.description}
                         </p>
                       )}
+                      <a
+                        href={gcalLink(e)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-slate-400 underline-offset-2 hover:text-blue-600 hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" aria-hidden />
+                        Toevoegen aan Google Calendar
+                      </a>
                     </div>
 
                     {/* Edit / delete */}

@@ -2,8 +2,10 @@ import { Suspense } from "react"
 import { Save, User, SlidersHorizontal, KeyRound, Bell } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { getGmailConnectionStatus } from "@/app/actions/gmail-connection"
+import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
 import { GmailSettingsSection } from "@/components/settings/GmailSettingsSection"
 import { getOwnerUserId } from "@/lib/supabase/ownership"
+import { AppShell } from "@/components/AppShell"
 
 export const dynamic = "force-dynamic"
 
@@ -45,10 +47,12 @@ async function getAccountInfo(): Promise<SettingsAccount> {
 }
 
 export default async function SettingsPage() {
-  const [account, gmailStatus] = await Promise.all([getAccountInfo(), getGmailConnectionStatus()])
+  const [account, gmailStatus, { data: notificationRows, error: notificationsError }] =
+    await Promise.all([getAccountInfo(), getGmailConnectionStatus(), getDashboardNotifications(12)])
 
   return (
-    <div className="saas-page space-y-8">
+    <AppShell notifications={notificationRows} notificationsError={notificationsError}>
+    <div className="mx-auto max-w-3xl space-y-8 p-8">
       <header className="space-y-2">
         <h1 className="font-headline text-3xl font-bold tracking-tight text-brand-dark sm:text-4xl">
           Settings
@@ -164,6 +168,7 @@ export default async function SettingsPage() {
         </div>
       </form>
     </div>
+    </AppShell>
   )
 }
 

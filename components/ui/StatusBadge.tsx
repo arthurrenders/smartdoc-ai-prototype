@@ -17,9 +17,9 @@ const variantStyles: Record<StatusVariant, string> = {
 }
 
 const defaultLabels: Record<StatusVariant, string> = {
-  green: "OK",
-  orange: "Attention",
-  red: "Critical",
+  green: "Conform",
+  orange: "Aandacht",
+  red: "Kritiek",
 }
 
 export function StatusBadge({ status, label, className }: StatusBadgeProps) {
@@ -32,6 +32,7 @@ export function StatusBadge({ status, label, className }: StatusBadgeProps) {
         className
       )}
     >
+      <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
       {resolvedLabel}
     </span>
   )

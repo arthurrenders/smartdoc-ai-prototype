@@ -101,7 +101,7 @@
 @layer components {
   /* Card – rounded, subtle shadow, soft border */
   .saas-card {
-    @apply rounded-2xl border border-[hsl(var(--card-border))] bg-white text-card-foreground shadow-sm transition-shadow duration-200 dark:bg-card;
+    @apply rounded-xl border border-[hsl(var(--card-border))] bg-white text-card-foreground shadow-sm transition-shadow duration-200 dark:bg-card;
     box-shadow: var(--card-shadow);
     padding: var(--card-padding);
   }
@@ -111,7 +111,7 @@
   }
 
   .saas-card-elevated {
-    @apply rounded-2xl border border-[hsl(var(--card-border))] bg-white text-card-foreground shadow-md transition-shadow duration-200 dark:bg-card;
+    @apply rounded-xl border border-[hsl(var(--card-border))] bg-white text-card-foreground shadow-md transition-shadow duration-200 dark:bg-card;
     padding: var(--card-padding);
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 8px 20px -4px rgb(0 0 0 / 0.06);
   }
@@ -162,19 +162,19 @@
   }
 
   .dashboard-shell {
-    @apply flex min-h-screen bg-dashboard-background text-dashboard-on-surface;
+    @apply flex min-h-screen bg-[#f8fafb] text-dashboard-on-surface;
   }
 
   .dashboard-sidenav {
-    @apply hidden w-64 flex-col border-r border-dashboard-outline-variant/40 bg-slate-50 md:flex;
+    @apply hidden w-60 flex-shrink-0 flex-col bg-[#002741] md:flex;
   }
 
   .dashboard-topnav {
-    @apply sticky top-0 z-40 flex min-h-[4.25rem] flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-dashboard-outline-variant/40 bg-white/85 px-4 py-2 backdrop-blur-md sm:px-6 lg:px-8;
+    @apply sticky top-0 z-40 flex h-14 flex-shrink-0 items-center justify-between border-b border-gray-100 bg-white px-6;
   }
 
   .dashboard-content {
-    @apply flex-1 overflow-y-auto p-6 md:p-8;
+    @apply flex-1 p-6 md:p-8;
   }
 
   .dashboard-section-title {
@@ -183,7 +183,7 @@
 
   /* Empty state – centered content with icon and copy */
   .saas-empty-state {
-    @apply flex flex-col items-center justify-center rounded-2xl border border-dashed border-[hsl(var(--card-border))] bg-muted/20 py-16 px-8 text-center;
+    @apply flex flex-col items-center justify-center rounded-xl border border-dashed border-[hsl(var(--card-border))] bg-muted/20 py-16 px-8 text-center;
     box-shadow: var(--card-shadow);
   }
 
@@ -218,6 +218,11 @@
   .text-balance {
     text-wrap: balance;
   }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
 }
 
 /* /map — Leaflet divIcon: hide default white square behind coloured status dot */

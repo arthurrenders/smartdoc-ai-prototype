@@ -1,45 +1,37 @@
-import Link from "next/link"
-import { ArrowLeft, Inbox } from "lucide-react"
+import { Inbox } from "lucide-react"
 
 import { getIntakeUploads } from "@/app/actions/get-intake-uploads"
 import { getIntakePropertyOptions } from "@/app/actions/get-intake-property-options"
+import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
 import { BulkIntakeClient } from "@/components/intake/BulkIntakeClient"
+import { AppShell } from "@/components/AppShell"
 
 export const dynamic = "force-dynamic"
 
 export default async function IntakePage() {
-  const { data: rows, error } = await getIntakeUploads()
-  const { data: propertyOptions } = await getIntakePropertyOptions()
+  const [{ data: rows, error }, { data: propertyOptions }, { data: notificationRows, error: notificationsError }] =
+    await Promise.all([getIntakeUploads(), getIntakePropertyOptions(), getDashboardNotifications(12)])
 
   return (
-    <div className="saas-page space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-light hover:text-brand-dark"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to dashboard
-          </Link>
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-dark text-white shadow-md">
-              <Inbox className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="font-headline text-3xl font-bold tracking-tight text-brand-dark sm:text-4xl">
-                Document intake
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Bulk upload compliance documents. Files are stored in Supabase and registered for processing.
-              </p>
-            </div>
+    <AppShell notifications={notificationRows} notificationsError={notificationsError}>
+      <div className="mx-auto max-w-5xl space-y-8 p-8">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0e3b6a] text-white shadow-md">
+            <Inbox className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="font-headline text-2xl font-bold tracking-tight text-[#0e3b6a]">
+              Document intake
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Bulk documenten uploaden en verwerken.
+            </p>
           </div>
         </div>
-      </div>
 
-      <BulkIntakeClient initialRows={rows} loadError={error} propertyOptions={propertyOptions} />
-    </div>
+        <BulkIntakeClient initialRows={rows} loadError={error} propertyOptions={propertyOptions} />
+      </div>
+    </AppShell>
   )
 }
 

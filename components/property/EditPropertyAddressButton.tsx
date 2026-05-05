@@ -149,7 +149,7 @@ export function EditPropertyAddressButton({ propertyId, initialRawLine1 }: Props
                   Annuleren
                 </button>
                 <button type="submit" disabled={isPending} className="saas-btn-primary">
-                  {isPending ? "Opslaanâ€¦" : "Opslaan"}
+                  {isPending ? "Opslaan…" : "Opslaan"}
                 </button>
               </div>
             </form>

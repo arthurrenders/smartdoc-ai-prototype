@@ -1,17 +1,13 @@
 import Link from "next/link"
-import Image from "next/image"
 import {
   BarChart3,
   Building2,
   CalendarClock,
   FileQuestion,
-  LayoutDashboard,
-  Map as MapIcon,
   PieChart,
-  Plus,
-  Settings,
   TriangleAlert,
 } from "lucide-react"
+import { AppShell } from "@/components/AppShell"
 import { getDashboardData } from "@/app/actions/get-dashboard-data"
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
 import { getUpcomingDeadlines } from "@/app/actions/get-upcoming-deadlines"
@@ -19,9 +15,6 @@ import { createServerClient } from "@/lib/supabase/server"
 import { REQUIRED_DOCUMENT_TYPE_NAMES } from "@/lib/property-status"
 import { getCurrentDocumentsByType } from "@/lib/current-documents"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
-import logoImage from "@/components/public/logo png.png"
-import { NotificationsBellDropdown } from "@/components/navigation/NotificationsBellDropdown"
-import { ExportDataButton } from "@/components/navigation/ExportDataButton"
 
 export const dynamic = "force-dynamic"
 
@@ -159,60 +152,24 @@ export default async function AnalyticsPage() {
     .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
     .slice(0, 6)
 
+  const topSlot = (
+    <nav className="flex items-center gap-5">
+      <Link href="/" className="py-4 text-sm text-slate-500 transition-colors hover:text-dashboard-primary">
+        Overzicht
+      </Link>
+      <a href="#" className="flex h-14 items-center border-b-2 border-dashboard-primary text-sm font-semibold text-dashboard-primary">
+        Analytics
+      </a>
+    </nav>
+  )
+
   return (
-    <div className="-mt-10 sm:-mt-12 lg:-mt-16">
-      <div className="dashboard-shell">
-        <aside className="dashboard-sidenav">
-          <div className="p-6">
-            <div className="mb-6 px-4">
-              <Image src={logoImage} alt="SmartDoc AI logo" width={528} height={132} className="h-24 w-auto max-w-full object-contain" priority />
-            </div>
-            <Link href="/properties/new" className="mb-8 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-dashboard-primary px-4 py-3 text-sm font-bold text-white transition-all hover:opacity-90">
-              <Plus className="h-4 w-4" />
-              New Property
-            </Link>
-            <nav className="space-y-1">
-              <Link href="/" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-dashboard-primary">
-                <LayoutDashboard className="h-4 w-4" />
-                Dashboard
-              </Link>
-              <Link href="/map" className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-dashboard-primary">
-                <MapIcon className="h-4 w-4" />
-                Map View
-              </Link>
-            </nav>
-          </div>
-          <div className="mt-auto border-t border-dashboard-outline-variant/40 p-6">
-            <Link href="/settings" className="flex items-center gap-3 rounded-lg px-4 py-2 text-sm text-slate-500 transition-colors hover:text-dashboard-primary">
-              <Settings className="h-4 w-4" />
-              Settings
-            </Link>
-          </div>
-        </aside>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="dashboard-topnav">
-            <div className="flex items-center gap-8">
-              <p className="hidden text-sm text-dashboard-on-surface-variant lg:block">Analytics overzicht</p>
-              <nav className="flex items-center gap-5">
-                <Link href="/" className="py-4 text-sm text-slate-500 transition-colors hover:text-dashboard-primary">
-                  Overview
-                </Link>
-                <Link href="/analytics" className="flex h-16 items-center border-b-2 border-dashboard-primary text-sm font-semibold text-dashboard-primary">
-                  Analytics
-                </Link>
-              </nav>
-            </div>
-            <div className="flex items-center gap-2 md:gap-4">
-              <ExportDataButton className="hidden md:block" />
-              <NotificationsBellDropdown
-                notifications={notificationRows}
-                error={notificationsError}
-              />
-            </div>
-          </header>
-
-          <div className="dashboard-content space-y-8">
+    <AppShell
+      notifications={notificationRows}
+      notificationsError={notificationsError}
+      topSlot={topSlot}
+    >
+      <div className="dashboard-content space-y-8">
             <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-6">
               {[
                 ["Total properties", totalProperties, "text-dashboard-primary"],
@@ -354,10 +311,8 @@ export default async function AnalyticsPage() {
                 </ul>
               </article>
             </section>
-          </div>
-        </div>
       </div>
-    </div>
+    </AppShell>
   )
 }
 

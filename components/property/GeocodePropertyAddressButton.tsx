@@ -49,7 +49,7 @@ export function GeocodePropertyAddressButton({ propertyId, rawLine1 }: Props) {
         className="saas-btn-primary inline-flex w-full items-center justify-center gap-2 text-sm disabled:opacity-60 sm:w-auto"
       >
         <MapPinned className="h-4 w-4" aria-hidden />
-        {isPending ? "Bezig met geocoderenâ€¦" : "Geocode adres (BelgiÃ«)"}
+        {isPending ? "Bezig met geocoderen…" : "Geocode adres (België)"}
       </button>
       <p className="text-xs text-muted-foreground">
         Eenmalig op aanvraag (OpenStreetMap Nominatim). Geen automatische aanroep bij elke pagina.
