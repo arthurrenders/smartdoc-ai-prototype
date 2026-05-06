@@ -23,7 +23,7 @@ export default function NewPropertyPage() {
       router.refresh()
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to create property. Please try again."
+        err instanceof Error ? err.message : "Aanmaken mislukt. Probeer het opnieuw."
       )
       setSubmitting(false)
     }
@@ -36,10 +36,10 @@ export default function NewPropertyPage() {
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Add Property
+              Pand toevoegen
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Create a new property. It will appear on your dashboard right away.
+              Maak een nieuw pand aan. Het verschijnt meteen op uw dashboard.
             </p>
           </div>
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-dark/10 text-brand-dark dark:bg-brand-light/15 dark:text-brand-light">
@@ -50,7 +50,7 @@ export default function NewPropertyPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-1.5">
             <label htmlFor="displayName" className="text-sm font-medium text-foreground">
-              Property name
+              Pandnaam
             </label>
             <input
               id="displayName"
@@ -61,11 +61,11 @@ export default function NewPropertyPage() {
               disabled={submitting}
               required
               maxLength={80}
-              placeholder="e.g. 123 Main Street"
+              placeholder="bijv. Kerkstraat 123"
               className="w-full rounded-md border border-[hsl(var(--border))] bg-background px-3 py-2 text-sm shadow-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-ring focus:ring-offset-0 disabled:opacity-50"
             />
             <p className="text-xs text-muted-foreground">
-              Required. Names must be unique (case-insensitive). Up to 80 characters.
+              Verplicht. Namen moeten uniek zijn (hoofdletterongevoelig). Tot 80 tekens.
             </p>
           </div>
 
@@ -81,7 +81,7 @@ export default function NewPropertyPage() {
               onClick={() => router.push("/")}
               className="saas-btn-secondary"
             >
-              Cancel
+              Annuleren
             </button>
             <button
               type="submit"

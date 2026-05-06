@@ -1,4 +1,4 @@
-import Link from "next/link"
+import type { Metadata } from "next"
 import {
   BarChart3,
   Building2,
@@ -7,6 +7,11 @@ import {
   PieChart,
   TriangleAlert,
 } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "Analytics",
+  description: "Statistieken en analyses van uw documentbeheer.",
+}
 import { AppShell } from "@/components/AppShell"
 import { getDashboardData } from "@/app/actions/get-dashboard-data"
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
@@ -106,7 +111,7 @@ export default async function AnalyticsPage() {
 
   const documentsByType = new Map<string, number>()
   for (const d of currentDocs) {
-    const name = d.document_types?.name ?? "Unknown"
+    const name = d.document_types?.name ?? "Onbekend"
     documentsByType.set(name, (documentsByType.get(name) ?? 0) + 1)
   }
   const docsByTypeRows = [...documentsByType.entries()]
@@ -142,7 +147,7 @@ export default async function AnalyticsPage() {
   }
   const expiryMonthRows = [...expiriesByMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(0, 6)
 
-  const propertyNameById = new Map(properties.map((p) => [p.id, p.display_name ?? `Property ${p.id.slice(0, 8)}`]))
+  const propertyNameById = new Map(properties.map((p) => [p.id, p.display_name ?? `Pand ${p.id.slice(0, 8)}`]))
   const recentDocuments = currentDocs
     .slice()
     .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
@@ -152,32 +157,20 @@ export default async function AnalyticsPage() {
     .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
     .slice(0, 6)
 
-  const topSlot = (
-    <nav className="flex items-center gap-5">
-      <Link href="/" className="py-4 text-sm text-slate-500 transition-colors hover:text-dashboard-primary">
-        Overzicht
-      </Link>
-      <a href="#" className="flex h-14 items-center border-b-2 border-dashboard-primary text-sm font-semibold text-dashboard-primary">
-        Analytics
-      </a>
-    </nav>
-  )
-
   return (
     <AppShell
       notifications={notificationRows}
       notificationsError={notificationsError}
-      topSlot={topSlot}
     >
       <div className="dashboard-content space-y-8">
             <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-6">
               {[
-                ["Total properties", totalProperties, "text-dashboard-primary"],
-                ["Properties with issues", propertiesWithIssues, "text-dashboard-error"],
-                ["Total documents", totalDocuments, "text-dashboard-primary-container"],
-                ["Missing documents", missingDocuments, "text-dashboard-tertiary-fixed-dim"],
-                ["Upcoming expiries", upcomingExpiries, "text-dashboard-primary"],
-                ["Total red flags", totalRedFlags, "text-dashboard-error"],
+                ["Totaal panden", totalProperties, "text-dashboard-primary"],
+                ["Panden met problemen", propertiesWithIssues, "text-dashboard-error"],
+                ["Totaal documenten", totalDocuments, "text-dashboard-primary-container"],
+                ["Ontbrekende documenten", missingDocuments, "text-dashboard-tertiary-fixed-dim"],
+                ["Verlopen binnenkort", upcomingExpiries, "text-dashboard-primary"],
+                ["Totaal bevindingen", totalRedFlags, "text-dashboard-error"],
               ].map(([label, value, tone]) => (
                 <article key={label} className="rounded-xl border border-dashboard-outline-variant/20 bg-white p-5 shadow-sm">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-dashboard-on-surface-variant">{label}</p>
@@ -190,7 +183,7 @@ export default async function AnalyticsPage() {
               <article className="rounded-xl border border-dashboard-outline-variant/20 bg-white p-6 shadow-sm">
                 <h2 className="inline-flex items-center gap-2 text-lg font-bold text-dashboard-primary">
                   <BarChart3 className="h-5 w-5" />
-                  Documents by type
+                  Documenten per type
                 </h2>
                 <div className="mt-4 space-y-3">
                   {docsByTypeRows.map(([name, count]) => (
@@ -210,13 +203,13 @@ export default async function AnalyticsPage() {
               <article className="rounded-xl border border-dashboard-outline-variant/20 bg-white p-6 shadow-sm">
                 <h2 className="inline-flex items-center gap-2 text-lg font-bold text-dashboard-primary">
                   <PieChart className="h-5 w-5" />
-                  Property status distribution
+                  Verdeling pandstatus
                 </h2>
                 <div className="mt-4 grid grid-cols-3 gap-3">
                   {[
-                    ["Green", propertyStatusCounts.green, "bg-emerald-500"],
-                    ["Orange", propertyStatusCounts.orange, "bg-amber-500"],
-                    ["Red", propertyStatusCounts.red, "bg-red-500"],
+                    ["Groen", propertyStatusCounts.green, "bg-emerald-500"],
+                    ["Oranje", propertyStatusCounts.orange, "bg-amber-500"],
+                    ["Rood", propertyStatusCounts.red, "bg-red-500"],
                   ].map(([name, count, bg]) => (
                     <div key={name} className="rounded-lg border border-dashboard-outline-variant/20 bg-dashboard-surface-low p-3 text-center">
                       <div className={`mx-auto mb-2 h-2 w-10 rounded-full ${bg}`} />
@@ -232,11 +225,11 @@ export default async function AnalyticsPage() {
               <article className="rounded-xl border border-dashboard-outline-variant/20 bg-white p-6 shadow-sm">
                 <h2 className="inline-flex items-center gap-2 text-lg font-bold text-dashboard-primary">
                   <CalendarClock className="h-5 w-5" />
-                  Upcoming expiries by month
+                  Verlopen per maand
                 </h2>
                 <div className="mt-4 space-y-3">
                   {expiryMonthRows.length === 0 ? (
-                    <p className="text-sm text-dashboard-on-surface-variant">No upcoming expiries in current range.</p>
+                    <p className="text-sm text-dashboard-on-surface-variant">Geen verlopen in het huidige bereik.</p>
                   ) : (
                     expiryMonthRows.map(([month, count]) => (
                       <div key={month} className="flex items-center justify-between rounded-lg bg-dashboard-surface-low px-3 py-2 text-sm">
@@ -251,7 +244,7 @@ export default async function AnalyticsPage() {
               <article className="rounded-xl border border-dashboard-outline-variant/20 bg-white p-6 shadow-sm">
                 <h2 className="inline-flex items-center gap-2 text-lg font-bold text-dashboard-primary">
                   <FileQuestion className="h-5 w-5" />
-                  Missing documents by type
+                  Ontbrekende documenten per type
                 </h2>
                 <div className="mt-4 space-y-3">
                   {missingByTypeRows.map(([name, count]) => (
@@ -271,15 +264,15 @@ export default async function AnalyticsPage() {
 
             <section className="grid grid-cols-1 gap-8 xl:grid-cols-2">
               <article className="rounded-xl border border-dashboard-outline-variant/20 bg-white p-6 shadow-sm">
-                <h2 className="text-lg font-bold text-dashboard-primary">Recently uploaded documents</h2>
+                <h2 className="text-lg font-bold text-dashboard-primary">Recentelijk geüploade documenten</h2>
                 <ul className="mt-4 space-y-2">
                   {recentDocuments.length === 0 ? (
-                    <li className="text-sm text-dashboard-on-surface-variant">No recent documents.</li>
+                    <li className="text-sm text-dashboard-on-surface-variant">Geen recente documenten.</li>
                   ) : (
                     recentDocuments.map((d) => (
                       <li key={d.id} className="flex items-center justify-between rounded-lg bg-dashboard-surface-low px-3 py-2 text-sm">
                         <span className="min-w-0 truncate font-medium text-foreground">
-                          {d.document_types?.name ?? "Unknown"} · {propertyNameById.get(d.property_id) ?? "Property"}
+                          {d.document_types?.name ?? "Onbekend"} · {propertyNameById.get(d.property_id) ?? "Pand"}
                         </span>
                         <span className="ml-3 shrink-0 text-xs text-dashboard-on-surface-variant">
                           {d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}
@@ -293,11 +286,11 @@ export default async function AnalyticsPage() {
               <article className="rounded-xl border border-dashboard-outline-variant/20 bg-white p-6 shadow-sm">
                 <h2 className="inline-flex items-center gap-2 text-lg font-bold text-dashboard-primary">
                   <TriangleAlert className="h-5 w-5 text-brand-light" />
-                  Recently created properties
+                  Recentelijk aangemaakte panden
                 </h2>
                 <ul className="mt-4 space-y-2">
                   {recentProperties.length === 0 ? (
-                    <li className="text-sm text-dashboard-on-surface-variant">No recent properties.</li>
+                    <li className="text-sm text-dashboard-on-surface-variant">Geen recente panden.</li>
                   ) : (
                     recentProperties.map((p) => (
                       <li key={p.id} className="flex items-center justify-between rounded-lg bg-dashboard-surface-low px-3 py-2 text-sm">

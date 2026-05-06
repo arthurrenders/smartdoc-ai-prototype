@@ -313,22 +313,23 @@ function buildSummaryParagraph(counts: {
 }): string {
   const { validCount, missingCount, manualReviewCount, requiredTotal, urgentActionNeeded } = counts
   if (requiredTotal === 0) {
-    return "No required document types are configured."
+    return "Geen vereiste documenttypes geconfigureerd."
   }
   if (validCount === requiredTotal && missingCount === 0 && manualReviewCount === 0) {
-    return `All ${requiredTotal} required document${requiredTotal !== 1 ? "s" : ""} are present and valid. No action required.`
+    return `Alle ${requiredTotal} vereiste document${requiredTotal !== 1 ? "en zijn" : " is"} aanwezig en geldig. Geen actie vereist.`
   }
   if (urgentActionNeeded) {
     const parts: string[] = []
-    if (missingCount > 0) parts.push(`${missingCount} missing`)
-    if (manualReviewCount > 0) parts.push(`${manualReviewCount} requiring manual review`)
-    return `Urgent action required: ${parts.join(", ")}. Address these issues before closing the transaction.`
+    if (missingCount > 0) parts.push(`${missingCount} ontbreekt`)
+    if (manualReviewCount > 0) parts.push(`${manualReviewCount} vereist handmatige review`)
+    return `Urgente actie vereist: ${parts.join(", ")}. Los deze problemen op vóór het afsluiten van de transactie.`
   }
   const parts: string[] = []
-  if (validCount > 0) parts.push(`${validCount} valid`)
-  if (missingCount > 0) parts.push(`${missingCount} missing`)
-  if (manualReviewCount > 0) parts.push(`${manualReviewCount} need manual review`)
-  return `${parts.join(", ")}. Review suggested actions below.`
+  if (validCount > 0) parts.push(`${validCount} geldig`)
+  if (missingCount > 0) parts.push(`${missingCount} ontbreekt`)
+  if (manualReviewCount > 0) parts.push(`${manualReviewCount} vereist handmatige review`)
+  const summary = parts.length > 0 ? `${parts.join(", ")}. ` : ""
+  return `${summary}Zie de aanbevolen acties voor vervolgstappen.`
 }
 
 function buildSuggestedActions(

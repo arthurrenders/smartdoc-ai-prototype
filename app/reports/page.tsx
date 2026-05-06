@@ -1,5 +1,11 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Building2, FileText } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "Rapporten",
+  description: "Interne notities en rapporten per pand.",
+}
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
 import { getReportsData } from "@/app/actions/reports"
 import { CreateReportForm } from "@/components/reports/CreateReportForm"
@@ -21,16 +27,16 @@ export default async function ReportsPage() {
             <section className="space-y-2">
               <h1 className="inline-flex items-center gap-2 text-3xl font-extrabold tracking-tight text-dashboard-primary">
                 <FileText className="h-7 w-7" />
-                Reports
+                Rapporten
               </h1>
               <p className="text-sm text-dashboard-on-surface-variant">
-                Internal employee notes linked to properties.
+                Interne notities gekoppeld aan panden.
               </p>
             </section>
 
             {error ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-                Could not load reports: {error}
+                Rapporten konden niet geladen worden: {error}
               </div>
             ) : null}
 
@@ -41,7 +47,7 @@ export default async function ReportsPage() {
               <div className="xl:col-span-2 space-y-4">
                 {reports.length === 0 ? (
                   <div className="rounded-xl border border-dashboard-outline-variant/20 bg-white p-6 text-sm text-dashboard-on-surface-variant shadow-sm">
-                    No reports yet. Create your first internal note.
+                    Nog geen rapporten. Maak uw eerste interne notitie aan.
                   </div>
                 ) : (
                   reports.map((report) => (
@@ -55,15 +61,15 @@ export default async function ReportsPage() {
                           </p>
                         </div>
                         <div className="text-right text-xs text-dashboard-on-surface-variant">
-                          <p>Created: {formatDateTimeNl(report.created_at)}</p>
-                          <p>Updated: {formatDateTimeNl(report.updated_at)}</p>
+                          <p>Aangemaakt: {formatDateTimeNl(report.created_at)}</p>
+                          <p>Bijgewerkt: {formatDateTimeNl(report.updated_at)}</p>
                         </div>
                       </div>
                       <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-dashboard-on-surface">
                         {report.note_text}
                       </p>
                       <p className="mt-3 text-xs text-dashboard-on-surface-variant">
-                        Author: {report.author_name?.trim() || "Unknown"}
+                        Auteur: {report.author_name?.trim() || "Onbekend"}
                       </p>
                     </article>
                   ))

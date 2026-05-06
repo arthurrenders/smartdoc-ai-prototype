@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import nextDynamic from "next/dynamic"
 import Link from "next/link"
@@ -39,6 +40,20 @@ const DocumentTable = nextDynamic(() => import("@/components/DocumentTable"), {
     </div>
   ),
 })
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  const data = await getPropertyDetail(id)
+  if (!data) return { title: "Pand niet gevonden" }
+  return {
+    title: data.propertyDisplayName,
+    description: `Documenten, compliance en bevindingen voor ${data.propertyDisplayName}.`,
+  }
+}
 
 export default async function PropertyPage({
   params,
@@ -156,92 +171,99 @@ export default async function PropertyPage({
           </div>
         </div>
 
-        {/* Main content: left (8) + right (4) */}
+        {/* Documents + compact score/actions sidebar — sidebar is transparent, stretches to match doc height */}
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-          {/* Left column: Documents → Address/Enrichment → Map */}
-          <div className="space-y-8 lg:col-span-8">
-            {/* Documents — primary action surface */}
-            <section className="rounded-xl border border-dashboard-outline-variant/10 bg-white shadow-sm" aria-label="Documenten">
-              <div className="flex items-center justify-between border-b border-dashboard-outline-variant/20 bg-dashboard-surface-low px-6 py-4">
-                <h3 className="font-headline text-lg font-bold text-dashboard-primary">Verificatiedocumenten</h3>
-                <span className="text-xs text-dashboard-on-surface-variant">{data.documentTypes.length} documentstypen</span>
-              </div>
-              <div className="p-6">
-                <DocumentTable propertyId={id} wrapInCard={false} />
-              </div>
-            </section>
+          {/* Documents — primary content */}
+          <section className="rounded-xl border border-dashboard-outline-variant/10 bg-white shadow-sm lg:col-span-8" aria-label="Documenten">
+            <div className="flex items-center justify-between border-b border-dashboard-outline-variant/20 bg-dashboard-surface-low px-6 py-4">
+              <h3 className="font-headline text-lg font-bold text-dashboard-primary">Verificatiedocumenten</h3>
+              <span className="text-xs text-dashboard-on-surface-variant">{data.documentTypes.length} documentstypen</span>
+            </div>
+            <div className="p-6">
+              <DocumentTable propertyId={id} wrapInCard={false} />
+            </div>
+          </section>
 
-            {/* Address + enrichment */}
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-              <PropertyAddressCard propertyId={id} address={data.propertyAddress} />
+          {/* Sidebar: score + actions + email anchored to bottom */}
+          <div className="flex flex-col lg:col-span-4">
+            {/* Compliance score */}
+            <div className="rounded-xl bg-dashboard-primary p-5 text-white shadow-xl">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <span className="font-headline text-3xl font-extrabold">{complianceScore}%</span>
+                  <p className="mt-0.5 text-xs font-bold uppercase tracking-widest opacity-80">Nalevingsscore</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-center">
+                    <p className="text-xl font-extrabold">{validCount}</p>
+                    <p className="text-[10px] opacity-70">Geldig</p>
+                  </div>
+                  <div className="h-8 w-px bg-white/25" />
+                  <div className="text-center">
+                    <p className="text-xl font-extrabold">{criticalIssues}</p>
+                    <p className="text-[10px] opacity-70">Kritiek</p>
+                  </div>
+                  <Layers3 className="h-6 w-6 shrink-0 opacity-40" />
+                </div>
+              </div>
+              <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/20">
+                <div className="h-full bg-white transition-all" style={{ width: `${complianceScore}%` }} />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <SuggestedActionsCard actions={data.suggestedActions} className="rounded-xl" />
+            </div>
+
+            <div className="mt-4">
+              <GenerateEmailDraftCard
+                propertyId={id}
+                allowMissingDocs={allowMissingDocs}
+                allowRedFlags={allowRedFlags}
+                allowDocumentMismatch={allowDocumentMismatch}
+                gmailConnected={gmailStatus.ok && gmailStatus.connected}
+                gmailEmail={gmailStatus.ok && gmailStatus.connected ? gmailStatus.gmailEmail : null}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Address + location — full width so expanding location enrichment never disrupts the layout above */}
+        <div className="overflow-hidden rounded-xl border border-[hsl(var(--card-border))] bg-white shadow-sm">
+          <div className="divide-y divide-[hsl(var(--card-border))]">
+            <div className="p-6">
+              <PropertyAddressCard propertyId={id} address={data.propertyAddress} wrapInCard={false} />
+            </div>
+            <div className="border-l-4 border-l-brand-light/55 bg-gradient-to-r from-brand-light/8 to-transparent p-6">
               <PropertyLocationEnrichmentCard
                 propertyId={id}
                 address={data.propertyAddress}
                 enrichment={data.locationEnrichment}
+                wrapInCard={false}
               />
             </div>
-
-            {/* Map — contextual */}
-            <div className="relative h-[240px] w-full overflow-hidden rounded-xl border border-dashboard-outline-variant/20 bg-dashboard-surface-low shadow-sm">
-              {mapMarkers.length > 0 ? (
-                <PropertiesMap markers={mapMarkers} className="h-full w-full border-0 shadow-none" />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-dashboard-on-surface-variant">
-                  Geocodeer dit adres om de kaartmarkering te tonen.
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right column: Score → AI Summary → Red flags → Suggested actions → Email */}
-          <div className="space-y-6 lg:col-span-4">
-            {/* Compliance score */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-4 rounded-xl bg-dashboard-primary p-6 text-white shadow-xl">
-                <div className="flex items-start justify-between">
-                  <span className="font-headline text-4xl font-extrabold">{complianceScore}%</span>
-                  <Layers3 className="h-8 w-8 opacity-50" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-widest opacity-80">Nalevingsscore</h4>
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/20">
-                    <div className="h-full bg-white" style={{ width: `${complianceScore}%` }} />
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-xl border border-emerald-200 bg-emerald-100 p-4">
-                <div className="text-xl font-extrabold text-emerald-800">{validCount}</div>
-                <div className="text-[10px] font-bold uppercase text-emerald-900/60">Geldig</div>
-              </div>
-              <div className="rounded-xl border border-red-200/80 bg-red-50 p-4">
-                <div className="text-xl font-extrabold text-red-700">{criticalIssues}</div>
-                <div className="text-[10px] font-bold uppercase text-red-700/60">Kritieke punten</div>
-              </div>
-            </div>
-
-            {/* AI document summary */}
-            <PropertyAISummaryCard
-              summaryCounts={data.summaryCounts}
-              status={data.stats.status}
-            />
-
-            {/* Red flags */}
-            <RedFlagsList flags={data.flags} className="rounded-xl border border-dashboard-outline-variant/10 bg-white shadow-sm" />
-
-            {/* Suggested actions */}
-            <SuggestedActionsCard actions={data.suggestedActions} className="rounded-xl" />
-
-            {/* Email draft */}
-            <GenerateEmailDraftCard
-              propertyId={id}
-              allowMissingDocs={allowMissingDocs}
-              allowRedFlags={allowRedFlags}
-              allowDocumentMismatch={allowDocumentMismatch}
-              gmailConnected={gmailStatus.ok && gmailStatus.connected}
-              gmailEmail={gmailStatus.ok && gmailStatus.connected ? gmailStatus.gmailEmail : null}
-            />
           </div>
         </div>
+
+        {/* Red flags */}
+        <RedFlagsList flags={data.flags} className="rounded-xl border border-dashboard-outline-variant/10 bg-white shadow-sm" />
+
+        {/* Map */}
+        <div className="relative isolate h-[320px] w-full overflow-hidden rounded-xl border border-dashboard-outline-variant/20 bg-dashboard-surface-low shadow-sm">
+          {mapMarkers.length > 0 ? (
+            <PropertiesMap markers={mapMarkers} className="h-full w-full border-0 shadow-none" />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-dashboard-on-surface-variant">
+              Geocodeer dit adres om de kaartmarkering te tonen.
+            </div>
+          )}
+        </div>
+
+        {/* AI document summary */}
+        <PropertyAISummaryCard
+          summaryCounts={data.summaryCounts}
+          status={data.stats.status}
+        />
 
         {/* Activity timeline */}
         <section aria-label="Tijdlijn" className="mt-8">

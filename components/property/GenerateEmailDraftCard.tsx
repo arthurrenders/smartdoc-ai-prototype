@@ -25,26 +25,26 @@ const EMAIL_KINDS: Array<{
 }> = [
   {
     id: "missing_docs",
-    label: "Missing required documents",
-    description: "Request certificates that are not on file.",
+    label: "Ontbrekende documenten",
+    description: "Vraag ontbrekende certificaten op.",
     requires: "missing_docs",
   },
   {
     id: "red_flags",
-    label: "Compliance warnings / issues",
-    description: "Summarize flagged items from document analysis.",
+    label: "Nalevingswaarschuwingen",
+    description: "Samenvatting van gemarkeerde problemen.",
     requires: "red_flags",
   },
   {
     id: "document_mismatch",
-    label: "Possible wrong upload",
-    description: "Ask for the correct document when type may not match.",
+    label: "Mogelijke foutieve upload",
+    description: "Vraag het juiste document op.",
     requires: "document_mismatch",
   },
   {
     id: "follow_up",
-    label: "General next-step follow-up",
-    description: "Polite follow-up using suggested actions and status.",
+    label: "Algemene vervolgstap",
+    description: "Vriendelijke opvolging op basis van status.",
     requires: null,
   },
 ]
@@ -121,7 +121,7 @@ export function GenerateEmailDraftCard({
     setSendStatus("idle")
     setSendError(null)
     if (!kindAllowed(kind, availability)) {
-      setError("This email type is not available for the current property state.")
+      setError("Dit e-mailtype is niet beschikbaar voor de huidige pandstatus.")
       return
     }
     startTransition(async () => {
@@ -137,11 +137,11 @@ export function GenerateEmailDraftCard({
 
   async function handleSendViaGmail() {
     if (!subject.trim() || !body.trim()) {
-      setSendError("Generate a draft first before sending.")
+      setSendError("Genereer eerst een concept voordat u verzendt.")
       return
     }
     if (!toEmail.trim()) {
-      setSendError("Enter a recipient email address.")
+      setSendError("Voer een ontvanger e-mailadres in.")
       return
     }
     setSendStatus("sending")
@@ -177,24 +177,24 @@ export function GenerateEmailDraftCard({
         className="rounded-xl border border-dashboard-outline-variant/10 bg-white p-5 shadow-sm"
         aria-label="Generate email draft"
       >
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-dashboard-primary/10 text-dashboard-primary">
-            <Mail className="h-5 w-5" aria-hidden />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-dashboard-primary/10 text-dashboard-primary">
+              <Mail className="h-4 w-4" aria-hidden />
+            </div>
+            <div>
+              <h2 className="font-headline text-base font-bold text-dashboard-primary">E-mailconcept</h2>
+              <p className="text-xs text-dashboard-on-surface-variant">Genereer op basis van analyse</p>
+            </div>
           </div>
-          <div className="min-w-0 flex-1 space-y-2">
-            <h2 className="font-headline text-base font-bold text-dashboard-primary">Generate email draft</h2>
-            <p className="text-sm text-dashboard-on-surface-variant">
-              Create a subject and body from this property&apos;s documents and analysis. Nothing is sent automatically —
-              review and edit before you copy or send.
-            </p>
-            <button
-              type="button"
-              onClick={open}
-              className="inline-flex items-center gap-2 rounded-lg bg-dashboard-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-dashboard-primary focus:ring-offset-2"
-            >
-              Open draft generator
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={open}
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-dashboard-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-dashboard-primary focus:ring-offset-2"
+          >
+            <Send className="h-3.5 w-3.5" aria-hidden />
+            Opstellen
+          </button>
         </div>
       </section>
 
@@ -213,7 +213,7 @@ export function GenerateEmailDraftCard({
             <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
                 <p id="email-draft-title" className="truncate text-sm font-semibold text-foreground">
-                  Generate email draft
+                  E-mailconcept genereren
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Alleen concept — geen juridisch advies. Controleer voor verzending.
@@ -223,7 +223,7 @@ export function GenerateEmailDraftCard({
                 type="button"
                 onClick={() => setIsOpen(false)}
                 className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                aria-label="Close"
+                aria-label="Sluiten"
               >
                 ×
               </button>
@@ -232,7 +232,7 @@ export function GenerateEmailDraftCard({
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
               <fieldset className="space-y-2">
                 <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Email type
+                  Type e-mail
                 </legend>
                 <div className="flex flex-col gap-2">
                   {EMAIL_KINDS.map((opt) => {
@@ -261,7 +261,7 @@ export function GenerateEmailDraftCard({
                           <span className="mt-0.5 block text-xs text-muted-foreground">{opt.description}</span>
                           {!allowed && opt.requires && (
                             <span className="mt-1 block text-[11px] text-muted-foreground">
-                              Not available: no matching items for this property right now.
+                              Niet beschikbaar voor dit pand.
                             </span>
                           )}
                         </span>
@@ -273,7 +273,7 @@ export function GenerateEmailDraftCard({
 
               <fieldset className="space-y-2">
                 <legend className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Language
+                  Taal
                 </legend>
                 <div className="flex flex-wrap gap-3">
                   {LANGUAGES.map((opt) => (
@@ -310,7 +310,7 @@ export function GenerateEmailDraftCard({
                   ) : (
                     <>
                       <Mail className="h-4 w-4" aria-hidden />
-                      Generate draft
+                      Concept genereren
                     </>
                   )}
                 </button>
@@ -328,16 +328,16 @@ export function GenerateEmailDraftCard({
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <label htmlFor="draft-subject" className="text-xs font-medium text-muted-foreground">
-                        Subject
+                        Onderwerp
                       </label>
                       <button
                         type="button"
-                        onClick={() => copyText("Subject", subject)}
+                        onClick={() => copyText("Onderwerp", subject)}
                         disabled={!subject}
                         className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-primary hover:bg-muted disabled:opacity-40"
                       >
                         <Copy className="h-3.5 w-3.5" aria-hidden />
-                        Copy
+                        Kopiëren
                       </button>
                     </div>
                     <input
@@ -350,26 +350,26 @@ export function GenerateEmailDraftCard({
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <label htmlFor="draft-body" className="text-xs font-medium text-muted-foreground">
-                        Body
+                        Berichttekst
                       </label>
                       <div className="flex gap-1">
                         <button
                           type="button"
-                          onClick={() => copyText("Body", body)}
+                          onClick={() => copyText("Berichttekst", body)}
                           disabled={!body}
                           className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-primary hover:bg-muted disabled:opacity-40"
                         >
                           <Copy className="h-3.5 w-3.5" aria-hidden />
-                          Copy
+                          Kopiëren
                         </button>
                         <button
                           type="button"
-                          onClick={() => copyText("Subject + body", `Subject: ${subject}\n\n${body}`)}
+                          onClick={() => copyText("Onderwerp + tekst", `Onderwerp: ${subject}\n\n${body}`)}
                           disabled={!subject && !body}
                           className="inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-1 text-xs font-medium text-primary hover:bg-muted disabled:opacity-40"
                         >
                           <Copy className="h-3.5 w-3.5" aria-hidden />
-                          Copy all
+                          Alles kopiëren
                         </button>
                       </div>
                     </div>
@@ -385,7 +385,7 @@ export function GenerateEmailDraftCard({
                   {gmailConnected && (
                     <div className="space-y-2 border-t pt-3">
                       <label htmlFor="draft-to" className="text-xs font-medium text-muted-foreground">
-                        Send to (recipient email)
+                        Verzenden naar (e-mailadres ontvanger)
                       </label>
                       <input
                         id="draft-to"
@@ -397,7 +397,7 @@ export function GenerateEmailDraftCard({
                         disabled={sendStatus === "sending"}
                       />
                       {gmailEmail && (
-                        <p className="text-[11px] text-muted-foreground">Sending from: {gmailEmail}</p>
+                        <p className="text-[11px] text-muted-foreground">Verzenden vanuit: {gmailEmail}</p>
                       )}
                       <button
                         type="button"
@@ -413,12 +413,12 @@ export function GenerateEmailDraftCard({
                         ) : (
                           <>
                             <Send className="h-4 w-4" aria-hidden />
-                            Send via Gmail
+                            Verzenden via Gmail
                           </>
                         )}
                       </button>
                       {sendStatus === "sent" && (
-                        <p className="text-sm font-medium text-emerald-600">Email sent successfully.</p>
+                        <p className="text-sm font-medium text-emerald-600">E-mail succesvol verzonden.</p>
                       )}
                       {(sendStatus === "error") && sendError && (
                         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -430,11 +430,11 @@ export function GenerateEmailDraftCard({
 
                   {!gmailConnected && (
                     <p className="text-xs text-muted-foreground">
-                      To send directly, connect Gmail in{" "}
+                      Koppel Gmail in{" "}
                       <a href="/settings" className="underline hover:text-foreground">
-                        Settings
-                      </a>
-                      .
+                        Instellingen
+                      </a>{" "}
+                      om rechtstreeks te verzenden.
                     </p>
                   )}
                 </div>

@@ -1,5 +1,11 @@
+import type { Metadata } from "next"
 import nextDynamic from "next/dynamic"
 import Link from "next/link"
+
+export const metadata: Metadata = {
+  title: "Kaart",
+  description: "Geografisch overzicht van al uw panden op de kaart.",
+}
 import { MapPin } from "lucide-react"
 import { getMapMarkers } from "@/app/actions/get-map-markers"
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
@@ -66,11 +72,11 @@ export default async function MapPage({
             <div className="m-8 flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-dashboard-outline-variant/50 bg-dashboard-surface px-6 py-14 text-center">
               <MapPin className="h-14 w-14 text-dashboard-on-surface-variant/35" aria-hidden />
               <p className="mt-5 text-base font-semibold text-dashboard-on-surface">
-                {searchQuery ? "No matching properties on the map" : "Nog geen punten op de kaart"}
+                {searchQuery ? "Geen overeenkomende panden op de kaart" : "Nog geen punten op de kaart"}
               </p>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-dashboard-on-surface-variant">
                 {searchQuery
-                  ? `No geocoded property matches "${searchQuery}". Try name, street, postcode, or municipality.`
+                  ? `Geen geocodeerd pand komt overeen met "${searchQuery}". Probeer naam, straat, postcode of gemeente.`
                   : "Geocodeer een adres op een panddetailpagina (knop \"Geocode adres (België)\"). Daarna verschijnt het pand hier."}
               </p>
               {searchQuery ? (
@@ -78,7 +84,7 @@ export default async function MapPage({
                   href="/map"
                   className="mt-4 inline-flex rounded-lg bg-dashboard-surface-low px-4 py-2 text-sm font-semibold text-dashboard-primary transition-colors hover:bg-dashboard-surface-variant"
                 >
-                  Clear search
+                  Zoekopdracht wissen
                 </Link>
               ) : null}
             </div>
@@ -87,13 +93,13 @@ export default async function MapPage({
               <aside className="z-20 hidden w-96 flex-col overflow-hidden rounded-xl border border-dashboard-outline-variant/20 bg-white shadow-sm lg:flex">
                 <div className="border-b border-dashboard-surface-low bg-dashboard-surface p-4">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="font-bold text-dashboard-primary">Property List</h3>
+                    <h3 className="font-bold text-dashboard-primary">Pandenlijst</h3>
                     <span className="rounded-full bg-dashboard-secondary-container px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight text-dashboard-on-secondary-container">
-                      {markers.length} assets
+                      {markers.length} panden
                     </span>
                   </div>
                   <p className="text-xs text-dashboard-on-surface-variant">
-                    Select a property to open its detail page. Status tags correspond with markers on the map.
+                    Klik op een pand om de detailpagina te openen. De statustags komen overeen met de markeringen op de kaart.
                   </p>
                 </div>
                 <div className="flex-1 space-y-1 overflow-y-auto bg-dashboard-surface-low/30 p-2">

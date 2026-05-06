@@ -1,15 +1,15 @@
-import { FileText, CheckCircle2, AlertCircle, FileQuestion } from "lucide-react"
+"use client"
+
+import { useState } from "react"
+import { FileText, CheckCircle2, AlertCircle, FileQuestion, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { PropertySummaryCounts } from "@/app/actions/get-property-detail"
 
 type SummaryTone = "green" | "orange" | "red"
 
 type PropertyAISummaryCardProps = {
-  /** Structured counts and narrative. Can be partial; missing values are treated as 0. */
   summaryCounts: Partial<PropertySummaryCounts> | null
-  /** Overall property status for tone (border/background). Defaults from urgentActionNeeded and counts if not set. */
   status?: SummaryTone
-  /** Optional fallback when summaryCounts is null or empty. */
   fallbackParagraph?: string
   className?: string
 }
@@ -34,9 +34,11 @@ const toneStyles: Record<SummaryTone, string> = {
 export function PropertyAISummaryCard({
   summaryCounts,
   status,
-  fallbackParagraph = "No document analysis data available. Upload documents and run analysis to see a summary.",
+  fallbackParagraph = "Geen documentanalysedata beschikbaar. Upload documenten en voer een analyse uit voor een samenvatting.",
   className = "",
 }: PropertyAISummaryCardProps) {
+  const [paragraphOpen, setParagraphOpen] = useState(false)
+
   const counts = summaryCounts ?? {}
   const validCount = counts.validCount ?? 0
   const missingCount = counts.missingCount ?? 0
@@ -45,11 +47,12 @@ export function PropertyAISummaryCard({
   const urgentActionNeeded = counts.urgentActionNeeded ?? false
   const paragraph = counts.summaryParagraph ?? fallbackParagraph
   const tone = deriveTone(summaryCounts, status)
+  const hasCounts = requiredTotal > 0 || validCount > 0 || missingCount > 0 || manualReviewCount > 0
 
   return (
     <div
       className={cn(
-        "saas-card-elevated flex flex-col gap-8 border",
+        "saas-card-elevated flex flex-col gap-5 border",
         toneStyles[tone],
         className
       )}
@@ -66,7 +69,7 @@ export function PropertyAISummaryCard({
         </div>
       </div>
 
-      {(requiredTotal > 0 || validCount > 0 || missingCount > 0 || manualReviewCount > 0) && (
+      {hasCounts && (
         <div className="grid grid-cols-2 gap-3" aria-label="Document counts">
           <div className="flex items-center gap-2.5 rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-3 py-2.5 shadow-sm">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
@@ -105,9 +108,26 @@ export function PropertyAISummaryCard({
         </div>
       )}
 
-      <div className="rounded-lg border border-[hsl(var(--card-border))] bg-card/50 p-4">
-        <p className="text-sm font-medium text-muted-foreground">Samenvatting</p>
-        <p className="mt-2 leading-relaxed text-foreground">{paragraph}</p>
+      <div>
+        <button
+          type="button"
+          onClick={() => setParagraphOpen((o) => !o)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          aria-expanded={paragraphOpen}
+        >
+          {paragraphOpen ? (
+            <><ChevronUp className="h-3.5 w-3.5" /> Verbergen</>
+          ) : (
+            <><ChevronDown className="h-3.5 w-3.5" /> Toon samenvatting</>
+          )}
+        </button>
+
+        {paragraphOpen && (
+          <div className="mt-2 rounded-lg border border-[hsl(var(--card-border))] bg-card/50 p-4">
+            <p className="text-sm font-medium text-muted-foreground">Samenvatting</p>
+            <p className="mt-2 leading-relaxed text-foreground">{paragraph}</p>
+          </div>
+        )}
       </div>
     </div>
   )

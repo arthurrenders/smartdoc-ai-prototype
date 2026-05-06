@@ -1,4 +1,10 @@
+import type { Metadata } from "next"
 import { Inbox } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "Intake",
+  description: "Upload documenten voor automatische verwerking en pandkoppeling.",
+}
 
 import { getIntakeUploads } from "@/app/actions/get-intake-uploads"
 import { getIntakePropertyOptions } from "@/app/actions/get-intake-property-options"

@@ -1,5 +1,11 @@
+import type { Metadata } from "next"
 import { Suspense } from "react"
 import { Save, User, SlidersHorizontal, KeyRound, Bell } from "lucide-react"
+
+export const metadata: Metadata = {
+  title: "Instellingen",
+  description: "Beheer uw account, Gmail-koppeling en applicatieinstellingen.",
+}
 import { createServerClient } from "@/lib/supabase/server"
 import { getGmailConnectionStatus } from "@/app/actions/gmail-connection"
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
@@ -16,8 +22,8 @@ type SettingsAccount = {
 
 async function getAccountInfo(): Promise<SettingsAccount> {
   const fallback: SettingsAccount = {
-    name: "SmartDoc User",
-    email: "Not available",
+    name: "SmartDoc Gebruiker",
+    email: "Niet beschikbaar",
   }
 
   try {
@@ -55,10 +61,10 @@ export default async function SettingsPage() {
     <div className="mx-auto max-w-3xl space-y-8 p-8">
       <header className="space-y-2">
         <h1 className="font-headline text-3xl font-bold tracking-tight text-brand-dark sm:text-4xl">
-          Settings
+          Instellingen
         </h1>
         <p className="text-sm text-muted-foreground">
-          Manage account details and SmartDoc preferences.
+          Beheer accountgegevens en SmartDoc-voorkeuren.
         </p>
       </header>
 
@@ -72,12 +78,12 @@ export default async function SettingsPage() {
         <section className="saas-card space-y-5">
           <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
             <User className="h-5 w-5 text-brand-light" />
-            Account Information
+            Accountinformatie
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                User name
+                Gebruikersnaam
               </span>
               <input
                 value={account.name}
@@ -87,7 +93,7 @@ export default async function SettingsPage() {
             </label>
             <label className="space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Email
+                E-mailadres
               </span>
               <input
                 value={account.email}
@@ -97,30 +103,30 @@ export default async function SettingsPage() {
             </label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Account fields are read-only for now.
+            Accountvelden zijn momenteel alleen-lezen.
           </p>
         </section>
 
         <section className="saas-card space-y-5">
           <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
             <SlidersHorizontal className="h-5 w-5 text-brand-light" />
-            App Preferences
+            App-voorkeuren
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Default country
+                Standaardland
               </span>
               <select
                 defaultValue="BE"
                 className="w-full rounded-lg border border-[hsl(var(--border))] bg-background px-3 py-2 text-sm"
               >
-                <option value="BE">Belgium</option>
+                <option value="BE">België</option>
               </select>
             </label>
             <label className="space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Language
+                Taal
               </span>
               <select
                 defaultValue="nl"
@@ -136,22 +142,22 @@ export default async function SettingsPage() {
         <section className="saas-card space-y-5">
           <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
             <KeyRound className="h-5 w-5 text-brand-light" />
-            Future-ready
+            Toekomstbestendig
           </h2>
           <div className="space-y-4">
             <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-muted/20 p-4">
-              <p className="text-sm font-medium text-foreground">API keys</p>
+              <p className="text-sm font-medium text-foreground">API-sleutels</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Placeholder for Google Maps and other integration keys.
+                Tijdelijk veld voor Google Maps en andere integratiesleutels.
               </p>
             </div>
             <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-muted/20 p-4">
               <p className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
                 <Bell className="h-4 w-4 text-brand-light" />
-                Notification preferences
+                Meldingsvoorkeuren
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Placeholder for e-mail and in-app notification settings.
+                Tijdelijk veld voor e-mail- en in-app meldingsinstellingen.
               </p>
             </div>
           </div>
@@ -163,7 +169,7 @@ export default async function SettingsPage() {
             className="inline-flex items-center gap-2 rounded-lg bg-brand-dark px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0b3158]"
           >
             <Save className="h-4 w-4" />
-            Save settings
+            Instellingen opslaan
           </button>
         </div>
       </form>

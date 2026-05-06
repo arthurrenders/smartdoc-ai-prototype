@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition, type FormEvent } from "react"
-import { Pencil } from "lucide-react"
+import { Pencil, X as XIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { renameProperty } from "@/app/actions/rename-property"
 
@@ -44,7 +44,7 @@ export function RenamePropertyButton({
         setIsOpen(false)
         router.refresh()
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to rename property.")
+        setError(err instanceof Error ? err.message : "Naam wijzigen mislukt. Probeer het opnieuw.")
       }
     })
   }
@@ -58,15 +58,15 @@ export function RenamePropertyButton({
         className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary shadow-sm transition-colors hover:bg-primary/20 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
       >
         <Pencil className="h-4 w-4" aria-hidden />
-        Rename
+        Hernoemen
       </button>
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 py-8"
           role="dialog"
           aria-modal="true"
-          aria-label="Rename property"
+          aria-label="Pand hernoemen"
           onClick={() => setIsOpen(false)}
         >
           <div
@@ -75,18 +75,18 @@ export function RenamePropertyButton({
           >
             <div className="flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">Rename property</p>
+                <p className="truncate text-sm font-semibold text-foreground">Pand hernoemen</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  This name is shown on your dashboard and property page.
+                  Deze naam wordt getoond op het dashboard en de pandpagina.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                aria-label="Close"
+                aria-label="Sluiten"
               >
-                X
+                <XIcon className="h-4 w-4" />
               </button>
             </div>
 
@@ -95,7 +95,7 @@ export function RenamePropertyButton({
 
               <div className="space-y-1.5">
                 <label htmlFor="displayName" className="text-sm font-medium text-foreground">
-                  Property name
+                  Pandnaam
                 </label>
                 <input
                   id="displayName"
@@ -110,7 +110,7 @@ export function RenamePropertyButton({
                   className="w-full rounded-md border border-[hsl(var(--border))] bg-background px-3 py-2 text-sm shadow-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-ring focus:ring-offset-0 disabled:opacity-50"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Up to 80 characters.
+                  Tot 80 tekens.
                 </p>
               </div>
 
@@ -127,7 +127,7 @@ export function RenamePropertyButton({
                   disabled={isPending}
                   className="saas-btn-secondary"
                 >
-                  Cancel
+                  Annuleren
                 </button>
                 <button
                   type="submit"

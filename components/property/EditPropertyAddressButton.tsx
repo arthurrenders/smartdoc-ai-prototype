@@ -2,21 +2,33 @@
 
 import { useEffect, useState, useTransition, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
-import { Pencil } from "lucide-react"
+import { Pencil, RotateCcw, X } from "lucide-react"
 import { updatePropertyAddress } from "@/app/actions/update-property-address"
 
 type Props = {
   propertyId: string
   initialRawLine1: string
+  addressSource?: string
 }
 
-export function EditPropertyAddressButton({ propertyId, initialRawLine1 }: Props) {
+function normalizeAddr(s: string): string {
+  return s.toLowerCase().replace(/[,\s]+/g, " ").trim()
+}
+
+const AI_SOURCES = new Set(["intake_auto_create", "document_extraction"])
+
+export function EditPropertyAddressButton({ propertyId, initialRawLine1, addressSource }: Props) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [draft, setDraft] = useState(initialRawLine1)
   const [syncTitle, setSyncTitle] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const isAiSource = addressSource ? AI_SOURCES.has(addressSource) : false
+  const hasChanged =
+    draft.trim().length > 0 &&
+    normalizeAddr(draft) !== normalizeAddr(initialRawLine1)
 
   useEffect(() => {
     if (!isOpen) return
@@ -36,16 +48,10 @@ export function EditPropertyAddressButton({ propertyId, initialRawLine1 }: Props
     event.preventDefault()
     setError(null)
     const formData = new FormData(event.currentTarget)
-    console.info("[SmartDoc][address-edit-ui] submit", {
-      propertyId,
-      currentInputValue: draft,
-      submittedValue: String(formData.get("rawLine1") ?? ""),
-    })
 
     startTransition(async () => {
       try {
         await updatePropertyAddress(formData)
-        console.info("[SmartDoc][address-edit-ui] save completed", { propertyId })
         setIsOpen(false)
         router.refresh()
       } catch (err) {
@@ -68,7 +74,7 @@ export function EditPropertyAddressButton({ propertyId, initialRawLine1 }: Props
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 py-8"
           role="dialog"
           aria-modal="true"
           aria-label="Adres bewerken"
@@ -79,19 +85,25 @@ export function EditPropertyAddressButton({ propertyId, initialRawLine1 }: Props
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b px-4 py-3">
-              <div className="min-w-0">
+              <div className="min-w-0 space-y-0.5">
                 <p className="truncate text-sm font-semibold text-foreground">Adres bewerken</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Ruwe adresregel voor geocoding. Na opslaan opnieuw geocoderen.
-                </p>
+                {isAiSource ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                    Automatisch gevonden uit document
+                  </span>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Na opslaan opnieuw geocoderen.
+                  </p>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                className="ml-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 aria-label="Sluiten"
               >
-                X
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -100,7 +112,7 @@ export function EditPropertyAddressButton({ propertyId, initialRawLine1 }: Props
 
               <div className="space-y-1.5">
                 <label htmlFor="rawLine1" className="text-sm font-medium text-foreground">
-                  Adres (ruwe regel)
+                  Adres
                 </label>
                 <textarea
                   id="rawLine1"
@@ -114,7 +126,22 @@ export function EditPropertyAddressButton({ propertyId, initialRawLine1 }: Props
                   autoFocus
                   className="w-full resize-y rounded-md border border-[hsl(var(--border))] bg-background px-3 py-2 text-sm shadow-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-ring focus:ring-offset-0 disabled:opacity-50"
                 />
-                <p className="text-xs text-muted-foreground">Max. 500 tekens.</p>
+
+                {hasChanged && (
+                  <div className="flex items-start justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                    <p className="text-xs text-amber-900">
+                      Let op: dit adres wijkt af van het automatisch gevonden adres. Controleer of dit correct is.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setDraft(initialRawLine1)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded text-xs font-semibold text-amber-800 underline-offset-2 hover:underline"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Terugzetten
+                    </button>
+                  </div>
+                )}
               </div>
 
               <label className="flex cursor-pointer items-start gap-2 text-sm text-foreground">
@@ -128,8 +155,7 @@ export function EditPropertyAddressButton({ propertyId, initialRawLine1 }: Props
                   className="mt-1 h-4 w-4 rounded border-[hsl(var(--border))]"
                 />
                 <span>
-                  Ook <strong>pandtitel</strong> bijwerken (zelfde tekst als hierboven; max. 80 tekens
-                  wanneer aangevinkt)
+                  Ook <strong>pandtitel</strong> bijwerken (max. 80 tekens)
                 </span>
               </label>
 

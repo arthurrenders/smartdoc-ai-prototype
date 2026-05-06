@@ -24,17 +24,17 @@ export function CreateReportForm({ properties }: Props) {
         event.currentTarget.reset()
         router.refresh()
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to create report.")
+        setError(err instanceof Error ? err.message : "Rapport aanmaken mislukt.")
       }
     })
   }
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-dashboard-outline-variant/20 bg-white p-5 shadow-sm">
-      <h2 className="text-base font-bold text-dashboard-primary">New report</h2>
+      <h2 className="text-base font-bold text-dashboard-primary">Nieuw rapport</h2>
       <div className="space-y-1">
         <label htmlFor="report-property" className="text-xs font-semibold uppercase tracking-wide text-dashboard-on-surface-variant">
-          Linked property
+          Gekoppeld pand
         </label>
         <select
           id="report-property"
@@ -43,17 +43,17 @@ export function CreateReportForm({ properties }: Props) {
           disabled={isPending}
           className="w-full rounded-lg border border-dashboard-outline-variant/30 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dashboard-primary/30"
         >
-          <option value="">Select a property</option>
+          <option value="">Selecteer een pand</option>
           {properties.map((property) => (
             <option key={property.id} value={property.id}>
-              {property.display_name?.trim() || `Property ${property.id.slice(0, 8)}`}
+              {property.display_name?.trim() || `Pand ${property.id.slice(0, 8)}`}
             </option>
           ))}
         </select>
       </div>
       <div className="space-y-1">
         <label htmlFor="report-title" className="text-xs font-semibold uppercase tracking-wide text-dashboard-on-surface-variant">
-          Title
+          Titel
         </label>
         <input
           id="report-title"
@@ -62,12 +62,12 @@ export function CreateReportForm({ properties }: Props) {
           maxLength={120}
           disabled={isPending}
           className="w-full rounded-lg border border-dashboard-outline-variant/30 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dashboard-primary/30"
-          placeholder="e.g. Follow-up call summary"
+          placeholder="bijv. Samenvatting telefonisch contact"
         />
       </div>
       <div className="space-y-1">
         <label htmlFor="report-author" className="text-xs font-semibold uppercase tracking-wide text-dashboard-on-surface-variant">
-          Author (optional)
+          Auteur (optioneel)
         </label>
         <input
           id="report-author"
@@ -75,12 +75,12 @@ export function CreateReportForm({ properties }: Props) {
           maxLength={80}
           disabled={isPending}
           className="w-full rounded-lg border border-dashboard-outline-variant/30 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dashboard-primary/30"
-          placeholder="Employee name"
+          placeholder="Naam medewerker"
         />
       </div>
       <div className="space-y-1">
         <label htmlFor="report-note" className="text-xs font-semibold uppercase tracking-wide text-dashboard-on-surface-variant">
-          Note
+          Notitie
         </label>
         <textarea
           id="report-note"
@@ -90,7 +90,7 @@ export function CreateReportForm({ properties }: Props) {
           disabled={isPending}
           rows={5}
           className="w-full resize-y rounded-lg border border-dashboard-outline-variant/30 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dashboard-primary/30"
-          placeholder="Plain text internal note..."
+          placeholder="Intern tekstbericht..."
         />
       </div>
       <button
@@ -98,7 +98,7 @@ export function CreateReportForm({ properties }: Props) {
         disabled={isPending}
         className="inline-flex items-center rounded-lg bg-dashboard-primary px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
       >
-        {isPending ? "Saving..." : "Create report"}
+        {isPending ? "Opslaan..." : "Rapport aanmaken"}
       </button>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </form>

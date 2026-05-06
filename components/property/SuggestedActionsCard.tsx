@@ -21,7 +21,7 @@ export function SuggestedActionsCard({ actions, className = "" }: SuggestedActio
         className
       )}
       role="region"
-      aria-label="Suggested next actions"
+      aria-label="Aanbevolen vervolgacties"
     >
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-3">
@@ -30,10 +30,10 @@ export function SuggestedActionsCard({ actions, className = "" }: SuggestedActio
           </div>
           <div>
             <h2 className="saas-section-heading text-xl sm:text-2xl">
-              Recommended next step
+              Aanbevolen actie
             </h2>
             <p className="saas-section-subheading">
-              Based on document status and analysis
+              Op basis van documentstatus en analyse
             </p>
           </div>
         </div>
@@ -54,7 +54,7 @@ export function SuggestedActionsCard({ actions, className = "" }: SuggestedActio
         {displayFollowUps.length > 0 && (
           <div className="space-y-2">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Follow-up actions
+              Vervolgacties
             </p>
             <ul className="flex flex-col gap-2" role="list">
               {displayFollowUps.map((action, index) => (

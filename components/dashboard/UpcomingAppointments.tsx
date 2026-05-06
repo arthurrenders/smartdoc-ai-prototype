@@ -20,7 +20,7 @@ import type { PropertyOption } from "@/lib/app-types"
 import { AppointmentModal } from "@/components/dashboard/AppointmentModal"
 import { formatTimeRange, formatDateNl } from "@/lib/date-formatting"
 
-const VISIBLE_LIMIT = 5
+const VISIBLE_LIMIT = 3
 
 type Props = {
   rows: AppointmentEntry[]

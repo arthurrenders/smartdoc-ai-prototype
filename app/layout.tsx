@@ -6,8 +6,11 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" })
 
 export const metadata: Metadata = {
-  title: "SmartDoc AI",
-  description: "Property document analysis platform",
+  title: {
+    default: "SmartDoc AI",
+    template: "%s — SmartDoc AI",
+  },
+  description: "Beheer vastgoeddocumenten, compliance en deadlines voor Belgisch vastgoed.",
 }
 
 export default function RootLayout({
