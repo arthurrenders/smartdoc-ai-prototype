@@ -306,20 +306,6 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     fileInputRefs.current[documentTypeId]?.click()
   }
 
-  function addressVerificationDotClass(status: string | null | undefined): string {
-    switch (status) {
-      case "match":
-        return "bg-emerald-500"
-      case "mismatch":
-        return "bg-red-500"
-      case "unknown":
-      case "possible_match":
-        return "bg-orange-500"
-      default:
-        return "bg-muted-foreground/40"
-    }
-  }
-
   function getStatusColor(status: string): string {
     switch (status.toLowerCase()) {
       case "missing":
@@ -406,7 +392,11 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
         documentTypes.map((docType) => {
           const { status, document, analysisRun } = getDocumentData(docType.id)
           const isUploading = uploading === docType.id
-          const isAnalyzing = analyzing === analysisRun?.id
+          /** Terminal runs no longer "busy" — avoids a frame where fresh data is `done` but `analyzing` is not cleared yet (after loadData, before finally). */
+          const analysisRunTerminal =
+            analysisRun?.status === "done" || analysisRun?.status === "error"
+          const isAnalyzing =
+            analyzing === analysisRun?.id && !analysisRunTerminal
           const showRunAnalysis =
             analysisRun?.status === "queued" && !isAnalyzing
           const statusForDisplay = isAnalyzing ? "Bezig met analyseren…" : status
@@ -431,37 +421,6 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold text-foreground">{docType.name}</h3>
-                  {document?.address_match_status != null && (
-                    <div className="mt-2 space-y-2 text-sm">
-                      <div className="flex items-center gap-2 text-foreground">
-                        <span
-                          className={`inline-block h-2 w-2 shrink-0 rounded-full ${addressVerificationDotClass(
-                            document.address_match_status
-                          )}`}
-                          aria-hidden
-                        />
-                        <span className="font-medium">Address</span>
-                      </div>
-                      {(document.address_match_status === "unknown" ||
-                        document.address_match_status === "possible_match") &&
-                        document.address_match_reason && (
-                          <p className="pl-4 text-muted-foreground">{document.address_match_reason}</p>
-                        )}
-                      {document.address_match_status === "mismatch" && (
-                        <div className="space-y-2 pl-4 text-muted-foreground">
-                          <p>The address is not identical.</p>
-                          <p>
-                            <span className="font-medium text-foreground">Property address: </span>
-                            {document.expected_address?.trim() || "—"}
-                          </p>
-                          <p>
-                            <span className="font-medium text-foreground">Address found in document: </span>
-                            {document.extracted_document_address?.trim() || "—"}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
                   {rowFeedback && (
                     <div
                       className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -486,55 +445,18 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                     <div className="mt-3 space-y-3">
                       <div className="rounded-lg border border-[hsl(var(--border))] bg-muted/50 p-3 text-sm">
                         <p className="font-medium text-foreground">Summary</p>
-                        <p className="mt-1 text-muted-foreground">
-                          {(analysisRun.result_json as AnalysisResult).summary}
-                        </p>
-                      </div>
-                      {docType.name === "EPC" && (
-                        <div className="rounded-lg border border-[hsl(var(--border))] bg-muted/50 p-3 text-sm space-y-1">
-                          <p className="font-medium text-foreground">EPC Details</p>
-                          {(analysisRun.result_json as AnalysisResult).epc_score_letter && (
-                            <p className="text-muted-foreground">
-                              <span className="font-medium">EPC Score:</span>{" "}
-                              {(analysisRun.result_json as AnalysisResult).epc_score_letter}
-                            </p>
-                          )}
-                          {(analysisRun.result_json as AnalysisResult).energy_consumption_kwh_m2_year !== null &&
-                            (analysisRun.result_json as AnalysisResult).energy_consumption_kwh_m2_year !==
-                              undefined && (
-                              <p className="text-muted-foreground">
-                                <span className="font-medium">Energy Consumption:</span>{" "}
-                                {(analysisRun.result_json as AnalysisResult).energy_consumption_kwh_m2_year}{" "}
-                                kWh/m²/year
-                              </p>
-                            )}
-                          {(analysisRun.result_json as AnalysisResult).certificate_date && (
-                            <p className="text-muted-foreground">
-                              <span className="font-medium">Certificate Date:</span>{" "}
-                              {(analysisRun.result_json as AnalysisResult).certificate_date}
-                            </p>
-                          )}
-                          {(analysisRun.result_json as AnalysisResult).expiry_date && (
-                            <p className="text-muted-foreground">
-                              <span className="font-medium">Expiry Date:</span>{" "}
-                              {(analysisRun.result_json as AnalysisResult).expiry_date}
-                            </p>
-                          )}
-                          {(analysisRun.result_json as AnalysisResult).is_expired !== null &&
-                            (analysisRun.result_json as AnalysisResult).is_expired !== undefined && (
-                              <p
-                                className={`font-medium ${
-                                  (analysisRun.result_json as AnalysisResult).is_expired
-                                    ? "text-red-600 dark:text-red-400"
-                                    : "text-emerald-600 dark:text-emerald-400"
-                                }`}
-                              >
-                                <span className="font-medium">Expired Status:</span>{" "}
-                                {(analysisRun.result_json as AnalysisResult).is_expired ? "EXPIRED" : "Valid"}
-                              </p>
-                            )}
+                        <div className="mt-1 space-y-1 text-muted-foreground">
+                          {(() => {
+                            const result = analysisRun.result_json as AnalysisResult
+                            const lines = result.summary
+                              .split("|")
+                              .map((part) => part.trim())
+                              .filter(Boolean)
+
+                            return lines.map((line, idx) => <p key={`${analysisRun.id}-summary-${idx}`}>{line}</p>)
+                          })()}
                         </div>
-                      )}
+                      </div>
                     </div>
                   )}
                 </div>

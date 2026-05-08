@@ -24,7 +24,9 @@ export async function getDashboardNotifications(limit = 25): Promise<{
 
     const { data, error } = await supabase
       .from("notifications")
-      .select("id, property_id, document_id, title, body, read_at, created_at, properties(display_name)")
+      .select(
+        "id, property_id, document_id, title, body, read_at, created_at, properties!notifications_property_id_fkey(display_name)"
+      )
       .eq("user_id", ownerUserId)
       .order("created_at", { ascending: false })
       .limit(limit)

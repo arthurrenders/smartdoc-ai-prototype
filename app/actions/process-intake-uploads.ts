@@ -21,7 +21,7 @@ function humanReviewMessage(result: Extract<MatchOrCreatePropertyResult, { outco
     case "pdf_download_failed":
       return "Manual review: could not download the file from storage."
     case "extraction_insufficient_for_autocreate":
-      return "Manual review: address signal is too weak to auto-create or auto-link a property."
+      return "Manual review: a likely address was extracted (see Address column). Add the postal code or confirm / edit below, or link an existing property."
     default:
       return "Manual review required."
   }

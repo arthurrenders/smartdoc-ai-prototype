@@ -34,7 +34,14 @@ function normalizeBelgianPostal(raw: string | number | null | undefined): string
 }
 
 function toExtractedAddress(data: z.infer<typeof IntakeGeminiAddressSchema>): ExtractedPropertyAddress | null {
-  const postal = normalizeBelgianPostal(data.postal_code ?? null)
+  const rawFromAi = data.raw_line1?.trim() || null
+  const postalFromFields = normalizeBelgianPostal(data.postal_code ?? null)
+  const postalFromLine =
+    normalizeBelgianPostal(rawFromAi ?? "") ||
+    normalizeBelgianPostal(
+      [data.street_name, data.house_number, data.municipality].filter(Boolean).join(" ")
+    )
+  const postal = postalFromFields ?? postalFromLine
   const municipality = data.municipality?.trim() || null
   const street = data.street_name?.trim() || ""
   const house = data.house_number?.trim() || ""
@@ -49,18 +56,44 @@ function toExtractedAddress(data: z.infer<typeof IntakeGeminiAddressSchema>): Ex
     region: null,
   })
 
-  if (!structured) {
+  if (structured) {
+    const raw_line1 = (rawFromAi && rawFromAi.length > 5 ? rawFromAi : structured.raw_line1).slice(0, 500)
+    const confidence = Math.max(0, Math.min(1, data.confidence))
+    return {
+      ...structured,
+      raw_line1,
+      confidence,
+      extraction_source: "structured_ai",
+    }
+  }
+
+  // Model returned street + city but no valid 4-digit BE postcode (common with Groq). Still useful for intake matching + manual confirm.
+  const hasStreetHouse = Boolean(street && house)
+  const hasUsableRaw = Boolean(rawFromAi && rawFromAi.length > 8)
+  if (!municipality || (!hasStreetHouse && !hasUsableRaw)) {
     return null
   }
 
-  const rawFromAi = data.raw_line1?.trim()
-  const raw_line1 = (rawFromAi && rawFromAi.length > 5 ? rawFromAi : structured.raw_line1).slice(0, 500)
+  const streetPart = [street, house].filter(Boolean).join(" ").trim()
+  const raw_line1 = (
+    rawFromAi && rawFromAi.length > 5
+      ? rawFromAi
+      : streetPart
+        ? `${streetPart}, ${municipality}`
+        : municipality
+  ).slice(0, 500)
 
-  const confidence = Math.max(0, Math.min(1, data.confidence))
+  const baseConf = Math.max(0, Math.min(1, data.confidence))
+  const confidence = baseConf * 0.92
 
   return {
-    ...structured,
     raw_line1,
+    street_name: street || null,
+    house_number: house || null,
+    box,
+    postal_code: null,
+    municipality,
+    region: null,
     confidence,
     extraction_source: "structured_ai",
   }
@@ -79,7 +112,7 @@ export async function extractIntakePropertyAddressWithGemini(
   rawOutput: string | null
   parsed: z.infer<typeof IntakeGeminiAddressSchema> | null
 }> {
-  const modelName = GEMINI_MODEL
+  let modelName = GEMINI_MODEL
 
   try {
     const normalized = normalizeText(documentText)
@@ -94,6 +127,7 @@ export async function extractIntakePropertyAddressWithGemini(
       model: GEMINI_MODEL,
       contents: prompt,
     })
+    modelName = `${response.provider}:${response.model}`
 
     const content = response.text
     if (!content?.trim()) {

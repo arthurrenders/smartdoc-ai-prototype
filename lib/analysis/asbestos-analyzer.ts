@@ -180,7 +180,7 @@ function coerceAsbestosData(parsed: unknown): AsbestosAIResponse {
 export async function analyzeAsbestosWithAI(
   text: string
 ): Promise<{ result: AnalysisResult; modelName: string; promptVersion: string }> {
-  const modelName = GEMINI_MODEL
+  let modelName = GEMINI_MODEL
 
   const normalizedText = normalizeText(text)
   debugLog("=== ASBESTOS NORMALIZED TEXT FOR AI ===")
@@ -200,6 +200,7 @@ export async function analyzeAsbestosWithAI(
       model: GEMINI_MODEL,
       contents: prompt,
     })
+    modelName = `${response.provider}:${response.model}`
     const content = getTextFromGeminiResponse(response)
     if (!content) {
       throw new Error("No content in asbestos LLM response")

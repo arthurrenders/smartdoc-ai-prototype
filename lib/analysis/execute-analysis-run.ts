@@ -45,6 +45,7 @@ export function detectDocumentTypeFromPdfText(text: string): "epc" | "electrical
     t.includes("asbestattest") ||
     t.includes("asbestveilig") ||
     t.includes("niet-asbestveilig") ||
+    t.includes("attest_id") ||
     t.includes("niet asbestveilig")
   ) {
     return "asbestos"
@@ -53,10 +54,57 @@ export function detectDocumentTypeFromPdfText(text: string): "epc" | "electrical
   return "unknown"
 }
 
+/** User-facing label for what the PDF text suggests (keyword detector). */
+function humanLabelForDetectedType(detected: "epc" | "electrical" | "asbestos"): string {
+  switch (detected) {
+    case "epc":
+      return "an EPC (energy performance) certificate"
+    case "electrical":
+      return "an electrical inspection / AREI document"
+    case "asbestos":
+      return "an asbestos certificate"
+  }
+}
+
+/** Short name for the upload slot / expected type. */
+function expectedSlotLabel(documentTypeName: string): string {
+  switch (documentTypeName) {
+    case "EPC":
+      return "EPC"
+    case "ELECTRICAL":
+      return "electrical inspection"
+    case "ASBESTOS":
+      return "asbestos"
+    default:
+      return documentTypeName
+  }
+}
+
+/** When keyword detection finds no EPC / electrical / asbestos cues in the PDF text. */
+function notRecognizedAsExpectedDocumentMessage(
+  expectedDbName: "EPC" | "ELECTRICAL" | "ASBESTOS"
+): { summary: string; details: string } {
+  const expected =
+    expectedDbName === "EPC"
+      ? "an EPC"
+      : expectedDbName === "ELECTRICAL"
+        ? "an electrical inspection"
+        : "an asbestos"
+  return {
+    summary: `This document type was not recognized as ${expected} document.`,
+    details: `The PDF text did not match the usual keywords for ${expectedSlotLabel(expectedDbName)}. Check that you uploaded the correct file, or try a text-based PDF export.`,
+  }
+}
+
 export type ExecuteAnalysisRunResult =
   | { success: true; result: unknown }
   | { error: string; persistedToDb: true }
   | { error: string; persistedToDb: false }
+
+/** No LLM call — keyword / heuristic paths only */
+const ANALYSIS_MODEL_RULE_BASED = "rule-based"
+/** LLM was attempted but threw before returning a provider label */
+const ANALYSIS_MODEL_AI_FAILED = "ai_failed"
 
 /**
  * Runs the full PDF download → extract → analyzer → persist pipeline for one `analysis_runs` row.
@@ -154,16 +202,31 @@ export async function executeAnalysisRunPipeline(
     const detectedType = detectDocumentTypeFromPdfText(extractedText)
 
     if (documentTypeName === "EPC") {
-      if (detectedType && detectedType !== "epc") {
+      if (detectedType === "unknown") {
+        modelName = ANALYSIS_MODEL_RULE_BASED
+        const { summary, details } = notRecognizedAsExpectedDocumentMessage("EPC")
         result = {
           status: "orange" as const,
-          summary: "Wrong document type uploaded.",
+          summary,
+          flags: [
+            {
+              severity: "orange" as const,
+              title: "Document type not recognized",
+              details,
+            },
+          ],
+        }
+      } else if (detectedType !== "epc") {
+        modelName = ANALYSIS_MODEL_RULE_BASED
+        const detectedHuman = humanLabelForDetectedType(detectedType)
+        result = {
+          status: "orange" as const,
+          summary: `Wrong document type: the PDF looks like ${detectedHuman}, but you uploaded it under ${expectedSlotLabel("EPC")}.`,
           flags: [
             {
               severity: "orange" as const,
               title: "Wrong document type",
-              details:
-                "This file does not appear to be an EPC certificate based on its contents. Please upload the correct document type.",
+              details: `Based on the text in this file, it matches ${detectedHuman}. This upload slot is for ${expectedSlotLabel("EPC")}. Please upload the correct PDF in the matching row.`,
             },
           ],
         }
@@ -175,6 +238,7 @@ export async function executeAnalysisRunPipeline(
           promptVersion = epcResult.promptVersion
         } catch (epcError) {
           console.error("EPC AI analysis failed:", epcError)
+          modelName = ANALYSIS_MODEL_AI_FAILED
           result = {
             status: "orange" as const,
             summary: "AI analysis failed. Manual review required.",
@@ -189,21 +253,31 @@ export async function executeAnalysisRunPipeline(
         }
       }
     } else if (documentTypeName === "ELECTRICAL") {
-      if (detectedType && detectedType !== "electrical") {
-        const detectedLabel =
-          detectedType === "epc"
-            ? "EPC document"
-            : detectedType === "asbestos"
-              ? "asbestos certificate"
-              : "different document type"
+      if (detectedType === "unknown") {
+        modelName = ANALYSIS_MODEL_RULE_BASED
+        const { summary, details } = notRecognizedAsExpectedDocumentMessage("ELECTRICAL")
         result = {
           status: "orange" as const,
-          summary: "Wrong document type uploaded.",
+          summary,
+          flags: [
+            {
+              severity: "orange" as const,
+              title: "Document type not recognized",
+              details,
+            },
+          ],
+        }
+      } else if (detectedType !== "electrical") {
+        modelName = ANALYSIS_MODEL_RULE_BASED
+        const detectedHuman = humanLabelForDetectedType(detectedType)
+        result = {
+          status: "orange" as const,
+          summary: `Wrong document type: the PDF looks like ${detectedHuman}, but you uploaded it under ${expectedSlotLabel("ELECTRICAL")}.`,
           flags: [
             {
               severity: "orange" as const,
               title: "Wrong document type",
-              details: `This file appears to be an ${detectedLabel}, not an electrical inspection document.`,
+              details: `Based on the text in this file, it matches ${detectedHuman}. This upload slot is for ${expectedSlotLabel("ELECTRICAL")}. Please upload the correct PDF in the matching row.`,
             },
           ],
         }
@@ -215,6 +289,7 @@ export async function executeAnalysisRunPipeline(
           promptVersion = electricalResult.promptVersion
         } catch (electricalError) {
           console.error("Electrical AI analysis failed at pipeline level:", electricalError)
+          modelName = ANALYSIS_MODEL_AI_FAILED
           result = {
             status: "orange" as const,
             summary: "AI analysis failed. Manual review required.",
@@ -229,21 +304,31 @@ export async function executeAnalysisRunPipeline(
         }
       }
     } else if (documentTypeName === "ASBESTOS") {
-      if (detectedType && detectedType !== "asbestos") {
-        const detectedLabel =
-          detectedType === "epc"
-            ? "EPC document"
-            : detectedType === "electrical"
-              ? "electrical inspection document"
-              : "different document type"
+      if (detectedType === "unknown") {
+        modelName = ANALYSIS_MODEL_RULE_BASED
+        const { summary, details } = notRecognizedAsExpectedDocumentMessage("ASBESTOS")
         result = {
           status: "orange" as const,
-          summary: "Wrong document type uploaded.",
+          summary,
+          flags: [
+            {
+              severity: "orange" as const,
+              title: "Document type not recognized",
+              details,
+            },
+          ],
+        }
+      } else if (detectedType !== "asbestos") {
+        modelName = ANALYSIS_MODEL_RULE_BASED
+        const detectedHuman = humanLabelForDetectedType(detectedType)
+        result = {
+          status: "orange" as const,
+          summary: `Wrong document type: the PDF looks like ${detectedHuman}, but you uploaded it under ${expectedSlotLabel("ASBESTOS")}.`,
           flags: [
             {
               severity: "orange" as const,
               title: "Wrong document type",
-              details: `This file appears to be an ${detectedLabel}, not an asbestos certificate.`,
+              details: `Based on the text in this file, it matches ${detectedHuman}. This upload slot is for ${expectedSlotLabel("ASBESTOS")}. Please upload the correct PDF in the matching row.`,
             },
           ],
         }
@@ -255,6 +340,7 @@ export async function executeAnalysisRunPipeline(
           promptVersion = asbestosResult.promptVersion
         } catch (asbestosError) {
           console.error("Asbestos AI analysis failed at pipeline level:", asbestosError)
+          modelName = ANALYSIS_MODEL_AI_FAILED
           result = {
             status: "orange" as const,
             summary: "AI analysis failed. Manual review required.",
@@ -269,6 +355,7 @@ export async function executeAnalysisRunPipeline(
         }
       }
     } else {
+      modelName = ANALYSIS_MODEL_RULE_BASED
       result = {
         status: "green" as const,
         summary: "Document reviewed - unknown type",
@@ -295,6 +382,7 @@ export async function executeAnalysisRunPipeline(
           promptVersion = llmResult.promptVersion
         } catch (llmError) {
           console.error("LLM analysis failed:", llmError)
+          if (!modelName) modelName = ANALYSIS_MODEL_AI_FAILED
         }
       }
     }
@@ -312,6 +400,10 @@ export async function executeAnalysisRunPipeline(
     if (updateError) {
       throw new Error(`Failed to update analysis: ${updateError.message}`)
     }
+
+    console.info(
+      `[analysis] AI model used: ${modelName ?? ANALYSIS_MODEL_RULE_BASED} (documentId=${documentId}, analysisRunId=${analysisRunId})`
+    )
 
     const { error: clearFlagsError } = await supabase
       .from("red_flags")

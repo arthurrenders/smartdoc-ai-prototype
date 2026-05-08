@@ -12,15 +12,22 @@ type IntakeManualPropertyFormProps = {
   intakeUploadId: string
   propertyOptions: IntakePropertyOption[]
   onDone: () => void
+  /** Pre-filled from AI / heuristic extraction so the user can confirm or add postcode */
+  suggestedAddress?: string | null
 }
 
 /**
  * Inline form for resolving an intake row when AI could not confidently match an address.
  * Creates a property and links the PDF using the same pipeline helpers as automatic intake.
  */
-export function IntakeManualPropertyForm({ intakeUploadId, propertyOptions, onDone }: IntakeManualPropertyFormProps) {
+export function IntakeManualPropertyForm({
+  intakeUploadId,
+  propertyOptions,
+  onDone,
+  suggestedAddress,
+}: IntakeManualPropertyFormProps) {
   const router = useRouter()
-  const [address, setAddress] = useState("")
+  const [address, setAddress] = useState(() => suggestedAddress?.trim() ?? "")
   const [selectedPropertyId, setSelectedPropertyId] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)

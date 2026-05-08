@@ -19,6 +19,23 @@ export const EPCResponseSchema = z.object({
 
 export type EPCResponse = z.infer<typeof EPCResponseSchema>
 
+/**
+ * EPC label derived from primary energy (kWh/m²/year) when the numeric value is trusted.
+ * Bands: A+ [-100,0], A (0,100), B [100,200), C [200,300), D [300,400), E [400,500), F ≥500.
+ * Values below -100 are not mapped (returns null).
+ */
+export function epcScoreLetterFromEnergyKwh(kwh: number): EPCResponse["epc_score_letter"] | null {
+  if (!Number.isFinite(kwh)) return null
+  if (kwh < -100) return null
+  if (kwh <= 0) return "A+"
+  if (kwh >= 500) return "F"
+  if (kwh >= 400) return "E"
+  if (kwh >= 300) return "D"
+  if (kwh >= 200) return "C"
+  if (kwh >= 100) return "B"
+  return "A"
+}
+
 const EPC_SCORE_LETTERS = new Set<EPCResponse["epc_score_letter"]>([
   "A+",
   "A",
