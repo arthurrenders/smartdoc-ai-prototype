@@ -119,7 +119,7 @@ function coerceElectricalData(parsed: unknown): ElectricalAIResponse {
 export async function analyzeElectricalWithAI(
   text: string
 ): Promise<{ result: AnalysisResult; modelName: string; promptVersion: string }> {
-  const modelName = GEMINI_MODEL
+  let modelName = GEMINI_MODEL
 
   const normalizedText = normalizeText(text)
   debugLog("=== ELECTRICAL NORMALIZED TEXT FOR AI ===")
@@ -139,6 +139,7 @@ export async function analyzeElectricalWithAI(
       model: GEMINI_MODEL,
       contents: prompt,
     })
+    modelName = `${response.provider}:${response.model}`
     const content = getTextFromGeminiResponse(response)
     if (!content) {
       throw new Error("No content in electrical LLM response")

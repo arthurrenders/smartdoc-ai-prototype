@@ -1,5 +1,9 @@
 import "server-only"
-import { type EPCResponse, normalizeParsedEpcResponse } from "./epc-schema"
+import {
+  type EPCResponse,
+  normalizeParsedEpcResponse,
+  epcScoreLetterFromEnergyKwh,
+} from "./epc-schema"
 import { EPC_PROMPT } from "@/lib/ai/prompts/epc"
 import type { AnalysisResult, Flag } from "./detectors"
 import { structuredAddressFromSchemaFields } from "@/lib/property-address/extract-from-analysis"
@@ -34,7 +38,7 @@ function normalizeText(text: string): string {
 export async function analyzeEPCWithAI(
   text: string
 ): Promise<{ result: AnalysisResult; epcData: EPCResponse; modelName: string; promptVersion: string }> {
-  const modelName = GEMINI_MODEL
+  let modelName = GEMINI_MODEL
 
   // Normalize text to handle formatting issues
   const normalizedText = normalizeText(text)
@@ -56,6 +60,7 @@ export async function analyzeEPCWithAI(
       model: GEMINI_MODEL,
       contents: prompt,
     })
+    modelName = `${response.provider}:${response.model}`
     const content = getTextFromGeminiResponse(response)
     if (!content) {
       throw new Error("No content in LLM response")
@@ -70,7 +75,7 @@ export async function analyzeEPCWithAI(
     debugLog(parsed !== null ? JSON.stringify(parsed, null, 2) : "(parse failed, using empty coercion)")
     debugLog("=== END PARSED JSON ===")
 
-    const epcData = normalizeParsedEpcResponse(parsed)
+    const epcData = mergeEnergyDerivedEpcLetter(normalizeParsedEpcResponse(parsed))
     debugLog("=== COERCED EPC DATA ===")
     debugLog(JSON.stringify(epcData, null, 2))
     debugLog("=== END COERCED EPC DATA ===")
@@ -161,6 +166,13 @@ export async function analyzeEPCWithAI(
       promptVersion: PROMPT_VERSION,
     }
   }
+}
+
+/** Prefer EPC class computed from kWh/m²/year; keep model letter only when energy is missing or invalid. */
+function mergeEnergyDerivedEpcLetter(data: EPCResponse): EPCResponse {
+  const derived = epcScoreLetterFromEnergyKwh(data.energy_consumption_kwh_m2_year ?? NaN)
+  if (derived == null) return data
+  return { ...data, epc_score_letter: derived }
 }
 
 function propertyAddressFromEpc(epcData: EPCResponse): AnalysisResult["property_address"] {

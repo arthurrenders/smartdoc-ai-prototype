@@ -82,7 +82,10 @@ Rules:
 Schema:
 {"street": string|null,"house_number": string|null,"box": string|null,"postal_code": string|null,"municipality": string|null,"region": string|null,"raw_line1": string|null,"confidence": number}`
 
-async function extractFromSingleExcerpt(excerpt: string): Promise<ExtractedPropertyAddress | null> {
+async function extractFromSingleExcerpt(excerpt: string): Promise<{
+  address: ExtractedPropertyAddress | null
+  modelName: string
+}> {
   const prompt = `${SYSTEM_INSTRUCTIONS}
 
 Document excerpt:
@@ -92,17 +95,18 @@ ${excerpt}`
     model: GEMINI_MODEL,
     contents: prompt,
   })
+  const modelName = `${response.provider}:${response.model}`
 
   const content = getTextFromGeminiResponse(response)
-  if (!content) return null
+  if (!content) return { address: null, modelName }
 
   const parsed = parseJsonLoose(content)
-  if (parsed === null) return null
+  if (parsed === null) return { address: null, modelName }
 
   const validated = LlmAddressSchema.safeParse(parsed)
-  if (!validated.success) return null
+  if (!validated.success) return { address: null, modelName }
 
-  if (validated.data.confidence < 0.32) return null
+  if (validated.data.confidence < 0.32) return { address: null, modelName }
 
   const structured = structuredAddressFromSchemaFields({
     street: validated.data.street,
@@ -115,9 +119,12 @@ ${excerpt}`
 
   if (structured) {
     return {
-      ...structured,
-      confidence: Math.min(structured.confidence, validated.data.confidence),
-      extraction_source: "structured_ai",
+      address: {
+        ...structured,
+        confidence: Math.min(structured.confidence, validated.data.confidence),
+        extraction_source: "structured_ai",
+      },
+      modelName,
     }
   }
 
@@ -126,14 +133,17 @@ ${excerpt}`
     const fromLine = extractBelgianAddressFromPdfText(`${raw}\n`)
     if (fromLine) {
       return {
-        ...fromLine,
-        confidence: Math.min(0.82, validated.data.confidence),
-        extraction_source: "structured_ai",
+        address: {
+          ...fromLine,
+          confidence: Math.min(0.82, validated.data.confidence),
+          extraction_source: "structured_ai",
+        },
+        modelName,
       }
     }
   }
 
-  return null
+  return { address: null, modelName }
 }
 
 /**
@@ -145,7 +155,7 @@ export async function extractAddressWithLlm(text: string): Promise<{
   modelName: string
   promptVersion: string
 }> {
-  const modelName = GEMINI_MODEL
+  let modelName = GEMINI_MODEL
   const normalized = normalizePdfTextForAddressExtraction(text)
   if (normalized.length < 15) {
     return { address: null, modelName, promptVersion: PROMPT_VERSION }
@@ -159,7 +169,9 @@ export async function extractAddressWithLlm(text: string): Promise<{
         ? `[Part ${i + 1} of ${chunks.length} — same PDF; find the subject property address if present in this segment]\n\n`
         : ""
     try {
-      const address = await extractFromSingleExcerpt(header + excerpt)
+      const result = await extractFromSingleExcerpt(header + excerpt)
+      modelName = result.modelName
+      const address = result.address
       if (address) {
         return { address, modelName, promptVersion: PROMPT_VERSION }
       }

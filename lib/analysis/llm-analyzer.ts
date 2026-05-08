@@ -38,7 +38,7 @@ export async function analyzeWithLLM(
   text: string,
   documentType: string
 ): Promise<{ result: LLMAnalysisResult; modelName: string; promptVersion: string }> {
-  const modelName = GEMINI_MODEL
+  let modelName = GEMINI_MODEL
 
   // Route to specialized analyzers for known document types
   const normalizedType = documentType.toLowerCase()
@@ -76,6 +76,7 @@ export async function analyzeWithLLM(
       model: GEMINI_MODEL,
       contents: prompt,
     })
+    modelName = `${response.provider}:${response.model}`
     const content = getTextFromGeminiResponse(response)
     if (!content) {
       throw new Error("No content in LLM response")

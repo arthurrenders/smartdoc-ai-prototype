@@ -58,7 +58,7 @@ export async function assertOwnerDocument(
   const ownerUserId = await getOwnerUserId(supabase)
   let query = supabase
     .from("documents")
-    .select("id, property_id, properties!inner(user_id)")
+    .select("id, property_id, properties!documents_property_id_fkey!inner(user_id)")
     .eq("id", documentId)
     .eq("properties.user_id", ownerUserId)
 

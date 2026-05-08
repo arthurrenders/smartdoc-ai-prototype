@@ -408,9 +408,6 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
             {driveImporting ? "Importing from Drive…" : "Import from Google Drive"}
           </button>
 
-          <span className="text-xs text-muted-foreground">
-            Non-PDF files in a folder are ignored. Duplicate paths in one batch are deduplicated.
-          </span>
         </div>
 
         {isWorking && (
@@ -443,12 +440,6 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground">
-          After upload, text is read from each PDF, then <strong>Gemini</strong> (same stack as EPC / asbestos / electrical
-          analysis) extracts a Belgian building address when possible; if the model is unsure or unavailable, a local
-          line-based fallback runs. The app then links via <code className="rounded bg-muted px-1">property_addresses</code>
-          , creates a property, or flags <strong>manual review</strong> when confidence is too low or matches are ambiguous.
-        </p>
       </section>
 
       <section className="saas-card space-y-4">
@@ -581,8 +572,10 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                           <div className="space-y-2">
                             {manualFormIntakeId === row.id ? (
                               <IntakeManualPropertyForm
+                                key={row.id}
                                 intakeUploadId={row.id}
                                 propertyOptions={propertyOptions}
+                                suggestedAddress={row.extracted_address_raw}
                                 onDone={() => setManualFormIntakeId(null)}
                               />
                             ) : (
