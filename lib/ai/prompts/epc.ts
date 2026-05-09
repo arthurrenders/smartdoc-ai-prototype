@@ -35,6 +35,24 @@ property_region — only if explicitly given (e.g. Vlaanderen)
 
 If unsure, return null for each property_* field.
 
+PROPERTY METADATA (only when explicitly stated on the certificate)
+
+construction_year — integer build year (e.g. 1985). Look for "Bouwjaar", "Year of construction", "Datum gebouw".
+heating_type — one of: "gas", "oil", "electric", "heat_pump", "district", "other".
+  Look for "Hoofdverwarming", "Warmte-opwekker", "Heating system".
+  Map: aardgas → "gas"; mazout / stookolie → "oil"; elektrisch → "electric";
+       warmtepomp → "heat_pump"; stadsverwarming → "district";
+       hout / pellet / biomass → "other".
+dwelling_type — one of: "house", "apartment", "land", "commercial", "other".
+  Look for "Type woning", "Gebouwtype". Map: eengezinswoning → "house";
+  appartement → "apartment"; bouwgrond → "land"; handelspand → "commercial".
+living_area_m2 — numeric living area in m² (e.g. 142).
+  Look for "Bewoonbare oppervlakte", "Useful floor area", "Bruikbare vloeroppervlakte".
+bedrooms — integer count of bedrooms (e.g. 3).
+  Look for "Aantal slaapkamers", "Slaapkamers", "Number of bedrooms".
+
+If any of these is not unambiguously stated, return null for that field.
+
 --------------------------------
 COMMON LABELS TO SEARCH FOR
 --------------------------------
@@ -172,7 +190,12 @@ Never include explanations.
  "property_box": null,
  "property_postal_code": null,
  "property_municipality": null,
- "property_region": null
+ "property_region": null,
+ "construction_year": null,
+ "heating_type": null,
+ "dwelling_type": null,
+ "living_area_m2": null,
+ "bedrooms": null
 }
 
 If a value cannot be extracted return null for that field.

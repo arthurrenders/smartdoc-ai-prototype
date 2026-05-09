@@ -1,12 +1,34 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Upload, Play, FileQuestion, FileText } from "lucide-react"
+import { Upload, Play, FileQuestion, FileText, MapPin } from "lucide-react"
 import { uploadDocument } from "@/app/actions/upload-document"
 import { verifyDocumentAddress } from "@/app/actions/verify-document-address"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
 import { runAnalysis } from "@/app/actions/run-analysis"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
+import {
+  VISIBLE_DOCUMENT_TYPE_NAMES,
+  NON_ANALYZED_DOCUMENT_TYPE_NAMES,
+} from "@/lib/property-status"
+
+const VISIBLE_DOC_TYPE_SET: ReadonlySet<string> = new Set(VISIBLE_DOCUMENT_TYPE_NAMES)
+const NON_ANALYZED_DOC_TYPE_SET: ReadonlySet<string> = new Set(NON_ANALYZED_DOCUMENT_TYPE_NAMES)
+const DOC_TYPE_ORDER: Map<string, number> = new Map(
+  VISIBLE_DOCUMENT_TYPE_NAMES.map((name, idx) => [name, idx]),
+)
+
+const DOC_TYPE_DUTCH_LABELS: Record<string, string> = {
+  EPC: "EPC",
+  ASBESTOS: "Asbestattest",
+  ELECTRICAL: "Elektrische keuring",
+  SOIL_CERTIFICATE: "Bodemattest",
+  URBAN_PLANNING_INFO: "Stedenbouwkundige inlichtingen",
+}
+
+function dutchDocTypeLabel(name: string): string {
+  return DOC_TYPE_DUTCH_LABELS[name] ?? name
+}
 
 type DocumentType = {
   id: string
@@ -78,6 +100,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState<string | null>(null)
+  const [verifyingAddress, setVerifyingAddress] = useState<string | null>(null)
   const [driveImporting, setDriveImporting] = useState(false)
   const [feedbackByDocType, setFeedbackByDocType] = useState<Record<string, string>>({})
   const [driveFeedback, setDriveFeedback] = useState<string | null>(null)
@@ -92,7 +115,17 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       ])
 
       if (typesResult.data) {
-        setDocumentTypes(typesResult.data as DocumentType[])
+        // Show only the doc types the realtor uploads in this prototype, in a
+        // fixed display order. The other types still exist in the DB (used by
+        // Smart Export's "manual_documents" tagging) but stay off this table.
+        const filtered = (typesResult.data as DocumentType[])
+          .filter((t) => VISIBLE_DOC_TYPE_SET.has(t.name))
+          .sort(
+            (a, b) =>
+              (DOC_TYPE_ORDER.get(a.name) ?? Number.MAX_SAFE_INTEGER) -
+              (DOC_TYPE_ORDER.get(b.name) ?? Number.MAX_SAFE_INTEGER),
+          )
+        setDocumentTypes(filtered)
       }
 
       if (docsResult.data) {
@@ -247,6 +280,33 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     }
   }
 
+  async function handleVerifyAddress(documentTypeId: string, documentId: string) {
+    setVerifyingAddress(documentId)
+    setFeedbackByDocType((prev) => {
+      const next = { ...prev }
+      delete next[documentTypeId]
+      return next
+    })
+
+    try {
+      const formData = new FormData()
+      formData.append("documentId", documentId)
+      const result = await verifyDocumentAddress(formData)
+      await loadData()
+      if (!result.ok) {
+        setFeedbackByDocType((prev) => ({
+          ...prev,
+          [documentTypeId]: result.error || "Adrescontrole mislukt.",
+        }))
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Adrescontrole mislukt."
+      setFeedbackByDocType((prev) => ({ ...prev, [documentTypeId]: msg }))
+    } finally {
+      setVerifyingAddress(null)
+    }
+  }
+
   async function handleFileSelect(
     documentTypeId: string,
     event: React.ChangeEvent<HTMLInputElement>
@@ -392,13 +452,16 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
         documentTypes.map((docType) => {
           const { status, document, analysisRun } = getDocumentData(docType.id)
           const isUploading = uploading === docType.id
+          const isNonAnalyzed = NON_ANALYZED_DOC_TYPE_SET.has(docType.name)
           /** Terminal runs no longer "busy" — avoids a frame where fresh data is `done` but `analyzing` is not cleared yet (after loadData, before finally). */
           const analysisRunTerminal =
             analysisRun?.status === "done" || analysisRun?.status === "error"
           const isAnalyzing =
             analyzing === analysisRun?.id && !analysisRunTerminal
           const showRunAnalysis =
-            analysisRun?.status === "queued" && !isAnalyzing
+            !isNonAnalyzed && analysisRun?.status === "queued" && !isAnalyzing
+          const isVerifyingAddr = document ? verifyingAddress === document.id : false
+          const showVerifyAddress = isNonAnalyzed && Boolean(document)
           const statusForDisplay = isAnalyzing ? "Bezig met analyseren…" : status
           const statusColorClass = getStatusColor(
             isAnalyzing ? "processing" : status
@@ -420,7 +483,12 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-foreground">{docType.name}</h3>
+                  <h3 className="font-semibold text-foreground">{dutchDocTypeLabel(docType.name)}</h3>
+                  {NON_ANALYZED_DOC_TYPE_SET.has(docType.name) && (
+                    <p className="mt-0.5 text-xs italic text-muted-foreground">
+                      Geen automatische analyse — handmatig op te laden voor het dossier
+                    </p>
+                  )}
                   {rowFeedback && (
                     <div
                       className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -432,6 +500,13 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                   <p className={`text-sm mt-1 ${statusColorClass}`}>
                     Status: {statusForDisplay}
                   </p>
+                  {isNonAnalyzed && document && (
+                    <AddressMatchPill
+                      status={document.address_match_status ?? null}
+                      reason={document.address_match_reason ?? null}
+                      verifying={isVerifyingAddr}
+                    />
+                  )}
                   {persistedAnalysisError && (
                     <div
                       className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -471,6 +546,17 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                       {isAnalyzing ? "Running…" : "Run Analysis"}
                     </button>
                   )}
+                  {showVerifyAddress && document && (
+                    <button
+                      onClick={() => handleVerifyAddress(docType.id, document.id)}
+                      disabled={isVerifyingAddr}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
+                      title="Vergelijk het adres in het PDF met het adres van het pand"
+                    >
+                      <MapPin className="h-4 w-4" />
+                      {isVerifyingAddr ? "Bezig…" : "Adres controleren"}
+                    </button>
+                  )}
                   <input
                     ref={(el) => {
                       fileInputRefs.current[docType.id] = el
@@ -508,5 +594,61 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   }
 
   return <>{content}</>
+}
+
+function AddressMatchPill({
+  status,
+  reason,
+  verifying,
+}: {
+  status: string | null
+  reason: string | null
+  verifying: boolean
+}) {
+  if (verifying) {
+    return (
+      <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+        Adres controleren…
+      </p>
+    )
+  }
+
+  if (!status) {
+    return (
+      <p className="mt-1 text-xs italic text-muted-foreground">
+        Adres nog niet gecontroleerd. Klik op &quot;Adres controleren&quot; om te valideren.
+      </p>
+    )
+  }
+
+  const styles: Record<string, { className: string; label: string }> = {
+    match: {
+      className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      label: "Adres komt overeen met pand",
+    },
+    possible_match: {
+      className: "border-amber-200 bg-amber-50 text-amber-800",
+      label: "Mogelijke match — controleer handmatig",
+    },
+    mismatch: {
+      className: "border-red-200 bg-red-50 text-red-800",
+      label: "Adres komt NIET overeen met pand",
+    },
+    unknown: {
+      className: "border-gray-200 bg-gray-50 text-gray-700",
+      label: "Adres niet herkend in document",
+    },
+  }
+  const conf = styles[status] ?? styles.unknown
+  return (
+    <div className="mt-1.5 space-y-1">
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${conf.className}`}
+      >
+        {conf.label}
+      </span>
+      {reason && <p className="text-xs text-muted-foreground">{reason}</p>}
+    </div>
+  )
 }
 

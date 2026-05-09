@@ -19,6 +19,13 @@ export type AnalysisResult = {
   certificate_date?: string | null
   expiry_date?: string | null
   is_expired?: boolean | null
+  // Property-metadata fields (optional, used to sync property columns after a successful run).
+  // construction_year is also set by the asbestos analyzer.
+  construction_year?: number | null
+  heating_type?: string | null
+  dwelling_type?: string | null
+  living_area_m2?: number | null
+  bedrooms?: number | null
 }
 
 // Calculate confidence based on rule-based detection results

@@ -375,11 +375,12 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse): AnalysisRe
       region: data.property_region,
     }) ?? undefined
 
-  const result: AnalysisResult = {
+  const result: AnalysisResult & { construction_year?: number | null } = {
     status,
     summary,
     flags,
     confidence: 0.9,
+    construction_year: data.building_year ?? null,
     ...(property_address ? { property_address } : {}),
   }
 

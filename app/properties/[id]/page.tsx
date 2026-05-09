@@ -14,6 +14,7 @@ import { PropertyAddressCard } from "@/components/property/PropertyAddressCard"
 import { PropertyLocationEnrichmentCard } from "@/components/property/PropertyLocationEnrichmentCard"
 import { RenamePropertyButton } from "@/components/property/RenamePropertyButton"
 import { DeletePropertyButton } from "@/components/property/DeletePropertyButton"
+import { EditPropertyMetadataButton } from "@/components/property/EditPropertyMetadataButton"
 import { RedFlagsList } from "@/components/property/RedFlagsList"
 import { SuggestedActionsCard } from "@/components/property/SuggestedActionsCard"
 import { GenerateEmailDraftCard } from "@/components/property/GenerateEmailDraftCard"
@@ -146,7 +147,8 @@ export default async function PropertyPage({
               ID: {data.propertyId.slice(0, 8).toUpperCase()}
             </span>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
+            <EditPropertyMetadataButton propertyId={data.propertyId} />
             <RenamePropertyButton propertyId={data.propertyId} currentDisplayName={data.propertyDisplayName} />
             <DeletePropertyButton propertyId={data.propertyId} propertyName={data.propertyDisplayName} redirectToDashboard />
           </div>

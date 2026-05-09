@@ -99,6 +99,11 @@ export async function analyzeEPCWithAI(
         certificate_date: epcData.certificate_date,
         expiry_date: epcData.expiry_date,
         is_expired: epcData.is_expired,
+        construction_year: epcData.construction_year ?? null,
+        heating_type: epcData.heating_type ?? null,
+        dwelling_type: epcData.dwelling_type ?? null,
+        living_area_m2: epcData.living_area_m2 ?? null,
+        bedrooms: epcData.bedrooms ?? null,
         ...(property_address ? { property_address } : {}),
       }
 
@@ -296,6 +301,11 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
     certificate_date: epcData.certificate_date,
     expiry_date: epcData.expiry_date,
     is_expired: epcData.is_expired,
+    construction_year: epcData.construction_year ?? null,
+    heating_type: epcData.heating_type ?? null,
+    dwelling_type: epcData.dwelling_type ?? null,
+    living_area_m2: epcData.living_area_m2 ?? null,
+    bedrooms: epcData.bedrooms ?? null,
     ...(property_address ? { property_address } : {}),
   } as AnalysisResult & {
     epc_score_letter?: string | null
@@ -303,6 +313,11 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
     certificate_date?: string | null
     expiry_date?: string | null
     is_expired?: boolean | null
+    construction_year?: number | null
+    heating_type?: string | null
+    dwelling_type?: string | null
+    living_area_m2?: number | null
+    bedrooms?: number | null
   }
 }
 

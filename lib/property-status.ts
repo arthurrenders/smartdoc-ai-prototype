@@ -12,6 +12,29 @@ export const REQUIRED_DOCUMENT_TYPE_NAMES = [
 
 export type RequiredDocumentTypeName = (typeof REQUIRED_DOCUMENT_TYPE_NAMES)[number]
 
+/**
+ * Doc types shown as upload slots in the per-property DocumentTable.
+ * Order is preserved in the rendered table.
+ * Add a name here to surface a new upload row; remove to hide it.
+ */
+export const VISIBLE_DOCUMENT_TYPE_NAMES = [
+  "EPC",
+  "ASBESTOS",
+  "ELECTRICAL",
+  "SOIL_CERTIFICATE",
+  "URBAN_PLANNING_INFO",
+] as const
+
+/**
+ * Visible doc types that we don't run AI analysis on — UI shows a
+ * "Geen automatische analyse" hint and the analysis pipeline writes a
+ * benign Dutch green result instead of calling Gemini.
+ */
+export const NON_ANALYZED_DOCUMENT_TYPE_NAMES = [
+  "SOIL_CERTIFICATE",
+  "URBAN_PLANNING_INFO",
+] as const
+
 /** Minimal shape from an analysis result for status/expiry. Compatible with AnalysisResult. */
 export type DocumentAnalysisSummary = {
   status?: "red" | "orange" | "green"

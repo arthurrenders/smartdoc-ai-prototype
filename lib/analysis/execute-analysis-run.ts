@@ -15,6 +15,7 @@ import type { AnalysisResult } from "@/lib/analysis/detectors"
 import { extractDocumentDatesFromResult } from "@/lib/document-dates/extract-from-result"
 import { replaceDocumentDatesForDocument } from "@/lib/document-dates/persist"
 import { syncPropertyAddressFromDocumentAnalysis } from "@/lib/property-address/sync-from-analysis"
+import { syncPropertyMetadataFromAnalysis } from "@/lib/property-metadata/sync-from-analysis"
 
 export function detectDocumentTypeFromPdfText(text: string): "epc" | "electrical" | "asbestos" | "unknown" {
   const t = text.toLowerCase()
@@ -354,6 +355,20 @@ export async function executeAnalysisRunPipeline(
           }
         }
       }
+    } else if (
+      documentTypeName === "SOIL_CERTIFICATE" ||
+      documentTypeName === "URBAN_PLANNING_INFO"
+    ) {
+      // Upload-only types: no AI analyzer exists for these. Persist a benign
+      // Dutch result so the UI shows "groen — opgeladen", and set confidence
+      // high enough to skip the LLM fallback below (saves Gemini tokens).
+      modelName = ANALYSIS_MODEL_RULE_BASED
+      result = {
+        status: "green" as const,
+        summary: "Document opgeladen — geen automatische analyse beschikbaar.",
+        flags: [],
+        confidence: 1,
+      }
     } else {
       modelName = ANALYSIS_MODEL_RULE_BASED
       result = {
@@ -452,6 +467,16 @@ export async function executeAnalysisRunPipeline(
       })
     } catch (addrErr) {
       console.error("Failed to sync property address from analysis:", addrErr)
+    }
+
+    try {
+      await syncPropertyMetadataFromAnalysis(supabase, {
+        propertyId: docPropertyId,
+        documentTypeName,
+        result: result as AnalysisResult,
+      })
+    } catch (metaErr) {
+      console.error("Failed to sync property metadata from analysis:", metaErr)
     }
 
     revalidatePath(`/properties/${propertyId}`)

@@ -15,6 +15,17 @@ export const EPCResponseSchema = z.object({
   property_postal_code: z.string().nullable().optional(),
   property_municipality: z.string().nullable().optional(),
   property_region: z.string().nullable().optional(),
+  construction_year: z.number().int().nullable().optional(),
+  heating_type: z
+    .enum(["gas", "oil", "electric", "heat_pump", "district", "other"])
+    .nullable()
+    .optional(),
+  dwelling_type: z
+    .enum(["house", "apartment", "land", "commercial", "other"])
+    .nullable()
+    .optional(),
+  living_area_m2: z.number().nullable().optional(),
+  bedrooms: z.number().int().nullable().optional(),
 })
 
 export type EPCResponse = z.infer<typeof EPCResponseSchema>
@@ -87,6 +98,88 @@ function booleanOrNull(raw: unknown): boolean | null {
   return null
 }
 
+function intOrNull(raw: unknown): number | null {
+  const n = numberOrNull(raw)
+  if (n === null) return null
+  if (!Number.isFinite(n)) return null
+  return Math.round(n)
+}
+
+const HEATING_ALIASES: Record<string, "gas" | "oil" | "electric" | "heat_pump" | "district" | "other"> = {
+  gas: "gas",
+  aardgas: "gas",
+  natural_gas: "gas",
+  natuurgas: "gas",
+  oil: "oil",
+  stookolie: "oil",
+  mazout: "oil",
+  fuel: "oil",
+  fuel_oil: "oil",
+  electric: "electric",
+  elektrisch: "electric",
+  electricity: "electric",
+  electriciteit: "electric",
+  heat_pump: "heat_pump",
+  warmtepomp: "heat_pump",
+  heatpump: "heat_pump",
+  district: "district",
+  stadsverwarming: "district",
+  district_heating: "district",
+  pellet: "other",
+  hout: "other",
+  wood: "other",
+  biomass: "other",
+  other: "other",
+  anders: "other",
+}
+
+function normalizeHeatingType(raw: unknown): EPCResponse["heating_type"] {
+  if (raw === null || raw === undefined) return null
+  const key = String(raw).trim().toLowerCase().replace(/[\s-]+/g, "_")
+  if (key === "") return null
+  if (key in HEATING_ALIASES) return HEATING_ALIASES[key]
+  // Substring match for partials like "Hoofdverwarming: aardgas (HR)"
+  for (const alias in HEATING_ALIASES) {
+    if (key.includes(alias)) return HEATING_ALIASES[alias]
+  }
+  return null
+}
+
+const DWELLING_ALIASES: Record<string, "house" | "apartment" | "land" | "commercial" | "other"> = {
+  house: "house",
+  woning: "house",
+  eengezinswoning: "house",
+  detached: "house",
+  semi_detached: "house",
+  maison: "house",
+  apartment: "apartment",
+  appartement: "apartment",
+  flat: "apartment",
+  studio: "apartment",
+  land: "land",
+  grond: "land",
+  perceel: "land",
+  bouwgrond: "land",
+  commercial: "commercial",
+  commercieel: "commercial",
+  handelspand: "commercial",
+  winkel: "commercial",
+  kantoor: "commercial",
+  other: "other",
+  anders: "other",
+}
+
+function normalizeDwellingType(raw: unknown): EPCResponse["dwelling_type"] {
+  if (raw === null || raw === undefined) return null
+  const key = String(raw).trim().toLowerCase().replace(/[\s-]+/g, "_")
+  if (key === "") return null
+  if (key in DWELLING_ALIASES) return DWELLING_ALIASES[key]
+  for (const alias in DWELLING_ALIASES) {
+    if (key.includes(alias)) return DWELLING_ALIASES[alias]
+  }
+  return null
+}
+
 function normalizeStringArray(raw: unknown): string[] {
   if (raw === null || raw === undefined) return []
   if (!Array.isArray(raw)) return []
@@ -130,6 +223,11 @@ export function normalizeParsedEpcResponse(parsed: unknown): EPCResponse {
     property_postal_code: null,
     property_municipality: null,
     property_region: null,
+    construction_year: null,
+    heating_type: null,
+    dwelling_type: null,
+    living_area_m2: null,
+    bedrooms: null,
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -167,6 +265,21 @@ export function normalizeParsedEpcResponse(parsed: unknown): EPCResponse {
     property_postal_code: stringOrNull(o.property_postal_code),
     property_municipality: stringOrNull(o.property_municipality),
     property_region: stringOrNull(o.property_region),
+    construction_year: intOrNull(
+      o.construction_year ?? o.bouwjaar ?? o.year_built ?? o.build_year ?? o.jaar_van_bouw,
+    ),
+    heating_type: normalizeHeatingType(
+      o.heating_type ?? o.hoofdverwarming ?? o.warmte_opwekker ?? o.heating_system ?? o.verwarming,
+    ),
+    dwelling_type: normalizeDwellingType(
+      o.dwelling_type ?? o.property_type ?? o.type_woning ?? o.gebouwtype ?? o.woning_type,
+    ),
+    living_area_m2: numberOrNull(
+      o.living_area_m2 ?? o.bewoonbare_oppervlakte ?? o.beschermd_volume_m2 ?? o.useful_floor_area,
+    ),
+    bedrooms: intOrNull(
+      o.bedrooms ?? o.aantal_slaapkamers ?? o.slaapkamers ?? o.number_of_bedrooms,
+    ),
   }
 
   const validated = EPCResponseSchema.safeParse(withDocType)
