@@ -7,6 +7,7 @@ import { verifyDocumentAddress } from "@/app/actions/verify-document-address"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
 import { runAnalysis } from "@/app/actions/run-analysis"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
+import { DocumentPreviewButton } from "@/components/property/DocumentPreviewButton"
 import {
   VISIBLE_DOCUMENT_TYPE_NAMES,
   NON_ANALYZED_DOCUMENT_TYPE_NAMES,
@@ -556,6 +557,12 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                       <MapPin className="h-4 w-4" />
                       {isVerifyingAddr ? "Bezig…" : "Adres controleren"}
                     </button>
+                  )}
+                  {document && (
+                    <DocumentPreviewButton
+                      documentId={document.id}
+                      label={dutchDocTypeLabel(docType.name)}
+                    />
                   )}
                   <input
                     ref={(el) => {
