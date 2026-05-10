@@ -483,22 +483,14 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
               className="space-y-4 rounded-2xl border border-[hsl(var(--card-border))] bg-white p-6 shadow-sm transition-all duration-200 hover:border-brand-light/45 hover:shadow-md dark:bg-card"
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 space-y-1">
                   <h3 className="font-semibold text-foreground">{dutchDocTypeLabel(docType.name)}</h3>
                   {NON_ANALYZED_DOC_TYPE_SET.has(docType.name) && (
-                    <p className="mt-0.5 text-xs italic text-muted-foreground">
+                    <p className="text-xs italic text-muted-foreground">
                       Geen automatische analyse — handmatig op te laden voor het dossier
                     </p>
                   )}
-                  {rowFeedback && (
-                    <div
-                      className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                      role="alert"
-                    >
-                      {rowFeedback}
-                    </div>
-                  )}
-                  <p className={`text-sm mt-1 ${statusColorClass}`}>
+                  <p className={`text-sm ${statusColorClass}`}>
                     Status: {statusForDisplay}
                   </p>
                   {isNonAnalyzed && document && (
@@ -507,33 +499,6 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                       reason={document.address_match_reason ?? null}
                       verifying={isVerifyingAddr}
                     />
-                  )}
-                  {persistedAnalysisError && (
-                    <div
-                      className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                      role="alert"
-                    >
-                      <p className="font-medium text-destructive">Analyse mislukt</p>
-                      <p className="mt-1 text-destructive/90">{persistedAnalysisError}</p>
-                    </div>
-                  )}
-                  {showResults && analysisRun.result_json && !isAnalysisErrorPayload(analysisRun.result_json) && (
-                    <div className="mt-3 space-y-3">
-                      <div className="rounded-lg border border-[hsl(var(--border))] bg-muted/50 p-3 text-sm">
-                        <p className="font-medium text-foreground">Summary</p>
-                        <div className="mt-1 space-y-1 text-muted-foreground">
-                          {(() => {
-                            const result = analysisRun.result_json as AnalysisResult
-                            const lines = result.summary
-                              .split("|")
-                              .map((part) => part.trim())
-                              .filter(Boolean)
-
-                            return lines.map((line, idx) => <p key={`${analysisRun.id}-summary-${idx}`}>{line}</p>)
-                          })()}
-                        </div>
-                      </div>
-                    </div>
                   )}
                 </div>
                 <div className="flex flex-shrink-0 flex-wrap gap-2">
@@ -584,6 +549,42 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                   </button>
                 </div>
               </div>
+
+              {rowFeedback && (
+                <div
+                  className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  role="alert"
+                >
+                  {rowFeedback}
+                </div>
+              )}
+
+              {persistedAnalysisError && (
+                <div
+                  className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                  role="alert"
+                >
+                  <p className="font-medium text-destructive">Analyse mislukt</p>
+                  <p className="mt-1 text-destructive/90">{persistedAnalysisError}</p>
+                </div>
+              )}
+
+              {showResults && analysisRun.result_json && !isAnalysisErrorPayload(analysisRun.result_json) && (
+                <div className="rounded-lg border border-[hsl(var(--border))] bg-muted/50 px-4 py-3.5 text-sm">
+                  <p className="font-medium text-foreground">Summary</p>
+                  <div className="mt-2 space-y-1.5 leading-relaxed text-muted-foreground">
+                    {(() => {
+                      const result = analysisRun.result_json as AnalysisResult
+                      const lines = result.summary
+                        .split("|")
+                        .map((part) => part.trim())
+                        .filter(Boolean)
+
+                      return lines.map((line, idx) => <p key={`${analysisRun.id}-summary-${idx}`}>{line}</p>)
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           )
         })
