@@ -92,12 +92,14 @@ function severityOrder(severity: "red" | "orange" | "green"): number {
 }
 
 function documentTypeOrder(name: string | undefined): number {
-  if (!name) return 3
+  if (!name) return 99
   const n = name.toUpperCase()
   if (n === "EPC") return 0
   if (n === "ASBESTOS") return 1
   if (n === "ELECTRICAL") return 2
-  return 3
+  if (n === "SOIL_CERTIFICATE") return 3
+  if (n === "URBAN_PLANNING_INFO") return 4
+  return 99
 }
 
 /**
@@ -115,7 +117,7 @@ function dedupeKey(flag: FlagOutput): string {
  * - Wrong document type: only that flag is shown for that document; other flags from that document are hidden.
  * - Manual review required: suppressed when the same document has a more specific flag.
  * - Deduplicate: same title + document type + details shown once with optional occurrence count.
- * - Sort: red first, then orange, then green; within same severity, by document type (EPC, ASBESTOS, ELECTRICAL).
+ * - Sort: red first, then orange, then green; within same severity, by document type (EPC, ASBESTOS, ELECTRICAL, SOIL_CERTIFICATE, URBAN_PLANNING_INFO).
  */
 export function aggregatePropertyFlags(documents: DocumentFlagsInput[]): FlagOutput[] {
   const normalizedPerDoc: Array<{ documentTypeName: string; flags: FlagInput[] }> = documents.map(

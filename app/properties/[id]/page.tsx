@@ -227,6 +227,13 @@ export default async function PropertyPage({
                 gmailEmail={gmailStatus.ok && gmailStatus.connected ? gmailStatus.gmailEmail : null}
               />
             </div>
+
+            <div className="mt-4">
+              <PropertyAISummaryCard
+                summaryCounts={data.summaryCounts}
+                status={data.stats.status}
+              />
+            </div>
           </div>
         </div>
 
@@ -260,12 +267,6 @@ export default async function PropertyPage({
             </div>
           )}
         </div>
-
-        {/* AI document summary */}
-        <PropertyAISummaryCard
-          summaryCounts={data.summaryCounts}
-          status={data.stats.status}
-        />
 
         {/* Activity timeline */}
         <section aria-label="Tijdlijn" className="mt-8">

@@ -13,6 +13,7 @@ import { getCurrentDocumentsByType } from "@/lib/current-documents"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
 import type { PropertyAddressRecord } from "@/lib/property-address/types"
 import { assertOwnerProperty } from "@/lib/supabase/ownership"
+import { DOC_DUTCH_LABELS } from "@/lib/export/readiness/evaluate"
 import {
   isLocationEnrichmentPayloadV1,
   type PropertyLocationEnrichmentView,
@@ -247,13 +248,13 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
       }),
     }
 
-    const suggestedActions = buildSuggestedActions(stats, flags)
-
     const missingRequiredDocumentNames = requiredTypeIds
       .filter((typeId) => !byType.has(typeId))
       .map((typeId) => documentTypes.find((dt) => dt.id === typeId)?.name)
       .filter((n): n is string => Boolean(n))
       .sort()
+
+    const suggestedActions = buildSuggestedActions(stats, flags, missingRequiredDocumentNames)
 
     const propertyAddress: PropertyAddressRecord | null = (() => {
       if (addrRes.error || !addrRes.data) return null
@@ -334,7 +335,8 @@ function buildSummaryParagraph(counts: {
 
 function buildSuggestedActions(
   stats: PropertyStatusResult,
-  flags: FlagItem[]
+  flags: FlagItem[],
+  missingRequiredDocumentNames: string[] = []
 ): SuggestedActionsData {
   const list: string[] = []
   const hasRed = flags.some((f) => f.severity === "red")
@@ -364,7 +366,13 @@ function buildSuggestedActions(
     list.push("Address critical issues before closing the transaction.")
   }
   if (stats.missingCount > 0) {
-    list.push("Request missing document(s) from the seller (EPC, Asbestos, or Electrical certificate as applicable).")
+    const missingLabels = missingRequiredDocumentNames
+      .map((name) => DOC_DUTCH_LABELS[name] ?? name)
+    const labelList =
+      missingLabels.length > 0
+        ? ` (${missingLabels.join(", ")})`
+        : ""
+    list.push(`Request missing document(s) from the seller${labelList}.`)
   }
   if (stats.expiriesCount > 0) {
     list.push("Renew expired certificate(s) or schedule renewal before validity end.")

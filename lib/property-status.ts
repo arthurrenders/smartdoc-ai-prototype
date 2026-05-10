@@ -8,6 +8,8 @@ export const REQUIRED_DOCUMENT_TYPE_NAMES = [
   "EPC",
   "ASBESTOS",
   "ELECTRICAL",
+  "SOIL_CERTIFICATE",
+  "URBAN_PLANNING_INFO",
 ] as const
 
 export type RequiredDocumentTypeName = (typeof REQUIRED_DOCUMENT_TYPE_NAMES)[number]

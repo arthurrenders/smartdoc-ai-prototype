@@ -6,7 +6,7 @@ import type {
 } from "../types"
 import { evaluateConditional, dutchFieldLabel } from "./rules"
 
-const DOC_DUTCH_LABELS: Record<string, string> = {
+export const DOC_DUTCH_LABELS: Record<string, string> = {
   EPC: "EPC-attest",
   ASBESTOS: "Asbestattest",
   ELECTRICAL: "Elektrische keuring",

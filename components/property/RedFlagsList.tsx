@@ -5,7 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { FlagItem } from "@/app/actions/get-property-detail"
 
-const DOC_TYPE_ORDER = ["EPC", "ASBESTOS", "ELECTRICAL"] as const
+const DOC_TYPE_ORDER = ["EPC", "ASBESTOS", "ELECTRICAL", "SOIL_CERTIFICATE", "URBAN_PLANNING_INFO"] as const
 
 type RedFlagsListProps = {
   flags: FlagItem[]
