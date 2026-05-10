@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   FileQuestion,
   CalendarClock,
+  Clock,
   Plus,
 } from "lucide-react"
 
@@ -56,12 +57,21 @@ export default async function DashboardPage({
   ])
 
   const totalProperties = properties.length
-  const propertiesWithIssues = properties.filter(
-    (p) => propertyStats[p.id]?.status !== "green"
+  const conformProperties = properties.filter(
+    (p) => propertyStats[p.id]?.status === "green"
   ).length
-  const conformProperties = totalProperties - propertiesWithIssues
+  const propertiesWithIssues = properties.filter(
+    (p) => propertyStats[p.id]?.status === "red" || propertyStats[p.id]?.status === "orange"
+  ).length
+  const propertiesPendingAnalysis = properties.filter(
+    (p) => propertyStats[p.id]?.status === "pending"
+  ).length
   const totalMissing = properties.reduce(
     (sum, p) => sum + (propertyStats[p.id]?.missingCount ?? 0),
+    0
+  )
+  const totalPending = properties.reduce(
+    (sum, p) => sum + (propertyStats[p.id]?.pendingCount ?? 0),
     0
   )
   const todayIso = new Date().toISOString().slice(0, 10)
@@ -90,11 +100,12 @@ export default async function DashboardPage({
     >
       <div className="dashboard-content space-y-8">
         {/* KPI row */}
-        <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4" aria-label="Overzicht statistieken">
+        <section className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5" aria-label="Overzicht statistieken">
           <StatCard
             title="Panden conform"
             value={conformProperties}
             icon={<Building2 className="h-5 w-5" />}
+            trendLabel="Geanalyseerd & in orde"
             tone="primary"
           />
           <StatCard
@@ -103,6 +114,17 @@ export default async function DashboardPage({
             icon={<AlertTriangle className="h-5 w-5" />}
             trendLabel={propertiesWithIssues > 0 ? `${propertiesWithIssues} actief` : "Geen problemen"}
             tone="danger"
+          />
+          <StatCard
+            title="Nog te analyseren"
+            value={propertiesPendingAnalysis}
+            icon={<Clock className="h-5 w-5" />}
+            trendLabel={
+              totalPending > 0
+                ? `${totalPending} document${totalPending !== 1 ? "en" : ""} wacht`
+                : "Alles geanalyseerd"
+            }
+            tone="info"
           />
           <StatCard
             title="Ontbrekende documenten"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Upload, Play, FileQuestion, FileText, MapPin } from "lucide-react"
+import { Upload, Play, RotateCw, FileQuestion, FileText, MapPin } from "lucide-react"
 import { uploadDocument } from "@/app/actions/upload-document"
 import { verifyDocumentAddress } from "@/app/actions/verify-document-address"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
@@ -69,6 +69,7 @@ type AnalysisRun = {
   status: string
   created_at?: string
   result_json: AnalysisRunResultJson | null
+  model_name?: string | null
 }
 
 type Document = {
@@ -95,6 +96,13 @@ type DocumentTableProps = {
   wrapInCard?: boolean
 }
 
+type ReanalyzePrompt = {
+  docTypeId: string
+  documentId: string
+  analysisRunId: string
+  docTypeLabel: string
+}
+
 export default function DocumentTable({ propertyId, wrapInCard = true }: DocumentTableProps) {
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
@@ -105,6 +113,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   const [driveImporting, setDriveImporting] = useState(false)
   const [feedbackByDocType, setFeedbackByDocType] = useState<Record<string, string>>({})
   const [driveFeedback, setDriveFeedback] = useState<string | null>(null)
+  const [reanalyzePrompt, setReanalyzePrompt] = useState<ReanalyzePrompt | null>(null)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const loadData = useCallback(async () => {
@@ -191,21 +200,21 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   }
 
   /**
-   * Same path as the per-row file input: FormData upload → refresh list → run analysis.
-   * Optional hook runs after loadData (e.g. clear row uploading state before analysis).
+   * Per-row file input path: upload → verify address (cheap, no Gemini) → refresh list. Analysis is
+   * intentionally NOT auto-triggered — Gemini credits are only spent when the realtor explicitly
+   * clicks "Analyse uitvoeren" on the row.
    */
   async function uploadPdfThroughManualPipeline(
     file: File,
     documentTypeId: string,
     afterLoadData?: () => void
   ) {
-    const { documentId, analysisRunId } = await uploadPdfFile(file, documentTypeId)
+    const { documentId } = await uploadPdfFile(file, documentTypeId)
     const verifyFd = new FormData()
     verifyFd.append("documentId", documentId)
     await verifyDocumentAddress(verifyFd)
     await loadData()
     afterLoadData?.()
-    await handleRunAnalysis(documentTypeId, documentId, analysisRunId)
   }
 
   function getDocumentData(documentTypeId: string) {
@@ -230,7 +239,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
 
     if (analysisRun) {
       if (analysisRun.status === "queued") {
-        status = "Queued"
+        status = "Nog niet geanalyseerd"
       } else if (analysisRun.status === "processing") {
         status = "Processing"
       } else if (analysisRun.status === "done") {
@@ -243,7 +252,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
         status = "Fout"
       }
     } else if (doc.status === "uploaded") {
-      status = "Uploaded"
+      status = "Nog niet geanalyseerd"
     }
 
     return {
@@ -253,7 +262,12 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     }
   }
 
-  async function handleRunAnalysis(docTypeId: string, documentId: string, analysisRunId: string) {
+  async function handleRunAnalysis(
+    docTypeId: string,
+    documentId: string,
+    analysisRunId: string,
+    options?: { force?: boolean }
+  ) {
     setAnalyzing(analysisRunId)
     setFeedbackByDocType((prev) => {
       const next = { ...prev }
@@ -265,6 +279,9 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     formData.append("analysisRunId", analysisRunId)
     formData.append("documentId", documentId)
     formData.append("propertyId", propertyId)
+    if (options?.force) {
+      formData.append("force", "1")
+    }
 
     try {
       const result = await runAnalysis(formData)
@@ -279,6 +296,27 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     } finally {
       setAnalyzing(null)
     }
+  }
+
+  function requestRunAnalysis(
+    docTypeId: string,
+    documentId: string,
+    analysisRunId: string,
+    isAlreadyDone: boolean,
+    docTypeLabel: string
+  ) {
+    if (isAlreadyDone) {
+      setReanalyzePrompt({ docTypeId, documentId, analysisRunId, docTypeLabel })
+      return
+    }
+    void handleRunAnalysis(docTypeId, documentId, analysisRunId)
+  }
+
+  async function confirmReanalyze() {
+    if (!reanalyzePrompt) return
+    const prompt = reanalyzePrompt
+    setReanalyzePrompt(null)
+    await handleRunAnalysis(prompt.docTypeId, prompt.documentId, prompt.analysisRunId, { force: true })
   }
 
   async function handleVerifyAddress(documentTypeId: string, documentId: string) {
@@ -372,9 +410,9 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       case "missing":
         return "text-red-600"
       case "uploaded":
-        return "text-brand-dark dark:text-brand-light"
       case "queued":
-        return "text-orange-600"
+      case "nog niet geanalyseerd":
+        return "text-slate-600"
       case "processing":
         return "text-yellow-600"
       case "green":
@@ -459,8 +497,14 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
             analysisRun?.status === "done" || analysisRun?.status === "error"
           const isAnalyzing =
             analyzing === analysisRun?.id && !analysisRunTerminal
+          const isAlreadyDone = analysisRun?.status === "done"
           const showRunAnalysis =
-            !isNonAnalyzed && analysisRun?.status === "queued" && !isAnalyzing
+            !isNonAnalyzed &&
+            !!analysisRun &&
+            !isAnalyzing &&
+            (analysisRun.status === "queued" ||
+              analysisRun.status === "done" ||
+              analysisRun.status === "error")
           const isVerifyingAddr = document ? verifyingAddress === document.id : false
           const showVerifyAddress = isNonAnalyzed && Boolean(document)
           const statusForDisplay = isAnalyzing ? "Bezig met analyseren…" : status
@@ -476,6 +520,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
             analysisRun?.status === "done" &&
             analysisRun.result_json &&
             !isAnalysisErrorPayload(analysisRun.result_json)
+          const usedGroqFallback = Boolean(analysisRun?.model_name?.startsWith("groq:"))
 
           return (
             <div
@@ -493,6 +538,11 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                   <p className={`text-sm ${statusColorClass}`}>
                     Status: {statusForDisplay}
                   </p>
+                  {usedGroqFallback && analysisRun?.status === "done" && (
+                    <p className="text-xs italic text-muted-foreground">
+                      Geanalyseerd via fallback-model (Gemini was tijdelijk niet beschikbaar)
+                    </p>
+                  )}
                   {isNonAnalyzed && document && (
                     <AddressMatchPill
                       status={document.address_match_status ?? null}
@@ -504,12 +554,24 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                 <div className="flex flex-shrink-0 flex-wrap gap-2">
                   {showRunAnalysis && document && analysisRun && (
                     <button
-                      onClick={() => handleRunAnalysis(docType.id, document.id, analysisRun.id)}
+                      onClick={() =>
+                        requestRunAnalysis(
+                          docType.id,
+                          document.id,
+                          analysisRun.id,
+                          isAlreadyDone,
+                          dutchDocTypeLabel(docType.name)
+                        )
+                      }
                       disabled={isAnalyzing}
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
                     >
-                      <Play className="h-4 w-4" />
-                      {isAnalyzing ? "Running…" : "Run Analysis"}
+                      {isAlreadyDone ? <RotateCw className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                      {isAnalyzing
+                        ? "Running…"
+                        : isAlreadyDone
+                          ? "Opnieuw analyseren"
+                          : "Analyseren"}
                     </button>
                   )}
                   {showVerifyAddress && document && (
@@ -592,16 +654,64 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     </div>
   )
 
+  const reanalyzeModal = reanalyzePrompt ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reanalyze-modal-title"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          setReanalyzePrompt(null)
+        }
+      }}
+    >
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-card">
+        <h3 id="reanalyze-modal-title" className="text-base font-bold text-foreground">
+          Opnieuw analyseren?
+        </h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Het document <span className="font-semibold text-foreground">{reanalyzePrompt.docTypeLabel}</span> is
+          al geanalyseerd. Opnieuw analyseren start een nieuwe AI-analyse en gebruikt opnieuw
+          Gemini-credits. Doorgaan?
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setReanalyzePrompt(null)}
+            className="inline-flex items-center justify-center rounded-lg border border-[hsl(var(--border))] bg-white px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+          >
+            Annuleren
+          </button>
+          <button
+            type="button"
+            onClick={() => void confirmReanalyze()}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-amber-700"
+          >
+            <RotateCw className="h-4 w-4" />
+            Ja, opnieuw analyseren
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
   if (wrapInCard) {
     return (
       <div className="saas-card">
         <h2 className="saas-section-heading mb-6">Documents</h2>
         {content}
+        {reanalyzeModal}
       </div>
     )
   }
 
-  return <>{content}</>
+  return (
+    <>
+      {content}
+      {reanalyzeModal}
+    </>
+  )
 }
 
 function AddressMatchPill({

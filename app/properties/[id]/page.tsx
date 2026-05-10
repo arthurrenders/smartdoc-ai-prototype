@@ -6,6 +6,7 @@ import {
   Layers3,
   AlertTriangle,
   Clock,
+  CircleDashed,
 } from "lucide-react"
 import { getPropertyDetail } from "@/app/actions/get-property-detail"
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
@@ -139,6 +140,11 @@ export default async function PropertyPage({
                   <AlertTriangle className="h-3 w-3" />
                   Kritieke actie vereist
                 </span>
+              ) : data.stats.status === "pending" ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                  <CircleDashed className="h-3 w-3" />
+                  Nog te analyseren
+                </span>
               ) : (
                 <StatusBadge status={data.stats.status} />
               )}
@@ -172,6 +178,25 @@ export default async function PropertyPage({
             </p>
           </div>
         </div>
+
+        {data.stats.pendingCount > 0 && (
+          <div
+            className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm"
+            role="status"
+          >
+            <CircleDashed className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+            <div className="flex-1">
+              <p className="font-semibold text-slate-800">
+                {data.stats.pendingCount === 1
+                  ? "1 document is nog niet geanalyseerd"
+                  : `${data.stats.pendingCount} documenten zijn nog niet geanalyseerd`}
+              </p>
+              <p className="mt-0.5 text-slate-600">
+                Klik op &quot;Run Analysis&quot; bij het document om de AI-analyse te starten. Pas dan worden bevindingen meegenomen in de nalevingsscore.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Documents + compact score/actions sidebar — sidebar is transparent, stretches to match doc height */}
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">

@@ -16,6 +16,7 @@ import { extractDocumentDatesFromResult } from "@/lib/document-dates/extract-fro
 import { replaceDocumentDatesForDocument } from "@/lib/document-dates/persist"
 import { syncPropertyAddressFromDocumentAnalysis } from "@/lib/property-address/sync-from-analysis"
 import { syncPropertyMetadataFromAnalysis } from "@/lib/property-metadata/sync-from-analysis"
+import { BudgetExceededError } from "@/lib/ai/usage-budget"
 
 export function detectDocumentTypeFromPdfText(text: string): "epc" | "electrical" | "asbestos" | "unknown" {
   const t = text.toLowerCase()
@@ -484,7 +485,12 @@ export async function executeAnalysisRunPipeline(
 
     return { success: true, result }
   } catch (pipelineError) {
-    const msg = pipelineError instanceof Error ? pipelineError.message : "Unknown error occurred"
+    const msg =
+      pipelineError instanceof BudgetExceededError
+        ? pipelineError.userMessage
+        : pipelineError instanceof Error
+          ? pipelineError.message
+          : "Unknown error occurred"
     await markRunFailed(msg)
     return { error: msg, persistedToDb: true }
   }

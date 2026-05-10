@@ -182,6 +182,7 @@ export async function getDashboardData(searchQuery?: string): Promise<DashboardD
       byType.set(doc.document_type_id, {
         documentTypeId: doc.document_type_id,
         analysis: toDocumentAnalysisSummary(run?.result_json),
+        analysisRunStatus: (run?.status ?? null) as DocumentWithAnalysis["analysisRunStatus"],
       })
     }
     const documentsWithAnalysis = [...byType.values()]
@@ -208,8 +209,9 @@ export async function getDashboardData(searchQuery?: string): Promise<DashboardD
           {
             missingCount: 0,
             expiriesCount: 0,
-            status: "orange" as const,
+            status: "pending" as const,
             documentCount: 0,
+            pendingCount: 0,
           },
         ])
       ),

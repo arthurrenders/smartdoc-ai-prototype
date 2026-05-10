@@ -70,9 +70,17 @@ export function PropertyCard({ id, nameOrAddress, stats, streetViewUrl }: Proper
               {stats.expiriesCount} verloopt
             </span>
           )}
-          {stats.missingCount === 0 && stats.expiriesCount === 0 && (
-            <span className="text-green-700">Alle documenten aanwezig</span>
+          {stats.pendingCount > 0 && (
+            <span className="text-slate-600">
+              {stats.pendingCount} nog te analyseren
+            </span>
           )}
+          {stats.missingCount === 0 &&
+            stats.expiriesCount === 0 &&
+            stats.pendingCount === 0 &&
+            stats.status === "green" && (
+              <span className="text-green-700">Alle documenten aanwezig en geldig</span>
+            )}
         </div>
 
         <Link

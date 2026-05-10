@@ -1,5 +1,12 @@
 import "server-only"
 import { ApiError, GoogleGenAI } from "@google/genai"
+import {
+  assertWithinDailyBudget,
+  BudgetExceededError,
+  recordLlmCall,
+} from "@/lib/ai/usage-budget"
+
+export { BudgetExceededError } from "@/lib/ai/usage-budget"
 
 let _client: GoogleGenAI | undefined
 
@@ -76,7 +83,9 @@ function isServiceUnavailable(error: unknown): boolean {
 }
 
 function shouldFallbackToGroq(error: unknown): boolean {
-  if (error === undefined || error === null) return true
+  // Only switch to Groq for transient capacity errors (429 / 503). Don't fall back on auth, schema,
+  // or quota-exhausted errors — those would burn Groq's free tier without solving the root cause.
+  if (error === undefined || error === null) return false
   return isRateLimited(error) || isServiceUnavailable(error)
 }
 
@@ -118,6 +127,8 @@ async function generateWithGroq(prompt: string): Promise<UnifiedGenerateContentR
     throw new Error("GROQ_API_KEY is not set")
   }
 
+  await assertWithinDailyBudget("groq")
+
   const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -147,6 +158,8 @@ async function generateWithGroq(prompt: string): Promise<UnifiedGenerateContentR
     throw new Error("Groq returned no content")
   }
 
+  await recordLlmCall("groq")
+
   return {
     text: content,
     candidates: [{ content: { parts: [{ text: content }] } }],
@@ -161,6 +174,9 @@ const MAX_GEMINI_RETRY_WAIT_MS = 5_000
 /**
  * One Gemini attempt. On 429/503 (or UNAVAILABLE), switch to Groq immediately when GROQ_API_KEY is set
  * — no long Retry-After sleeps. Without Groq, uses capped short waits + optional GEMINI_MODEL_FALLBACK.
+ *
+ * The daily budget cap (LLM_MAX_CALLS_PER_DAY, default 200) is enforced before any provider call.
+ * If the cap is hit, throws `BudgetExceededError` whose `userMessage` is shown to the realtor in Dutch.
  */
 export async function generateContentWithRetry(
   request: GenerateContentRequest
@@ -171,10 +187,14 @@ export async function generateContentWithRetry(
   const prompt = promptFromGenerateContentRequest(request)
   let lastError: unknown
 
+  await assertWithinDailyBudget("gemini")
+
   try {
     const res = await geminiClient.models.generateContent(request)
+    await recordLlmCall("gemini")
     return buildUnifiedGeminiResponse(res, primaryModel)
   } catch (e) {
+    if (e instanceof BudgetExceededError) throw e
     lastError = e
   }
 
@@ -199,6 +219,7 @@ export async function generateContentWithRetry(
         ...(request as unknown as Record<string, unknown>),
         model: fallback,
       } as GenerateContentRequest)
+      await recordLlmCall("gemini")
       return buildUnifiedGeminiResponse(res, fallback)
     } catch (e) {
       lastError = e
@@ -216,6 +237,7 @@ export async function generateContentWithRetry(
       await sleep(wait)
       try {
         const res = await geminiClient.models.generateContent(request)
+        await recordLlmCall("gemini")
         return buildUnifiedGeminiResponse(res, primaryModel)
       } catch (e) {
         lastError = e

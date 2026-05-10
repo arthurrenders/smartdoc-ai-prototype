@@ -87,6 +87,7 @@ export default async function AnalyticsPage() {
     green: properties.filter((p) => propertyStats[p.id]?.status === "green").length,
     orange: properties.filter((p) => propertyStats[p.id]?.status === "orange").length,
     red: properties.filter((p) => propertyStats[p.id]?.status === "red").length,
+    pending: properties.filter((p) => propertyStats[p.id]?.status === "pending").length,
   }
 
   const totalProperties = properties.length
@@ -205,11 +206,12 @@ export default async function AnalyticsPage() {
                   <PieChart className="h-5 w-5" />
                   Verdeling pandstatus
                 </h2>
-                <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {[
                     ["Groen", propertyStatusCounts.green, "bg-emerald-500"],
                     ["Oranje", propertyStatusCounts.orange, "bg-amber-500"],
                     ["Rood", propertyStatusCounts.red, "bg-red-500"],
+                    ["Nog te analyseren", propertyStatusCounts.pending, "bg-slate-400"],
                   ].map(([name, count, bg]) => (
                     <div key={name} className="rounded-lg border border-dashboard-outline-variant/20 bg-dashboard-surface-low p-3 text-center">
                       <div className={`mx-auto mb-2 h-2 w-10 rounded-full ${bg}`} />

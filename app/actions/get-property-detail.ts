@@ -168,6 +168,7 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
       byType.set(doc.document_type_id, {
         documentTypeId: doc.document_type_id,
         analysis: toDocumentAnalysisSummary(run?.result_json),
+        analysisRunStatus: (run?.status ?? null) as DocumentWithAnalysis["analysisRunStatus"],
       })
     }
     const documentsWithAnalysis = [...byType.values()]
@@ -232,7 +233,11 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
         : "No document analyses available yet. Upload and run analysis for each required document type."
 
     const requiredTotal = requiredTypeIds.length
-    const validCount = documentsWithAnalysis.filter((d) => d.analysis?.status === "green").length
+    // Only count documents that were actually analyzed and came back green — uploaded-but-pending
+    // docs must never inflate the compliance score.
+    const validCount = documentsWithAnalysis.filter(
+      (d) => d.analysisRunStatus === "done" && d.analysis?.status === "green"
+    ).length
     const summaryCounts: PropertySummaryCounts = {
       validCount,
       missingCount: stats.missingCount,

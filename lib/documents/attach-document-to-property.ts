@@ -118,11 +118,17 @@ export type AttachDocumentToPropertyParams = {
   intakeDetectedType?: IntakeDetectedDocumentType | null
   /** Used when intake type is unknown (e.g. match `epc` from filename). */
   sourceFileName?: string | null
+  /**
+   * When true, run the AI pipeline immediately after attach. Default `false` so uploads do not burn
+   * Gemini credits without explicit user intent — analysis is then driven by the manual Analyze button
+   * via `runAnalysis`. Bulk intake and single-file uploads should leave this off.
+   */
+  triggerAnalysis?: boolean
 }
 
 /**
- * Ensures the row is tied to the property, resolves `document_type_id` when missing, then runs or
- * skips analysis:
+ * Ensures the row is tied to the property and resolves `document_type_id` when missing. Analysis
+ * only runs when `triggerAnalysis` is `true`. Behaviour with `triggerAnalysis: true`:
  * - `done` + `result_json` → no-op (idempotent)
  * - `processing` → no-op (avoid duplicate concurrent jobs)
  * - `queued` / `error` → execute pipeline once
@@ -233,6 +239,11 @@ export async function attachDocumentToProperty(
     revalidatePath(`/properties/${pid}`)
     return { ok: true }
   } else if (latest?.status === "processing") {
+    return { ok: true }
+  }
+
+  if (!params.triggerAnalysis) {
+    revalidatePath(`/properties/${pid}`)
     return { ok: true }
   }
 

@@ -20,7 +20,7 @@ type Props = {
   className?: string
 }
 
-/** Matches StatusBadge-style greens / ambers / reds (prototype). */
+/** Matches StatusBadge-style greens / ambers / reds plus a neutral "pending" grey. */
 const STATUS_MARKER_ICONS: Record<
   MapMarkerRow["status"],
   L.DivIcon
@@ -42,6 +42,13 @@ const STATUS_MARKER_ICONS: Record<
   red: L.divIcon({
     className: "leaflet-div-icon smartdoc-map-marker",
     html: `<div style="width:14px;height:14px;border-radius:50%;background:#dc2626;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.32);"></div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -10],
+  }),
+  pending: L.divIcon({
+    className: "leaflet-div-icon smartdoc-map-marker",
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:#94a3b8;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.32);"></div>`,
     iconSize: [18, 18],
     iconAnchor: [9, 9],
     popupAnchor: [0, -10],

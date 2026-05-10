@@ -6,6 +6,7 @@ import {
   toDocumentAnalysisSummary,
   REQUIRED_DOCUMENT_TYPE_NAMES,
   type DocumentWithAnalysis,
+  type PropertyStatusValue,
 } from "@/lib/property-status"
 import { getCurrentDocumentsByType } from "@/lib/current-documents"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
@@ -17,7 +18,7 @@ export type MapMarkerRow = {
   latitude: number
   longitude: number
   addressLabel: string
-  status: "green" | "orange" | "red"
+  status: PropertyStatusValue
 }
 
 type DocumentWithRelations = {
@@ -147,7 +148,7 @@ export async function getMapMarkers(searchQuery?: string): Promise<{
 
     const documents = (docsRes.data as DocumentWithRelations[]) || []
 
-    const statusByProperty: Record<string, "green" | "orange" | "red"> = {}
+    const statusByProperty: Record<string, PropertyStatusValue> = {}
 
     for (const pid of propertyIds) {
       const propDocs = documents.filter((d) => d.property_id === pid)
@@ -159,6 +160,7 @@ export async function getMapMarkers(searchQuery?: string): Promise<{
         byType.set(doc.document_type_id, {
           documentTypeId: doc.document_type_id,
           analysis: toDocumentAnalysisSummary(run?.result_json),
+          analysisRunStatus: (run?.status ?? null) as DocumentWithAnalysis["analysisRunStatus"],
         })
       }
       const stats = computePropertyStatus(requiredTypeIds, [...byType.values()])
@@ -167,7 +169,7 @@ export async function getMapMarkers(searchQuery?: string): Promise<{
 
     let markers: MapMarkerRow[] = base.map((b) => ({
       ...b,
-      status: statusByProperty[b.propertyId] ?? "orange",
+      status: statusByProperty[b.propertyId] ?? "pending",
     }))
 
     if (normalizedQuery) {

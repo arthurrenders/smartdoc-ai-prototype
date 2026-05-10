@@ -5,7 +5,7 @@ import { FileText, CheckCircle2, AlertCircle, FileQuestion, ChevronDown, Chevron
 import { cn } from "@/lib/utils"
 import type { PropertySummaryCounts } from "@/app/actions/get-property-detail"
 
-type SummaryTone = "green" | "orange" | "red"
+type SummaryTone = "green" | "orange" | "red" | "pending"
 
 type PropertyAISummaryCardProps = {
   summaryCounts: Partial<PropertySummaryCounts> | null
@@ -16,10 +16,11 @@ type PropertyAISummaryCardProps = {
 
 function deriveTone(counts: Partial<PropertySummaryCounts> | null, status?: SummaryTone): SummaryTone {
   if (status) return status
-  if (!counts) return "orange"
+  if (!counts) return "pending"
   if (counts.urgentActionNeeded) return "red"
   const { validCount = 0, missingCount = 0, manualReviewCount = 0, requiredTotal = 0 } = counts
   if (requiredTotal > 0 && validCount === requiredTotal && missingCount === 0 && manualReviewCount === 0) return "green"
+  if (validCount === 0 && missingCount === 0 && manualReviewCount === 0) return "pending"
   return "orange"
 }
 
@@ -29,6 +30,8 @@ const toneStyles: Record<SummaryTone, string> = {
   orange:
     "border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30",
   red: "border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/30",
+  pending:
+    "border-slate-200 bg-slate-50/60 dark:border-slate-700 dark:bg-slate-900/40",
 }
 
 export function PropertyAISummaryCard({

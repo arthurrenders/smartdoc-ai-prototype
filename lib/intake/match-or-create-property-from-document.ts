@@ -340,14 +340,26 @@ export async function matchOrCreatePropertyFromDocument(
     }
   }
 
-  const geminiResult = await extractIntakePropertyAddressWithGemini(text)
-  const geminiAddress = geminiResult.address
-  const candidate =
-    geminiAddress ?? extractBelgianAddressFromPdfText(text)
+  // Regex-first to avoid burning Gemini credits when the PDF already has a clean Belgian-style
+  // address line. Only fall back to the LLM when the heuristic finds nothing — most EPC, asbestos,
+  // and electrical certificates have a parseable "Street Number, 0000 Municipality" line.
+  const heuristicCandidate = extractBelgianAddressFromPdfText(text)
+  let geminiResult: Awaited<ReturnType<typeof extractIntakePropertyAddressWithGemini>> | null = null
+  let candidate = heuristicCandidate
 
-  const parsed = geminiResult.parsed
+  if (!heuristicCandidate) {
+    geminiResult = await extractIntakePropertyAddressWithGemini(text)
+    candidate = geminiResult.address
+  }
+
+  const geminiAddress = geminiResult?.address ?? null
+  const parsed = geminiResult?.parsed
   const debugConfidence = typeof parsed?.confidence === "number" ? parsed.confidence : 0
-  console.info(`[AI ADDRESS EXTRACTION]
+
+  if (heuristicCandidate) {
+    console.info(`${logPrefix} address extraction=pdf_heuristic conf=${heuristicCandidate.confidence.toFixed(2)} (Gemini skipped)`)
+  } else if (geminiResult) {
+    console.info(`[AI ADDRESS EXTRACTION]
 Document: ${params.filename}
 Raw output: ${geminiResult.rawOutput ?? "<empty>"}
 Parsed:
@@ -356,11 +368,9 @@ Parsed:
   City: ${parsed?.municipality?.trim() || "<missing>"}
   Postal Code: ${parsed?.postal_code !== null && parsed?.postal_code !== undefined ? String(parsed.postal_code).trim() : "<missing>"}
 Confidence: ${debugConfidence}`)
-
-  if (geminiAddress) {
-    console.info(`${logPrefix} address extraction=gemini conf=${debugConfidence.toFixed(2)}`)
-  } else if (candidate) {
-    console.info(`${logPrefix} address extraction=pdf_heuristic conf=${candidate.confidence.toFixed(2)}`)
+    if (geminiAddress) {
+      console.info(`${logPrefix} address extraction=gemini conf=${debugConfidence.toFixed(2)}`)
+    }
   }
 
   if (!candidate) {

@@ -47,6 +47,7 @@ export async function getDocumentsForProperty(propertyId: string) {
         id,
         status,
         result_json,
+        model_name,
         created_at
       )
     `
