@@ -67,7 +67,14 @@ export function IntakeManualPropertyForm({
         <select
           id={`intake-prop-${intakeUploadId}`}
           value={selectedPropertyId}
-          onChange={(e) => setSelectedPropertyId(e.target.value)}
+          onChange={(e) => {
+            const nextId = e.target.value
+            setSelectedPropertyId(nextId)
+            const selected = propertyOptions.find((property) => property.id === nextId)
+            if (selected?.addressLine) {
+              setAddress(selected.addressLine)
+            }
+          }}
           className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
           disabled={submitting}
         >

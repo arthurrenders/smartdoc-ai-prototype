@@ -67,7 +67,7 @@ export async function getAppointments(opts?: {
 
     const from =
       opts?.from ??
-      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      new Date().toISOString()
     const to =
       opts?.to ??
       new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
@@ -81,7 +81,7 @@ export async function getAppointments(opts?: {
          properties ( display_name, property_addresses ( normalized_full_address ) )`
       )
       .eq("user_id", ownerUserId)
-      .gte("start_at", from)
+      .gte("end_at", from)
       .lte("start_at", to)
       .order("start_at", { ascending: true })
 

@@ -27,6 +27,7 @@ type RawDocRow = {
   id: string
   property_id: string
   document_type_id: string | null
+  is_active?: boolean | null
   created_at: string | null
   document_types?: { id: string; name: string } | null
   analysis_runs?: Array<{
@@ -61,7 +62,7 @@ export default async function AnalyticsPage() {
     ? await supabase
         .from("documents")
         .select(
-          "id, property_id, document_type_id, created_at, document_types(id, name), analysis_runs(id, created_at, result_json)"
+          "id, property_id, document_type_id, is_active, created_at, document_types(id, name), analysis_runs(id, created_at, result_json)"
         )
         .in("property_id", propertyIds)
         .order("created_at", { ascending: false })

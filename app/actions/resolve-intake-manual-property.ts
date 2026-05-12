@@ -40,12 +40,24 @@ export async function resolveIntakeManualProperty(input: z.infer<typeof schema>)
     if (selectedPropertyId) {
       await assertOwnerProperty(supabase, selectedPropertyId)
     }
+    let addressLine = parsed.data.address?.trim() ? parsed.data.address.trim() : null
+    if (selectedPropertyId && !addressLine) {
+      const { data: addr } = await supabase
+        .from("property_addresses")
+        .select("raw_line1, normalized_full_address")
+        .eq("property_id", selectedPropertyId)
+        .maybeSingle()
+      addressLine =
+        (addr?.normalized_full_address as string | null | undefined)?.trim() ||
+        (addr?.raw_line1 as string | null | undefined)?.trim() ||
+        null
+    }
 
     const res = await linkIntakeUploadToManualProperty(supabase, {
       userId,
       intakeUploadId: parsed.data.intakeUploadId,
       displayName: parsed.data.propertyName?.trim() || "",
-      addressLine: parsed.data.address?.trim() ? parsed.data.address.trim() : null,
+      addressLine,
       selectedPropertyId,
     })
 

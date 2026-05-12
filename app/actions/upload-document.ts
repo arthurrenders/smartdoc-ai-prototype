@@ -36,7 +36,7 @@ export async function uploadDocument(formData: FormData) {
     }
 
     // Validate PDF type
-    if (file.type !== "application/pdf") {
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
       return {
         ok: false,
         error: "Invalid file type",

@@ -102,7 +102,8 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
         document_id,
         date_type,
         date_on,
-        properties!inner ( user_id, display_name )
+        properties!inner ( user_id, display_name ),
+        documents!inner ( is_active )
       `
 
     const dates: DateRow[] = []
@@ -112,6 +113,7 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
         .from("document_dates")
         .select(datesSelect)
         .eq("properties.user_id", ownerUserId)
+        .eq("documents.is_active", true)
         .gte("date_on", windowStart)
         .lte("date_on", windowEnd)
         .order("date_on", { ascending: true })

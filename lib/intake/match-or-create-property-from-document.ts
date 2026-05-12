@@ -22,6 +22,8 @@ import {
 } from "@/lib/properties/display-name-match"
 import { attachDocumentToProperty as attachDocumentToPropertyRecord } from "@/lib/documents/attach-document-to-property"
 import { createProperty as createPropertyRecord } from "@/lib/properties/create-property"
+import { geocodeBelgiumRawLine } from "@/lib/geocoding/nominatim-be"
+import { runAndPersistPropertyLocationEnrichment } from "@/lib/location-enrichment/run-enrichment"
 
 function isValidPropertyUuid(id: string | null | undefined): id is string {
   return typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
@@ -100,14 +102,31 @@ export function normalizeExtractedAddress(
   }
 }
 
-function detectIntakeDocumentType(text: string): "epc" | "electricity" | "asbestos" | "unknown" {
-  const t = text.slice(0, 12_000).toLowerCase()
+function detectIntakeDocumentType(text: string, filename = ""): IntakeDetectedDocumentType {
+  const t = `${filename}\n${text.slice(0, 12_000)}`.toLowerCase()
   if (t.includes("energieprestatie") || /\bepc\b/.test(t) || t.includes("energieprestatiecertificaat")) {
     return "epc"
   }
   if (t.includes("asbest")) return "asbestos"
   if (t.includes("keuring") && (t.includes("elektr") || t.includes("installatie") || t.includes("arei"))) {
     return "electricity"
+  }
+  if (
+    t.includes("bodemattest") ||
+    t.includes("ovam") ||
+    t.includes("bodeminformatie") ||
+    t.includes("grondinformatieregister")
+  ) {
+    return "soil_certificate"
+  }
+  if (
+    t.includes("stedenbouwkundige inlichtingen") ||
+    t.includes("stedenbouwkundig uittreksel") ||
+    t.includes("stedenbouw") ||
+    t.includes("vastgoedinformatie") ||
+    t.includes("omgevingsvergunning")
+  ) {
+    return "urban_planning_info"
   }
   return "unknown"
 }
@@ -250,6 +269,81 @@ async function createProperty(
   })
 }
 
+function optionalNominatimUserAgent(): string | null {
+  const ua = process.env.NOMINATIM_USER_AGENT?.trim()
+  return ua && ua.length >= 8 ? ua : null
+}
+
+async function geocodeAndEnrichNewProperty(
+  supabase: SupabaseClient,
+  params: {
+    propertyId: string
+    rawLine: string
+    normalized: NormalizedAddressFields
+  }
+): Promise<void> {
+  const userAgent = optionalNominatimUserAgent()
+  if (!userAgent) {
+    console.warn("[intake] auto geocode skipped: NOMINATIM_USER_AGENT is not configured")
+    return
+  }
+
+  const now = new Date().toISOString()
+  try {
+    const outcome = await geocodeBelgiumRawLine(params.rawLine, userAgent, {
+      streetName: params.normalized.street_name,
+      houseNumber: params.normalized.house_number,
+      box: params.normalized.box,
+      postalCode: params.normalized.postal_code,
+      municipality: params.normalized.municipality,
+      countryCode: params.normalized.country_code || "BE",
+    })
+
+    if (outcome.kind !== "ok") {
+      await supabase
+        .from("property_addresses")
+        .update({
+          geocode_status: outcome.kind === "no_result" ? "no_result" : "error",
+          geocode_error: "detail" in outcome ? outcome.detail.slice(0, 500) : "Automatic geocode failed.",
+          updated_at: now,
+        })
+        .eq("property_id", params.propertyId)
+      return
+    }
+
+    const { error: upErr } = await supabase
+      .from("property_addresses")
+      .update({
+        latitude: outcome.latitude,
+        longitude: outcome.longitude,
+        normalized_full_address: outcome.normalizedFullAddress,
+        street_name: outcome.streetName,
+        house_number: outcome.houseNumber,
+        postal_code: outcome.postalCode,
+        municipality: outcome.municipality,
+        region: outcome.region,
+        geocoded_at: now,
+        geocode_status: "ok",
+        geocode_error: null,
+        updated_at: now,
+      })
+      .eq("property_id", params.propertyId)
+
+    if (upErr) {
+      console.warn("[intake] auto geocode: update failed", upErr.message)
+      return
+    }
+
+    try {
+      await runAndPersistPropertyLocationEnrichment(supabase, params.propertyId, userAgent)
+    } catch (e) {
+      console.warn("[intake] auto location enrichment failed", e)
+    }
+  } catch (e) {
+    console.warn("[intake] auto geocode failed", e)
+  }
+}
+
 async function attachDocumentToProperty(
   supabase: SupabaseClient,
   params: {
@@ -322,7 +416,7 @@ export async function matchOrCreatePropertyFromDocument(
 
   const extractedTextLength = text.length
   const detectedDocumentType: IntakeDetectedDocumentType = text.trim().length
-    ? detectIntakeDocumentType(text)
+    ? detectIntakeDocumentType(text, params.filename)
     : "unknown"
 
   if (!text.trim()) {
@@ -496,6 +590,11 @@ Confidence: ${debugConfidence}`)
     created = true
     propertyAddressId = createdProperty.propertyAddressId
     console.info(`${logPrefix} created property=${propertyId} address=${propertyAddressId}`)
+    await geocodeAndEnrichNewProperty(supabase, {
+      propertyId,
+      rawLine: extractedAddressRaw ?? displayName,
+      normalized,
+    })
   }
 
   if (!propertyId) {
@@ -847,6 +946,21 @@ export async function linkIntakeUploadToManualProperty(
 
   if (!isValidPropertyUuid(resolvedPropertyId)) {
     return { ok: false, error: "Cannot attach document: invalid propertyId" }
+  }
+
+  if (newPropertyIdForRollback && resolvedPropertyId === newPropertyIdForRollback) {
+    await geocodeAndEnrichNewProperty(supabase, {
+      propertyId: resolvedPropertyId,
+      rawLine,
+      normalized: parsed ?? {
+        street_name: null,
+        house_number: null,
+        box: null,
+        postal_code: null,
+        municipality: null,
+        country_code: "BE",
+      },
+    })
   }
 
   const detected = (row.detected_document_type as IntakeDetectedDocumentType | null) ?? "unknown"

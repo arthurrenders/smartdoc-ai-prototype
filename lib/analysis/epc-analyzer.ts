@@ -75,7 +75,8 @@ export async function analyzeEPCWithAI(
     debugLog(parsed !== null ? JSON.stringify(parsed, null, 2) : "(parse failed, using empty coercion)")
     debugLog("=== END PARSED JSON ===")
 
-    const epcData = mergeEnergyDerivedEpcLetter(normalizeParsedEpcResponse(parsed))
+    const explicitLetter = extractExplicitEpcLetter(normalizedText)
+    const epcData = mergeEnergyDerivedEpcLetter(normalizeParsedEpcResponse(parsed), explicitLetter)
     debugLog("=== COERCED EPC DATA ===")
     debugLog(JSON.stringify(epcData, null, 2))
     debugLog("=== END COERCED EPC DATA ===")
@@ -173,8 +174,23 @@ export async function analyzeEPCWithAI(
   }
 }
 
-/** Prefer EPC class computed from kWh/m²/year; keep model letter only when energy is missing or invalid. */
-function mergeEnergyDerivedEpcLetter(data: EPCResponse): EPCResponse {
+/** Prefer a letter explicitly printed in the EPC; otherwise derive from kWh/m²/year when possible. */
+function extractExplicitEpcLetter(text: string): EPCResponse["epc_score_letter"] | null {
+  const match = text.match(
+    /\b(?:letterscore|letter\s*score|energielabel|energieklasse|epc\s*(?:label|class|klasse))\s*[:\-]?\s*(A\+|[A-F])\b/i
+  )
+  if (!match) return null
+  const compact = match[1].replace(/\s+/g, "").toUpperCase()
+  if (compact === "A+") return "A+"
+  if ("ABCDEF".includes(compact)) return compact as EPCResponse["epc_score_letter"]
+  return null
+}
+
+function mergeEnergyDerivedEpcLetter(
+  data: EPCResponse,
+  explicitLetter: EPCResponse["epc_score_letter"] | null
+): EPCResponse {
+  if (explicitLetter) return { ...data, epc_score_letter: explicitLetter }
   const derived = epcScoreLetterFromEnergyKwh(data.energy_consumption_kwh_m2_year ?? NaN)
   if (derived == null) return data
   return { ...data, epc_score_letter: derived }

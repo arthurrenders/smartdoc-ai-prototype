@@ -5,7 +5,13 @@ export type IntakeProcessingStatus =
   | "failed"
   | "needs_review"
 
-export type IntakeDetectedDocumentType = "epc" | "electricity" | "asbestos" | "unknown"
+export type IntakeDetectedDocumentType =
+  | "epc"
+  | "electricity"
+  | "asbestos"
+  | "soil_certificate"
+  | "urban_planning_info"
+  | "unknown"
 
 export type IntakeUploadRow = {
   id: string

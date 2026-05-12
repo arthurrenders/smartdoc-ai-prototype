@@ -6,6 +6,7 @@ import { uploadDocument } from "@/app/actions/upload-document"
 import { verifyDocumentAddress } from "@/app/actions/verify-document-address"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
 import { runAnalysis } from "@/app/actions/run-analysis"
+import { chooseActiveDocumentVersion } from "@/app/actions/set-active-document-version"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
 import { DocumentPreviewButton } from "@/components/property/DocumentPreviewButton"
 import {
@@ -78,6 +79,7 @@ type Document = {
   document_type_id: string | null
   storage_path: string
   status: string
+  is_active?: boolean | null
   created_at: string
   expected_property_id?: string | null
   expected_address?: string | null
@@ -110,6 +112,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   const [uploading, setUploading] = useState<string | null>(null)
   const [analyzing, setAnalyzing] = useState<string | null>(null)
   const [verifyingAddress, setVerifyingAddress] = useState<string | null>(null)
+  const [activatingDocument, setActivatingDocument] = useState<string | null>(null)
   const [driveImporting, setDriveImporting] = useState(false)
   const [feedbackByDocType, setFeedbackByDocType] = useState<Record<string, string>>({})
   const [driveFeedback, setDriveFeedback] = useState<string | null>(null)
@@ -169,6 +172,20 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     )
     if (asbestos && lower.includes("asbest")) return asbestos.id
 
+    const soil = documentTypes.find((t) => t.name === "SOIL_CERTIFICATE")
+    if (soil && (lower.includes("bodem") || lower.includes("soil") || lower.includes("ovam"))) return soil.id
+
+    const urban = documentTypes.find((t) => t.name === "URBAN_PLANNING_INFO")
+    if (
+      urban &&
+      (lower.includes("stedenbouw") ||
+        lower.includes("stedebouw") ||
+        lower.includes("urban") ||
+        lower.includes("vastgoedinformatie"))
+    ) {
+      return urban.id
+    }
+
     return documentTypes[0]?.id ?? null
   }
 
@@ -217,10 +234,16 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     afterLoadData?.()
   }
 
+  function getDocumentVersions(documentTypeId: string): Document[] {
+    return documents
+      .filter((d) => d.document_type_id === documentTypeId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }
+
   function getDocumentData(documentTypeId: string) {
     // Intake-linked PDFs get a real `document_type_id` in `attachDocumentToProperty`; pick the latest row per type
     // so verification rows match manual uploads (including re-uploads).
-    const candidates = documents.filter((d) => d.document_type_id === documentTypeId)
+    const candidates = getDocumentVersions(documentTypeId)
     if (!candidates.length) {
       return {
         status: "Missing",
@@ -228,7 +251,9 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
         analysisRun: null,
       }
     }
-    const doc = candidates.reduce((a, b) => {
+    const activeCandidates = candidates.filter((d) => d.is_active !== false)
+    const pool = activeCandidates.length ? activeCandidates : candidates
+    const doc = pool.reduce((a, b) => {
       const ta = new Date(a.created_at).getTime()
       const tb = new Date(b.created_at).getTime()
       return tb >= ta ? b : a
@@ -343,6 +368,35 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       setFeedbackByDocType((prev) => ({ ...prev, [documentTypeId]: msg }))
     } finally {
       setVerifyingAddress(null)
+    }
+  }
+
+  async function handleChooseActiveDocument(documentTypeId: string, documentId: string) {
+    setActivatingDocument(documentId)
+    setFeedbackByDocType((prev) => {
+      const next = { ...prev }
+      delete next[documentTypeId]
+      return next
+    })
+
+    try {
+      const result = await chooseActiveDocumentVersion({
+        propertyId,
+        documentId,
+        documentTypeId,
+      })
+      await loadData()
+      if (!result.ok) {
+        setFeedbackByDocType((prev) => ({
+          ...prev,
+          [documentTypeId]: result.error ?? "Kon actieve documentversie niet wijzigen.",
+        }))
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Kon actieve documentversie niet wijzigen."
+      setFeedbackByDocType((prev) => ({ ...prev, [documentTypeId]: msg }))
+    } finally {
+      setActivatingDocument(null)
     }
   }
 
@@ -490,6 +544,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       ) : (
         documentTypes.map((docType) => {
           const { status, document, analysisRun } = getDocumentData(docType.id)
+          const versions = getDocumentVersions(docType.id)
           const isUploading = uploading === docType.id
           const isNonAnalyzed = NON_ANALYZED_DOC_TYPE_SET.has(docType.name)
           /** Terminal runs no longer "busy" — avoids a frame where fresh data is `done` but `analyzing` is not cleared yet (after loadData, before finally). */
@@ -521,6 +576,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
             analysisRun.result_json &&
             !isAnalysisErrorPayload(analysisRun.result_json)
           const usedGroqFallback = Boolean(analysisRun?.model_name?.startsWith("groq:"))
+          const activeDocumentId = document?.id ?? versions.find((d) => d.is_active !== false)?.id ?? versions[0]?.id ?? ""
 
           return (
             <div
@@ -618,6 +674,44 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                   role="alert"
                 >
                   {rowFeedback}
+                </div>
+              )}
+
+              {versions.length > 1 && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-3 text-sm">
+                  <label
+                    htmlFor={`active-doc-${docType.id}`}
+                    className="block text-xs font-semibold uppercase tracking-wide text-blue-800"
+                  >
+                    Actieve documentversie
+                  </label>
+                  <select
+                    id={`active-doc-${docType.id}`}
+                    value={activeDocumentId}
+                    disabled={Boolean(activatingDocument)}
+                    onChange={(event) => {
+                      void handleChooseActiveDocument(docType.id, event.target.value)
+                    }}
+                    className="mt-1 w-full rounded-md border border-blue-200 bg-white px-2 py-1.5 text-sm text-blue-950 shadow-sm disabled:opacity-60"
+                  >
+                    {versions.map((version) => {
+                      const date = version.created_at
+                        ? new Date(version.created_at).toLocaleString("nl-BE", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })
+                        : "Onbekende datum"
+                      const statusLabel = version.is_active === false ? "uitgesloten" : "actief"
+                      return (
+                        <option key={version.id} value={version.id}>
+                          {date} · {statusLabel} · {version.id.slice(0, 8)}
+                        </option>
+                      )
+                    })}
+                  </select>
+                  <p className="mt-1 text-xs text-blue-700">
+                    Alleen de actieve versie telt mee voor status, export en samenvattingen.
+                  </p>
                 </div>
               )}
 

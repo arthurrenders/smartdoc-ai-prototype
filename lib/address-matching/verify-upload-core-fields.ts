@@ -24,7 +24,7 @@ function hasCoreTriple(row: {
   )
 }
 
-export type UploadAddressVerificationDbStatus = "match" | "mismatch" | "unknown"
+export type UploadAddressVerificationDbStatus = "match" | "possible_match" | "mismatch" | "unknown"
 
 /**
  * Upload-time check: street name, house number, and municipality must be identical
@@ -51,6 +51,31 @@ export function verifyUploadAddressCoreFields(
         "Verification is not available because the property address is missing street, house number, or city.",
       expectedAddress,
       extractedDocumentAddress,
+    }
+  }
+
+  if (
+    extracted &&
+    normalizeAddressCoreField(extracted.street_name) !== "" &&
+    normalizeAddressCoreField(extracted.house_number) !== "" &&
+    normalizeAddressCoreField(extracted.municipality) === ""
+  ) {
+    const streetOk =
+      normalizeAddressCoreField(extracted.street_name) ===
+      normalizeAddressCoreField(propertyRow.street_name)
+    const houseOk =
+      normalizeAddressCoreField(extracted.house_number) ===
+      normalizeAddressCoreField(propertyRow.house_number)
+
+    if (streetOk && houseOk) {
+      return {
+        status: "possible_match",
+        confidence: 0.68,
+        reason:
+          "The document states the same street and house number, but no municipality was found in the document.",
+        expectedAddress,
+        extractedDocumentAddress,
+      }
     }
   }
 

@@ -52,7 +52,7 @@ export async function bulkIntakeUpload(formData: FormData): Promise<{
       rawPaths[i]?.trim() ||
       (file.webkitRelativePath && file.webkitRelativePath.length > 0 ? file.webkitRelativePath : null)
 
-    if (file.type !== PDF_MIME) {
+    if (file.type !== PDF_MIME && !file.name.toLowerCase().endsWith(".pdf")) {
       results.push({
         filename: file.name,
         error: "Only PDF files are allowed.",

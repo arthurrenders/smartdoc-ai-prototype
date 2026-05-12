@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache"
 import { detectDocumentTypeFromPdfText, executeAnalysisRunPipeline } from "@/lib/analysis/execute-analysis-run"
 import { extractTextFromPDF, extractTextFromPDFFallback } from "@/lib/pdf/extractor"
 import type { IntakeDetectedDocumentType } from "@/lib/intake/types"
+import { setActiveDocumentVersion } from "@/lib/documents/active-version"
+import { NON_ANALYZED_DOCUMENT_TYPE_NAMES } from "@/lib/property-status"
 
 /**
  * Central place for “document belongs to property + analysis pipeline”.
@@ -22,6 +24,8 @@ import type { IntakeDetectedDocumentType } from "@/lib/intake/types"
 function documentTypeNameFromIntake(detected: IntakeDetectedDocumentType | null | undefined): string | null {
   if (!detected || detected === "unknown") return null
   if (detected === "electricity") return "ELECTRICAL"
+  if (detected === "soil_certificate") return "SOIL_CERTIFICATE"
+  if (detected === "urban_planning_info") return "URBAN_PLANNING_INFO"
   return detected.toUpperCase() as "EPC" | "ASBESTOS"
 }
 
@@ -50,13 +54,29 @@ function inferTypeIdFromFileName(
   if (electrical && lower.includes("electr")) return electrical.id
   const asbestos = rows.find((t) => t.name.toLowerCase().includes("asbestos"))
   if (asbestos && lower.includes("asbest")) return asbestos.id
+  const soil = rows.find((t) => t.name === "SOIL_CERTIFICATE")
+  if (soil && (lower.includes("bodem") || lower.includes("soil") || lower.includes("ovam"))) return soil.id
+  const urban = rows.find((t) => t.name === "URBAN_PLANNING_INFO")
+  if (
+    urban &&
+    (lower.includes("stedenbouw") ||
+      lower.includes("stedebouw") ||
+      lower.includes("urban") ||
+      lower.includes("vastgoedinformatie"))
+  ) {
+    return urban.id
+  }
   return null
 }
 
-function detectedKindToDocumentTypeName(kind: string): "EPC" | "ELECTRICAL" | "ASBESTOS" | null {
+function detectedKindToDocumentTypeName(
+  kind: string
+): "EPC" | "ELECTRICAL" | "ASBESTOS" | "SOIL_CERTIFICATE" | "URBAN_PLANNING_INFO" | null {
   if (kind === "epc") return "EPC"
   if (kind === "electrical") return "ELECTRICAL"
   if (kind === "asbestos") return "ASBESTOS"
+  if (kind === "soil_certificate") return "SOIL_CERTIFICATE"
+  if (kind === "urban_planning_info") return "URBAN_PLANNING_INFO"
   return null
 }
 
@@ -109,6 +129,19 @@ async function inferDocumentTypeIdFromPdfStorage(
 async function fallbackDefaultDocumentTypeId(supabase: SupabaseClient): Promise<string | null> {
   const { data } = await supabase.from("document_types").select("id").eq("name", "EPC").maybeSingle()
   return (data?.id as string) ?? null
+}
+
+async function resolveDocumentTypeNameById(
+  supabase: SupabaseClient,
+  typeId: string | null
+): Promise<string | null> {
+  if (!typeId) return null
+  const { data, error } = await supabase.from("document_types").select("name").eq("id", typeId).maybeSingle()
+  if (error) {
+    console.warn("[documents] attach: document type name lookup failed", error.message)
+    return null
+  }
+  return (data?.name as string | null) ?? null
 }
 
 export type AttachDocumentToPropertyParams = {
@@ -210,6 +243,17 @@ export async function attachDocumentToProperty(
     }
   }
 
+  if (typeId) {
+    const active = await setActiveDocumentVersion(supabase, {
+      propertyId: pid,
+      documentId,
+      documentTypeId: typeId,
+    })
+    if (!active.ok) {
+      console.warn("[documents] attach: failed to mark active document version", active.error)
+    }
+  }
+
   const { data: runs, error: runsErr } = await supabase
     .from("analysis_runs")
     .select("id, status, result_json, created_at")
@@ -242,7 +286,12 @@ export async function attachDocumentToProperty(
     return { ok: true }
   }
 
-  if (!params.triggerAnalysis) {
+  const documentTypeName = await resolveDocumentTypeNameById(supabase, typeId)
+  const shouldAutoCompleteUploadOnly = Boolean(
+    documentTypeName && (NON_ANALYZED_DOCUMENT_TYPE_NAMES as readonly string[]).includes(documentTypeName)
+  )
+
+  if (!params.triggerAnalysis && !shouldAutoCompleteUploadOnly) {
     revalidatePath(`/properties/${pid}`)
     return { ok: true }
   }

@@ -41,10 +41,11 @@ export async function getCalendarDates(): Promise<{
         date_on,
         source,
         properties ( display_name ),
-        documents ( id, document_types ( name ) )
+        documents!inner ( id, is_active, document_types ( name ) )
       `
       )
       .in("property_id", propertyIds)
+      .eq("documents.is_active", true)
       .gte("date_on", isoStart)
       .lte("date_on", isoEnd)
       .order("date_on", { ascending: true })

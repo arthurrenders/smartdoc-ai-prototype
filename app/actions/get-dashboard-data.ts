@@ -35,6 +35,7 @@ type DocumentWithRelations = {
   id: string
   property_id: string
   document_type_id: string | null
+  is_active?: boolean | null
   created_at?: string | null
   analysis_runs?: Array<{
     id: string
@@ -144,7 +145,7 @@ export async function getDashboardData(searchQuery?: string): Promise<DashboardD
     supabase
       .from("documents")
       .select(
-        "id, property_id, document_type_id, created_at, document_types(id, name), analysis_runs(id, status, result_json, created_at)"
+        "id, property_id, document_type_id, is_active, created_at, document_types(id, name), analysis_runs(id, status, result_json, created_at)"
       )
       .in("property_id", properties.map((p) => p.id))
       .order("created_at", { foreignTable: "analysis_runs", ascending: false }),

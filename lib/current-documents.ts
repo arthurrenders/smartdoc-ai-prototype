@@ -7,6 +7,7 @@
 export type DocumentWithTimestamp = {
   document_type_id: string | null
   created_at?: string | null
+  is_active?: boolean | null
   [key: string]: unknown
 }
 
@@ -25,7 +26,17 @@ export function getCurrentDocumentsByType<T extends DocumentWithTimestamp>(
     const existing = byType.get(typeId)
     const docTime = doc.created_at ? new Date(doc.created_at).getTime() : 0
     const existingTime = existing?.created_at ? new Date(existing.created_at).getTime() : 0
-    if (!existing || docTime > existingTime) {
+    const docActive = doc.is_active !== false
+    const existingActive = existing?.is_active !== false
+    if (!existing) {
+      byType.set(typeId, doc)
+      continue
+    }
+    if (docActive && !existingActive) {
+      byType.set(typeId, doc)
+      continue
+    }
+    if (docActive === existingActive && docTime > existingTime) {
       byType.set(typeId, doc)
     }
   }

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   FolderOpen,
   FolderInput,
+  Trash2,
 } from "lucide-react"
 
 import type { IntakeUploadRow, IntakeProcessingStatus } from "@/lib/intake/types"
@@ -25,6 +26,7 @@ import {
 import { IntakeManualPropertyForm } from "@/components/intake/IntakeManualPropertyForm"
 import { cn } from "@/lib/utils"
 import type { IntakePropertyOption } from "@/app/actions/get-intake-property-options"
+import { deleteIntakeUpload } from "@/app/actions/delete-intake-upload"
 
 /** Batch size per server round-trip to keep FormData and processing bounded for large folders. */
 const UPLOAD_CHUNK_SIZE = 30
@@ -87,6 +89,18 @@ function matchTierFromScore(score: number | null): string {
   return "Low"
 }
 
+function localStatusBadgeClass(status: LocalQueueRow["status"]): string {
+  switch (status) {
+    case "uploading":
+    case "processing":
+      return "border-amber-300/80 bg-amber-100 text-amber-900"
+    case "processed":
+      return "border-emerald-300/80 bg-emerald-50 text-emerald-900"
+    case "failed":
+      return "border-red-300/80 bg-red-50 text-red-900"
+  }
+}
+
 function canEnterPropertyManually(row: IntakeUploadRow, propId: string | null): boolean {
   if (propId) return false
   return row.processing_status === "needs_review" || row.processing_status === "failed"
@@ -117,6 +131,15 @@ type BulkIntakeClientProps = {
   propertyOptions: IntakePropertyOption[]
 }
 
+type LocalQueueRow = {
+  key: string
+  filename: string
+  relativePath: string | null
+  size: number
+  status: "uploading" | "processing" | "processed" | "failed"
+  message: string | null
+}
+
 export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: BulkIntakeClientProps) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -127,6 +150,8 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
   const [driveImporting, setDriveImporting] = useState(false)
   const [driveFeedback, setDriveFeedback] = useState<string | null>(null)
   const [manualFormIntakeId, setManualFormIntakeId] = useState<string | null>(null)
+  const [localQueueRows, setLocalQueueRows] = useState<LocalQueueRow[]>([])
+  const [deletingIntakeId, setDeletingIntakeId] = useState<string | null>(null)
   /** Per-tab session: only rows created after this ISO time (stored in sessionStorage). */
   const [sessionCutoffIso, setSessionCutoffIso] = useState<string | null>(null)
   const [showFullHistory, setShowFullHistory] = useState(false)
@@ -155,6 +180,41 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
     router.refresh()
   }, [router])
 
+  const updateLocalQueueRows = useCallback((keys: string[], patch: Partial<LocalQueueRow>) => {
+    const keySet = new Set(keys)
+    setLocalQueueRows((prev) =>
+      prev.map((row) => (keySet.has(row.key) ? { ...row, ...patch } : row))
+    )
+  }, [])
+
+  async function handleDeleteQueueRow(row: IntakeUploadRow) {
+    if (row.processing_status === "processing") {
+      setMessage({ type: "err", text: "This file is currently processing. Try again after it finishes." })
+      return
+    }
+    const linked = Boolean(row.matched_property_id || row.created_property_id || row.processing_status === "processed")
+    const ok = window.confirm(
+      linked
+        ? "Remove this row from the intake queue? The linked property document will stay in place."
+        : "Delete this intake upload? The queued file will be removed."
+    )
+    if (!ok) return
+
+    setDeletingIntakeId(row.id)
+    setMessage(null)
+    try {
+      const res = await deleteIntakeUpload({ intakeUploadId: row.id })
+      if (!res.ok) {
+        setMessage({ type: "err", text: res.error ?? "Could not delete intake upload." })
+        return
+      }
+      setMessage({ type: "ok", text: "Intake queue row deleted." })
+      router.refresh()
+    } finally {
+      setDeletingIntakeId(null)
+    }
+  }
+
   const handlePdfRows = useCallback(
     async (rowsIn: PdfFileWithPath[], options?: { skippedNonPdf?: number }) => {
       const rows = dedupePdfInputs(rowsIn.filter((r) => r.file.size > 0))
@@ -172,12 +232,24 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
 
       setMessage(null)
       setIsWorking(true)
+      const localRows: LocalQueueRow[] = rows.map(({ file, relativePath }, index) => ({
+        key: `${relativePath}\0${file.size}\0${file.lastModified}\0${index}`,
+        filename: file.name,
+        relativePath,
+        size: file.size,
+        status: "uploading",
+        message: "Uploading",
+      }))
+      setLocalQueueRows((prev) => [...localRows, ...prev])
       try {
         let totalOk = 0
         const errorParts: string[] = []
 
         for (let offset = 0; offset < rows.length; offset += UPLOAD_CHUNK_SIZE) {
           const chunk = rows.slice(offset, offset + UPLOAD_CHUNK_SIZE)
+          const localChunk = localRows.slice(offset, offset + UPLOAD_CHUNK_SIZE)
+          const localKeys = localChunk.map((row) => row.key)
+          updateLocalQueueRows(localKeys, { status: "uploading", message: "Uploading" })
           const formData = new FormData()
           for (const { file, relativePath } of chunk) {
             formData.append("files", file)
@@ -186,6 +258,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
 
           const res = await bulkIntakeUpload(formData)
           if (!res.ok && !res.results.some((r) => r.intakeId)) {
+            updateLocalQueueRows(localKeys, { status: "failed", message: res.error ?? "Upload failed" })
             setMessage({
               type: "err",
               text: res.error ?? "Upload failed.",
@@ -196,6 +269,16 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
 
           const errors = res.results.filter((r) => r.error)
           const okIds = res.results.map((r) => r.intakeId).filter(Boolean) as string[]
+          const okLocalKeys: string[] = []
+          res.results.forEach((result, idx) => {
+            const local = localChunk[idx]
+            if (!local) return
+            if (!result.error && result.intakeId) okLocalKeys.push(local.key)
+            updateLocalQueueRows([local.key], result.error
+              ? { status: "failed", message: result.error }
+              : { status: "processing", message: "Matching property" }
+            )
+          })
           totalOk += okIds.length
 
           for (const e of errors) {
@@ -205,10 +288,13 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           if (okIds.length) {
             const procRes = await processIntakeUploads(okIds)
             if (!procRes.ok) {
+              updateLocalQueueRows(okLocalKeys, { status: "failed", message: procRes.error ?? "Processing failed" })
               setMessage({
                 type: "err",
                 text: procRes.error ?? "Processing failed.",
               })
+            } else {
+              updateLocalQueueRows(okLocalKeys, { status: "processed", message: "Processed" })
             }
           }
         }
@@ -231,11 +317,12 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
         }
 
         router.refresh()
+        setLocalQueueRows((prev) => prev.filter((row) => row.status === "failed"))
       } finally {
         setIsWorking(false)
       }
     },
-    [router]
+    [router, updateLocalQueueRows]
   )
 
   const handleGoogleDriveClick = useCallback(async () => {
@@ -464,12 +551,62 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           </p>
         )}
 
-        {initialRows.length === 0 ? (
+        {localQueueRows.length > 0 && (
+          <div className="rounded-xl border border-brand-light/30 bg-brand-light/5 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-dark">Current upload</p>
+              <button
+                type="button"
+                onClick={() => setLocalQueueRows((prev) => prev.filter((row) => row.status !== "processed"))}
+                className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-brand-dark hover:underline"
+              >
+                Clear completed
+              </button>
+            </div>
+            <ul className="space-y-2">
+              {localQueueRows.map((row) => (
+                <li
+                  key={row.key}
+                  className="flex flex-col gap-2 rounded-lg border border-[hsl(var(--border))] bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 flex items-start gap-2">
+                    {row.status === "uploading" || row.status === "processing" ? (
+                      <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-brand-light" />
+                    ) : (
+                      <FileText className="mt-0.5 h-4 w-4 shrink-0 text-brand-light" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="break-all text-sm font-medium text-foreground">{row.filename}</p>
+                      {row.relativePath && row.relativePath !== row.filename && (
+                        <p className="mt-0.5 line-clamp-1 break-all text-xs text-muted-foreground">
+                          {row.relativePath}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      className={cn(
+                        "inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+                        localStatusBadgeClass(row.status)
+                      )}
+                    >
+                      {row.message ?? row.status}
+                    </span>
+                    <span className="text-xs tabular-nums text-muted-foreground">{formatFileSize(row.size)}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {initialRows.length === 0 && localQueueRows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[hsl(var(--border))] bg-muted/10 py-12 text-center text-sm text-muted-foreground">
             <FileText className="mx-auto h-10 w-10 opacity-40" />
             <p className="mt-3">No uploads yet. Add PDFs above to see them listed here.</p>
           </div>
-        ) : queueRows.length === 0 ? (
+        ) : queueRows.length === 0 && localQueueRows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[hsl(var(--border))] bg-muted/10 py-12 text-center text-sm text-muted-foreground">
             <FileText className="mx-auto h-10 w-10 opacity-40" />
             <p className="mt-3">No uploads in this session yet.</p>
@@ -481,9 +618,9 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
               Show all uploads
             </button>
           </div>
-        ) : (
+        ) : queueRows.length > 0 ? (
           <div className="overflow-x-auto rounded-xl border border-[hsl(var(--card-border))]">
-            <table className="w-full min-w-[1280px] text-left text-sm">
+            <table className="w-full min-w-[1480px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[hsl(var(--border))] bg-muted/30">
                   <th className="px-4 py-3 font-semibold text-brand-dark">File</th>
@@ -496,6 +633,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                   <th className="px-4 py-3 font-semibold text-brand-dark">Property</th>
                   <th className="min-w-[280px] px-4 py-3 font-semibold text-brand-dark">Review</th>
                   <th className="px-4 py-3 font-semibold text-brand-dark">Size</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -510,13 +648,13 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                         row.needs_manual_review && "bg-amber-50/60 dark:bg-amber-950/20"
                       )}
                     >
-                      <td className="max-w-[200px] px-4 py-3">
+                      <td className="min-w-[320px] max-w-[420px] px-4 py-3">
                         <div className="flex items-start gap-2">
                           <FileText className="mt-0.5 h-4 w-4 shrink-0 text-brand-light" />
                           <span className="break-all font-medium text-foreground">{row.filename}</span>
                         </div>
                       </td>
-                      <td className="max-w-[160px] px-4 py-3 text-xs text-muted-foreground">
+                      <td className="max-w-[220px] px-4 py-3 text-xs text-muted-foreground">
                         {row.source_relative_path?.trim() ? (
                           <span className="line-clamp-2 break-all" title={row.source_relative_path}>
                             {row.source_relative_path}
@@ -606,13 +744,33 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                       <td className="px-4 py-3 text-muted-foreground tabular-nums">
                         {formatFileSize(row.original_file_size)}
                       </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteQueueRow(row)}
+                          disabled={row.processing_status === "processing" || deletingIntakeId === row.id}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-white text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={`Delete ${row.filename} from intake queue`}
+                          title={
+                            row.processing_status === "processing"
+                              ? "Processing rows can be deleted after processing finishes"
+                              : "Delete intake queue row"
+                          }
+                        >
+                          {deletingIntakeId === row.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </button>
+                      </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
       </section>
     </div>
   )

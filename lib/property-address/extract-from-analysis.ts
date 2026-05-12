@@ -61,6 +61,109 @@ function isUnreliableAnalysisResult(r: AnalysisResult): boolean {
   return false
 }
 
+function cleanLabelValue(value: string | undefined): string | null {
+  const v = value?.replace(/^[:.\-\s]+/, "").replace(/\s+/g, " ").trim()
+  return v ? v : null
+}
+
+function readNextOrInlineValue(lines: string[], index: number, pattern: RegExp): string | null {
+  const inline = lines[index].match(pattern)
+  if (!inline) return null
+  const value = cleanLabelValue(inline[1])
+  if (value) return value
+  const next = lines[index + 1]?.trim()
+  return next && next.length > 1 ? next : null
+}
+
+function splitStreetHouse(value: string): {
+  street_name: string | null
+  house_number: string | null
+  box: string | null
+} {
+  const bus = value.match(/^(.+?)\s+(?:bus|box|busnummer)\s+([A-Za-z0-9-]+)$/i)
+  const beforeBus = bus ? bus[1].trim() : value.trim()
+  const box = bus?.[2]?.trim() ?? null
+  const num = beforeBus.match(/^(.+?)\s+(\d+[A-Za-z]?)$/i)
+  return {
+    street_name: (num ? num[1] : beforeBus).trim() || null,
+    house_number: num?.[2]?.trim() || null,
+    box,
+  }
+}
+
+/**
+ * Handles Belgian government-style PDFs that render addresses as labeled fields:
+ * "Straat", "Nummer", "Gemeente", "Postcode", or "Straat + nr.:".
+ */
+function extractBelgianAddressFromKeyValueFields(lines: string[]): ExtractedPropertyAddress | null {
+  let street: string | null = null
+  let house: string | null = null
+  let box: string | null = null
+  let postal: string | null = null
+  let municipality: string | null = null
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const streetNr = readNextOrInlineValue(lines, i, /^\s*Straat\s*\+\s*nr\.?\s*:?\s*(.*)$/i)
+    if (streetNr) {
+      const parsed = splitStreetHouse(streetNr)
+      street = parsed.street_name ?? street
+      house = parsed.house_number ?? house
+      box = parsed.box ?? box
+      continue
+    }
+
+    const streetOnly = readNextOrInlineValue(lines, i, /^\s*Straat\s*:?\s*(.*)$/i)
+    if (streetOnly) {
+      street = streetOnly
+      continue
+    }
+
+    const number = readNextOrInlineValue(lines, i, /^\s*Nummer\s*:?\s*(.*)$/i)
+    if (number) {
+      const parsed = number.match(/^(\d+[A-Za-z]?)(?:\s+(?:bus|box)\s+([A-Za-z0-9-]+))?$/i)
+      house = parsed?.[1]?.trim() ?? number
+      box = parsed?.[2]?.trim() ?? box
+      continue
+    }
+
+    const city = readNextOrInlineValue(lines, i, /^\s*Gemeente\s*:?\s*(.*)$/i)
+    if (city) {
+      municipality = city
+      continue
+    }
+
+    const post = line.match(/^\s*Postcode\s*:?\s*([1-9]\d{3})\b/i)
+    if (post) {
+      postal = post[1]
+      continue
+    }
+  }
+
+  if (street && !house) {
+    const parsed = splitStreetHouse(street)
+    street = parsed.street_name
+    house = parsed.house_number
+    box = parsed.box ?? box
+  }
+
+  if (!street || !house) return null
+
+  const streetPart = [street, house, box ? `bus ${box}` : null].filter(Boolean).join(" ")
+  const tail = [postal, municipality].filter(Boolean).join(" ")
+  return {
+    raw_line1: (tail ? `${streetPart}, ${tail}` : streetPart).slice(0, 500),
+    street_name: street,
+    house_number: house,
+    box,
+    postal_code: postal,
+    municipality,
+    region: null,
+    confidence: postal && municipality ? 0.86 : municipality ? 0.83 : 0.8,
+    extraction_source: "keyword_context",
+  }
+}
+
 /**
  * Belgium-first line heuristic: one line matching "… 3000 Gemeente" with unique match in the excerpt.
  */
@@ -70,6 +173,9 @@ export function extractBelgianAddressFromPdfText(text: string): ExtractedPropert
     .split(/\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 8)
+
+  const keyValueHit = extractBelgianAddressFromKeyValueFields(lines)
+  if (keyValueHit) return keyValueHit
 
   // First-pass signal: when a line explicitly labels an address, trust it before generic heuristics.
   // Examples: "adres: parkstraat 88" / "adress: parkstraat 88"

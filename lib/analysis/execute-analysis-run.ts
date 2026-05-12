@@ -18,7 +18,15 @@ import { syncPropertyAddressFromDocumentAnalysis } from "@/lib/property-address/
 import { syncPropertyMetadataFromAnalysis } from "@/lib/property-metadata/sync-from-analysis"
 import { BudgetExceededError } from "@/lib/ai/usage-budget"
 
-export function detectDocumentTypeFromPdfText(text: string): "epc" | "electrical" | "asbestos" | "unknown" {
+export type DetectedDocumentKind =
+  | "epc"
+  | "electrical"
+  | "asbestos"
+  | "soil_certificate"
+  | "urban_planning_info"
+  | "unknown"
+
+export function detectDocumentTypeFromPdfText(text: string): DetectedDocumentKind {
   const t = text.toLowerCase()
 
   if (
@@ -53,11 +61,30 @@ export function detectDocumentTypeFromPdfText(text: string): "epc" | "electrical
     return "asbestos"
   }
 
+  if (
+    t.includes("bodemattest") ||
+    t.includes("ovam") ||
+    t.includes("bodeminformatie") ||
+    t.includes("grondinformatieregister")
+  ) {
+    return "soil_certificate"
+  }
+
+  if (
+    t.includes("stedenbouwkundige inlichtingen") ||
+    t.includes("stedenbouwkundig uittreksel") ||
+    t.includes("vastgoedinformatie") ||
+    t.includes("omgevingsvergunning") ||
+    t.includes("stedenbouwkundige voorschriften")
+  ) {
+    return "urban_planning_info"
+  }
+
   return "unknown"
 }
 
 /** User-facing label for what the PDF text suggests (keyword detector). */
-function humanLabelForDetectedType(detected: "epc" | "electrical" | "asbestos"): string {
+function humanLabelForDetectedType(detected: Exclude<DetectedDocumentKind, "unknown">): string {
   switch (detected) {
     case "epc":
       return "an EPC (energy performance) certificate"
@@ -65,6 +92,10 @@ function humanLabelForDetectedType(detected: "epc" | "electrical" | "asbestos"):
       return "an electrical inspection / AREI document"
     case "asbestos":
       return "an asbestos certificate"
+    case "soil_certificate":
+      return "a soil certificate / bodemattest"
+    case "urban_planning_info":
+      return "an urban-planning information document"
   }
 }
 
@@ -96,6 +127,42 @@ function notRecognizedAsExpectedDocumentMessage(
     summary: `This document type was not recognized as ${expected} document.`,
     details: `The PDF text did not match the usual keywords for ${expectedSlotLabel(expectedDbName)}. Check that you uploaded the correct file, or try a text-based PDF export.`,
   }
+}
+
+function normalizeLooseText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function extractUrbanPlanningMetadata(text: string): Partial<AnalysisResult> {
+  const normalized = normalizeLooseText(text)
+  const out: Partial<AnalysisResult> = {}
+
+  const areaMatch = normalized.match(
+    /\b(?:bewoonbare oppervlakte|woonoppervlakte|bruto vloeroppervlakte|netto vloeroppervlakte|vloeroppervlakte)\D{0,40}(\d{2,5}(?:[,.]\d+)?)\s*(?:m2|m²|vierkante meter)\b/i
+  )
+  if (areaMatch) {
+    const n = Number(areaMatch[1].replace(",", "."))
+    if (Number.isFinite(n) && n > 0 && n < 100_000) {
+      out.living_area_m2 = n
+    }
+  }
+
+  if (/\b(appartement|flat|studio)\b/.test(normalized)) {
+    out.dwelling_type = "apartment"
+  } else if (/\b(eengezinswoning|woning|huis|rijwoning|halfopen bebouwing|open bebouwing)\b/.test(normalized)) {
+    out.dwelling_type = "house"
+  } else if (/\b(bouwgrond|perceel grond|grond)\b/.test(normalized)) {
+    out.dwelling_type = "land"
+  } else if (/\b(handelspand|kantoor|winkel|commercieel)\b/.test(normalized)) {
+    out.dwelling_type = "commercial"
+  }
+
+  return out
 }
 
 export type ExecuteAnalysisRunResult =
@@ -364,11 +431,16 @@ export async function executeAnalysisRunPipeline(
       // Dutch result so the UI shows "groen — opgeladen", and set confidence
       // high enough to skip the LLM fallback below (saves Gemini tokens).
       modelName = ANALYSIS_MODEL_RULE_BASED
+      const metadata =
+        documentTypeName === "URBAN_PLANNING_INFO"
+          ? extractUrbanPlanningMetadata(extractedText)
+          : {}
       result = {
         status: "green" as const,
         summary: "Document opgeladen — geen automatische analyse beschikbaar.",
         flags: [],
         confidence: 1,
+        ...metadata,
       }
     } else {
       modelName = ANALYSIS_MODEL_RULE_BASED

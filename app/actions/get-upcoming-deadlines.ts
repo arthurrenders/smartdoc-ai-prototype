@@ -36,10 +36,11 @@ export async function getUpcomingDeadlines(limit = 20): Promise<{
         date_type,
         date_on,
         properties ( display_name ),
-        documents ( document_types ( name ) )
+        documents!inner ( is_active, document_types ( name ) )
       `
       )
       .in("property_id", propertyIds)
+      .eq("documents.is_active", true)
       .gte("date_on", today)
       .order("date_on", { ascending: true })
       .limit(limit)
