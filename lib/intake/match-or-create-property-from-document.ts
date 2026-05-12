@@ -268,6 +268,7 @@ async function insertDocumentAndAnalysis(
     propertyId: pid,
     intakeDetectedType: params.intakeDetectedDocumentType ?? null,
     sourceFileName: params.sourceFileName ?? null,
+    uploadOnlyInlineComplete: true,
   })
   if (!attach.ok) {
     console.error("[intake] attachDocumentToProperty after insert:", attach.error)

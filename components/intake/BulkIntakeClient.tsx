@@ -169,6 +169,27 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
     }
   }, [])
 
+  // Auto-recover queue rows stranded by a previous tab / timeout. processIntakeUploads([]) is
+  // a no-op when nothing is stuck, otherwise it resets >2-minute "processing" rows back to
+  // "uploaded" and drains the queue. Runs once per mount.
+  const recoveryAttemptedRef = useRef(false)
+  useEffect(() => {
+    if (recoveryAttemptedRef.current) return
+    const hasStuck = initialRows.some(
+      (r) => r.processing_status === "processing" || r.processing_status === "uploaded"
+    )
+    if (!hasStuck) return
+    recoveryAttemptedRef.current = true
+    void (async () => {
+      try {
+        const res = await processIntakeUploads([])
+        if (res.ok) router.refresh()
+      } catch {
+        /* silent — manual upload flow still works */
+      }
+    })()
+  }, [initialRows, router])
+
   const queueRows = useMemo(() => {
     if (showFullHistory || !sessionCutoffIso) return initialRows
     const t = Date.parse(sessionCutoffIso)

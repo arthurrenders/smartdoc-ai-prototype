@@ -75,13 +75,34 @@ function readNextOrInlineValue(lines: string[], index: number, pattern: RegExp):
   return next && next.length > 1 ? next : null
 }
 
+/**
+ * Strip address-label prefixes like "Adres", "Address", "ADRES INSTALLATIE", "Adres gebouw",
+ * "Adres van het pand", and trailing punctuation (commas, periods, semicolons, colons).
+ * Belgian government / inspection PDFs often render the address as
+ * "ADRES INSTALLATIE: Blijde Inkomststraat 150, 3000 Leuven" or
+ * "Adres Blijde Inkomststraat 150, 3000 Leuven" — both should reduce to the bare street+number form.
+ */
+function stripAddressLabelNoise(value: string): string {
+  let v = value.trim()
+  // Strip leading address-label words plus any descriptor words ("installatie", "gebouw", "pand",
+  // "van het pand", "object", "subject"), with an optional trailing colon.
+  v = v.replace(
+    /^(?:adres|address|adress|adresse)(?:\s+(?:van\s+het\s+|van\s+|du\s+|de\s+)?(?:installatie|gebouw|pand|object|subject|bien|inspectie|onderzoek))?\s*[:\-]?\s*/i,
+    ""
+  )
+  // Trim trailing punctuation that would block the "street + number" tail regex.
+  v = v.replace(/[\s,;:.]+$/g, "")
+  return v.trim()
+}
+
 function splitStreetHouse(value: string): {
   street_name: string | null
   house_number: string | null
   box: string | null
 } {
-  const bus = value.match(/^(.+?)\s+(?:bus|box|busnummer)\s+([A-Za-z0-9-]+)$/i)
-  const beforeBus = bus ? bus[1].trim() : value.trim()
+  const cleaned = stripAddressLabelNoise(value)
+  const bus = cleaned.match(/^(.+?)\s+(?:bus|box|busnummer)\s+([A-Za-z0-9-]+)$/i)
+  const beforeBus = bus ? bus[1].trim() : cleaned
   const box = bus?.[2]?.trim() ?? null
   const num = beforeBus.match(/^(.+?)\s+(\d+[A-Za-z]?)$/i)
   return {
@@ -133,10 +154,20 @@ function extractBelgianAddressFromKeyValueFields(lines: string[]): ExtractedProp
       continue
     }
 
-    const post = line.match(/^\s*Postcode\s*:?\s*([1-9]\d{3})\b/i)
-    if (post) {
-      postal = post[1]
-      continue
+    // Belgian EPCs print the postcode under "Postnummer", not "Postcode". Accept both
+    // (plus "Postnr." / "Postal code") so EPC key-value tables produce a complete address.
+    // Use the inline-or-next-line reader so "Postnummer" alone on one line with "3000" on the next still resolves.
+    const postRaw = readNextOrInlineValue(
+      lines,
+      i,
+      /^\s*(?:Postcode|Postnummer|Postnr\.?|Postal\s*code)\s*:?\s*(.*)$/i
+    )
+    if (postRaw) {
+      const m = postRaw.match(/\b([1-9]\d{3})\b/)
+      if (m) {
+        postal = m[1]
+        continue
+      }
     }
   }
 
@@ -178,9 +209,13 @@ export function extractBelgianAddressFromPdfText(text: string): ExtractedPropert
   if (keyValueHit) return keyValueHit
 
   // First-pass signal: when a line explicitly labels an address, trust it before generic heuristics.
-  // Examples: "adres: parkstraat 88" / "adress: parkstraat 88"
+  // Examples: "adres: parkstraat 88" / "adress: parkstraat 88" /
+  // "Adres installatie: Blijde Inkomststraat 150, 3000 Leuven" /
+  // "Adres gebouw: …" / "Adres van het pand: …"
   for (const line of lines) {
-    const labeled = line.match(/^[\"'“”]?(?:adres|address|adress)[\"'“”]?\s*:\s*[\"'“”]?(.+?)[\"'“”]?$/i)
+    const labeled = line.match(
+      /^[\"'“”]?(?:adres|address|adress|adresse)(?:\s+(?:van\s+het\s+|van\s+|du\s+|de\s+)?(?:installatie|gebouw|pand|object|subject|bien|inspectie|onderzoek))?[\"'“”]?\s*:\s*[\"'“”]?(.+?)[\"'“”]?$/i
+    )
     if (!labeled) continue
     const candidate = labeled[1]?.trim() ?? ""
     if (!candidate) continue
@@ -229,7 +264,10 @@ export function extractBelgianAddressFromPdfText(text: string): ExtractedPropert
   for (const line of lines) {
     const m = line.match(/^(.+?)\s+([1-9]\d{3})\s+([A-Za-zÀ-ÿ0-9](?:[A-Za-zÀ-ÿ0-9\s\-'.]+[A-Za-zÀ-ÿ0-9])?)$/i)
     if (!m) continue
-    const streetPart = m[1].trim().replace(/\s+/g, " ")
+    // Reports like "ADRES INSTALLATIE: Blijde Inkomststraat 150, 3000 Leuven" and
+    // "Adres Blijde Inkomststraat 150, 3000 Leuven" leave label words + a trailing comma
+    // in streetPart, which then blocks the "<street> <number>" tail regex.
+    const streetPart = stripAddressLabelNoise(m[1]).replace(/\s+/g, " ")
     const postal = m[2]
     const municipality = m[3].trim().replace(/\s+/g, " ")
     if (streetPart.length < 3 || municipality.length < 2) continue

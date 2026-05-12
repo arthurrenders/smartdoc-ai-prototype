@@ -1,5 +1,6 @@
 import type { ExtractedPropertyAddress, PropertyAddressRecord } from "@/lib/property-address/types"
 import { buildCanonicalExpectedAddress } from "./expected-address"
+import { canonicalStreetForm, streetSimilarity } from "@/lib/intake/property-address-match"
 
 /** Case-insensitive, trims whitespace, strips combining marks for stable comparison. */
 export function normalizeAddressCoreField(s: string | null | undefined): string {
@@ -9,6 +10,44 @@ export function normalizeAddressCoreField(s: string | null | undefined): string 
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
+}
+
+/**
+ * Punctuation-insensitive variant: `Blijde-Inkomststraat` and `Blijde Inkomststraat` collapse to the
+ * same key. Lets PDF extraction quirks (hyphen vs space, stray dots) stop causing false mismatches
+ * on the property page's "Adres controleren" button.
+ */
+function normalizeAddressCoreFieldStrict(s: string | null | undefined): string {
+  return normalizeAddressCoreField(s).replace(/[^a-z0-9]+/g, "")
+}
+
+/**
+ * Two strings compare equal if they match exactly after diacritic stripping AND after
+ * punctuation/whitespace collapse, OR their canonical street similarity is high.
+ * Mirrors the matcher used during intake so verification is at least as forgiving.
+ */
+function streetFieldsEquivalent(a: string | null | undefined, b: string | null | undefined): boolean {
+  const na = normalizeAddressCoreField(a)
+  const nb = normalizeAddressCoreField(b)
+  if (!na || !nb) return false
+  if (na === nb) return true
+  if (normalizeAddressCoreFieldStrict(a) === normalizeAddressCoreFieldStrict(b)) return true
+  return streetSimilarity(canonicalStreetForm(a), canonicalStreetForm(b)) >= 0.9
+}
+
+function municipalityFieldsEquivalent(a: string | null | undefined, b: string | null | undefined): boolean {
+  const na = normalizeAddressCoreField(a)
+  const nb = normalizeAddressCoreField(b)
+  if (!na || !nb) return false
+  if (na === nb) return true
+  if (normalizeAddressCoreFieldStrict(a) === normalizeAddressCoreFieldStrict(b)) return true
+  // Sub-municipality / parent municipality tolerance (e.g. "Heverlee" ⊂ "Leuven Heverlee").
+  if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return true
+  return false
+}
+
+function houseNumberFieldsEquivalent(a: string | null | undefined, b: string | null | undefined): boolean {
+  return normalizeAddressCoreFieldStrict(a) === normalizeAddressCoreFieldStrict(b) && normalizeAddressCoreFieldStrict(a) !== ""
 }
 
 function hasCoreTriple(row: {
@@ -60,12 +99,8 @@ export function verifyUploadAddressCoreFields(
     normalizeAddressCoreField(extracted.house_number) !== "" &&
     normalizeAddressCoreField(extracted.municipality) === ""
   ) {
-    const streetOk =
-      normalizeAddressCoreField(extracted.street_name) ===
-      normalizeAddressCoreField(propertyRow.street_name)
-    const houseOk =
-      normalizeAddressCoreField(extracted.house_number) ===
-      normalizeAddressCoreField(propertyRow.house_number)
+    const streetOk = streetFieldsEquivalent(extracted.street_name, propertyRow.street_name)
+    const houseOk = houseNumberFieldsEquivalent(extracted.house_number, propertyRow.house_number)
 
     if (streetOk && houseOk) {
       return {
@@ -89,15 +124,9 @@ export function verifyUploadAddressCoreFields(
     }
   }
 
-  const streetOk =
-    normalizeAddressCoreField(extracted.street_name) ===
-    normalizeAddressCoreField(propertyRow.street_name)
-  const houseOk =
-    normalizeAddressCoreField(extracted.house_number) ===
-    normalizeAddressCoreField(propertyRow.house_number)
-  const cityOk =
-    normalizeAddressCoreField(extracted.municipality) ===
-    normalizeAddressCoreField(propertyRow.municipality)
+  const streetOk = streetFieldsEquivalent(extracted.street_name, propertyRow.street_name)
+  const houseOk = houseNumberFieldsEquivalent(extracted.house_number, propertyRow.house_number)
+  const cityOk = municipalityFieldsEquivalent(extracted.municipality, propertyRow.municipality)
 
   if (streetOk && houseOk && cityOk) {
     return {

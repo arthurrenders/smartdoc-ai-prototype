@@ -157,6 +157,13 @@ export type AttachDocumentToPropertyParams = {
    * via `runAnalysis`. Bulk intake and single-file uploads should leave this off.
    */
   triggerAnalysis?: boolean
+  /**
+   * Intake calls this helper inside its per-file loop. For SOIL_CERTIFICATE / URBAN_PLANNING_INFO
+   * the helper would normally run the full pipeline inline (re-download PDF, re-extract text, etc.),
+   * which is wasted work on intake and pushes large batches past the function timeout.
+   * Pass `true` to short-circuit: the helper writes the same benign green analysis result directly.
+   */
+  uploadOnlyInlineComplete?: boolean
 }
 
 /**
@@ -290,6 +297,36 @@ export async function attachDocumentToProperty(
   const shouldAutoCompleteUploadOnly = Boolean(
     documentTypeName && (NON_ANALYZED_DOCUMENT_TYPE_NAMES as readonly string[]).includes(documentTypeName)
   )
+
+  // Intake path for upload-only types: write the benign green result inline so the per-file loop
+  // does not pay for another PDF download + text extraction. Without this, batches of bodemattest /
+  // stedenbouwkundige documents push the server action past its function timeout and the intake
+  // row stays stuck on processing_status = 'processing'.
+  if (params.uploadOnlyInlineComplete && shouldAutoCompleteUploadOnly && analysisRunId) {
+    const { error: shortCircuitErr } = await supabase
+      .from("analysis_runs")
+      .update({
+        status: "done",
+        result_json: {
+          status: "green",
+          summary: "Document opgeladen — geen automatische analyse beschikbaar.",
+          flags: [],
+          confidence: 1,
+        },
+        model_name: "rule-based",
+        prompt_version: null,
+      })
+      .eq("id", analysisRunId)
+    if (shortCircuitErr) {
+      console.warn(
+        "[documents] attach: inline upload-only completion failed; falling back to full pipeline",
+        shortCircuitErr.message
+      )
+    } else {
+      revalidatePath(`/properties/${pid}`)
+      return { ok: true }
+    }
+  }
 
   if (!params.triggerAnalysis && !shouldAutoCompleteUploadOnly) {
     revalidatePath(`/properties/${pid}`)

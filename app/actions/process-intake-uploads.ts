@@ -77,15 +77,43 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
   ok: boolean
   error?: string
 }> {
-  if (!uploadIds.length) {
-    return { ok: true }
-  }
-
   try {
     const supabase = createServerClient()
     const userId = await resolveOwnerUserId(supabase)
 
-    for (const id of uploadIds) {
+    // Safety net: a previous server action run may have set rows to "processing" and then
+    // hit the function timeout (especially on batches of SOIL_CERTIFICATE / URBAN_PLANNING_INFO,
+    // which used to run the full analysis pipeline inline). Re-queue any of this user's rows that
+    // have been stuck on "processing" for over 2 minutes so this run picks them up again.
+    const stuckCutoffIso = new Date(Date.now() - 2 * 60_000).toISOString()
+    const { error: resetErr } = await supabase
+      .from("intake_uploads")
+      .update({ processing_status: "uploaded" })
+      .eq("user_id", userId)
+      .eq("processing_status", "processing")
+      .lt("created_at", stuckCutoffIso)
+    if (resetErr) {
+      console.warn("[intake] process: stuck row reset failed", resetErr.message)
+    }
+
+    // Pick up any other rows that are still in "uploaded" state — e.g. ones we just reset above,
+    // or ones from a previous browser tab where the upload succeeded but processing was cut short.
+    const { data: pendingRows, error: pendingErr } = await supabase
+      .from("intake_uploads")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("processing_status", "uploaded")
+    if (pendingErr) {
+      console.warn("[intake] process: pending row scan failed", pendingErr.message)
+    }
+    const pendingIds = (pendingRows ?? []).map((r) => r.id as string)
+    const allIds = Array.from(new Set([...uploadIds, ...pendingIds]))
+
+    if (!allIds.length) {
+      return { ok: true }
+    }
+
+    for (const id of allIds) {
       const { data: row, error: fetchErr } = await supabase
         .from("intake_uploads")
         .select("id, user_id, processing_status, filename, storage_path")
