@@ -176,7 +176,10 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
   useEffect(() => {
     if (recoveryAttemptedRef.current) return
     const hasStuck = initialRows.some(
-      (r) => r.processing_status === "processing" || r.processing_status === "uploaded"
+      (r) =>
+        r.processing_status === "processing" ||
+        r.processing_status === "uploaded" ||
+        r.processing_status === "needs_review"
     )
     if (!hasStuck) return
     recoveryAttemptedRef.current = true

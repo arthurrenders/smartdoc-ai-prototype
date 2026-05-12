@@ -11,6 +11,7 @@ import {
   fetchAllPropertyAddressesForUser,
   findUniquePropertyAddressMatch,
   findUniqueRawLineTextMatch,
+  normStr,
   scoreForMatchTier,
   parsePartialAddressFromText,
   type DbAddressRow,
@@ -103,6 +104,25 @@ export function normalizeExtractedAddress(
 }
 
 function detectIntakeDocumentType(text: string, filename = ""): IntakeDetectedDocumentType {
+  const f = filename.toLowerCase()
+  if (
+    f.includes("bodemattest") ||
+    f.includes("ovam") ||
+    f.includes("bodeminformatie") ||
+    f.includes("grondinformatieregister")
+  ) {
+    return "soil_certificate"
+  }
+  if (
+    f.includes("stedenbouwkundige inlichtingen") ||
+    f.includes("stedenbouwkundig uittreksel") ||
+    f.includes("stedenbouw") ||
+    f.includes("stedebouw") ||
+    f.includes("vastgoedinformatie") ||
+    f.includes("omgevingsvergunning")
+  ) {
+    return "urban_planning_info"
+  }
   const t = `${filename}\n${text.slice(0, 12_000)}`.toLowerCase()
   if (t.includes("energieprestatie") || /\bepc\b/.test(t) || t.includes("energieprestatiecertificaat")) {
     return "epc"
@@ -143,11 +163,66 @@ function detectIntakeDocumentType(text: string, filename = ""): IntakeDetectedDo
     t.includes("stedenbouwkundige inlichtingen") ||
     t.includes("stedenbouwkundig uittreksel") ||
     t.includes("stedenbouw") ||
+    t.includes("stedebouw") ||
     t.includes("vastgoedinformatie") ||
     t.includes("omgevingsvergunning")
   ) {
     return "urban_planning_info"
   }
+  return "unknown"
+}
+
+function isUploadOnlyIntakeDocumentType(type: IntakeDetectedDocumentType): boolean {
+  return type === "soil_certificate" || type === "urban_planning_info"
+}
+
+function blankNormalizedAddress(): NormalizedAddressFields {
+  return {
+    street_name: null,
+    house_number: null,
+    box: null,
+    postal_code: null,
+    municipality: null,
+    country_code: "BE",
+  }
+}
+
+function sourceContextParts(params: { filename: string; sourceRelativePath?: string | null }): string[] {
+  const raw = [params.sourceRelativePath, params.filename]
+    .filter((v): v is string => Boolean(v && v.trim()))
+    .map((v) => v.replace(/\\/g, "/"))
+  const parts: string[] = []
+  for (const value of raw) {
+    parts.push(value)
+    for (const segment of value.split("/")) {
+      parts.push(segment)
+    }
+  }
+  const cleaned = parts
+    .map((part) =>
+      part
+        .replace(/\.pdf$/i, "")
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+    )
+    .filter((part) => part.length >= 3)
+
+  return Array.from(new Set(cleaned))
+}
+
+type SourceContextPropertyMatch = {
+  propertyId: string
+  propertyAddressId: string | null
+  tier: AddressMatchTier
+}
+
+function documentTypeNameToIntakeType(name: string | null | undefined): IntakeDetectedDocumentType {
+  if (name === "EPC") return "epc"
+  if (name === "ELECTRICAL") return "electricity"
+  if (name === "ASBESTOS") return "asbestos"
+  if (name === "SOIL_CERTIFICATE") return "soil_certificate"
+  if (name === "URBAN_PLANNING_INFO") return "urban_planning_info"
   return "unknown"
 }
 
@@ -445,6 +520,230 @@ async function attachDocumentToProperty(
   return commitIntakePdfToProperty(supabase, params)
 }
 
+async function findPropertyFromSourceContext(
+  supabase: SupabaseClient,
+  params: {
+    userId: string
+    filename: string
+    sourceRelativePath?: string | null
+    addressRows: DbAddressRow[]
+  }
+): Promise<SourceContextPropertyMatch | null> {
+  const parts = sourceContextParts({
+    filename: params.filename,
+    sourceRelativePath: params.sourceRelativePath,
+  })
+  if (!parts.length) return null
+
+  for (const part of parts) {
+    const parsed = parsePartialAddressFromText(part)
+    if (!parsed?.street_name || !parsed.house_number) continue
+    const match = findUniquePropertyAddressMatch(parsed, params.addressRows)
+    if (match.kind === "linked") {
+      return {
+        propertyId: match.row.property_id,
+        propertyAddressId: match.row.id,
+        tier: match.tier,
+      }
+    }
+    if (match.kind === "ambiguous") return null
+  }
+
+  const combined = parts.join(" | ")
+  const rawMatch = findUniqueRawLineTextMatch(combined, params.addressRows)
+  if (rawMatch.kind === "linked") {
+    return {
+      propertyId: rawMatch.row.property_id,
+      propertyAddressId: rawMatch.row.id,
+      tier: rawMatch.tier,
+    }
+  }
+  if (rawMatch.kind === "ambiguous") return null
+
+  const { data: properties, error } = await supabase
+    .from("properties")
+    .select("id, display_name")
+    .eq("user_id", params.userId)
+
+  if (error || !properties?.length) {
+    if (error) console.warn("[intake] source context property lookup failed", error.message)
+    return null
+  }
+
+  const normalizedParts = parts
+    .map((part) => normStr(part))
+    .filter((part) => part.length >= 4)
+  const matchingPropertyIds = new Set<string>()
+
+  for (const property of properties as Array<{ id: string; display_name?: string | null }>) {
+    const displayName = normStr(property.display_name)
+    if (displayName.length < 4) continue
+    const matched = normalizedParts.some(
+      (part) =>
+        part === displayName ||
+        (displayName.length >= 8 && part.includes(displayName)) ||
+        (part.length >= 8 && displayName.includes(part))
+    )
+    if (matched) matchingPropertyIds.add(property.id)
+  }
+
+  if (matchingPropertyIds.size !== 1) return null
+  const [propertyId] = Array.from(matchingPropertyIds)
+  const addressRow = params.addressRows.find((row) => row.property_id === propertyId) ?? null
+  return {
+    propertyId,
+    propertyAddressId: addressRow?.id ?? null,
+    tier: "strong",
+  }
+}
+
+async function commitIntakeToExistingProperty(
+  supabase: SupabaseClient,
+  params: {
+    intakeUploadId: string
+    storagePath: string
+    filename: string
+    propertyId: string
+    propertyAddressId: string | null
+    intakeDetectedDocumentType: IntakeDetectedDocumentType
+    normalized: NormalizedAddressFields
+    extractedAddressRaw: string | null
+    extractedTextLength: number
+    matchTier: AddressMatchTier | null
+    confidenceScore: number
+    addressMatchPrefill?: {
+      extractedAddress: string | null
+      expectedAddress: string | null
+      confidence: number
+      reason: string
+    } | null
+  }
+): Promise<MatchOrCreatePropertyResult> {
+  const copyRes = await copyIntakeToPropertyStorage(supabase, {
+    sourcePath: params.storagePath,
+    propertyId: params.propertyId,
+    intakeUploadId: params.intakeUploadId,
+    filename: params.filename,
+  })
+
+  if ("error" in copyRes) {
+    return {
+      outcome: "failed",
+      reason: `storage: ${copyRes.error}`,
+      extractedTextLength: params.extractedTextLength,
+      detectedDocumentType: params.intakeDetectedDocumentType,
+    }
+  }
+
+  const docRes = await insertDocumentAndAnalysis(supabase, {
+    propertyId: params.propertyId,
+    storagePath: copyRes.destPath,
+    intakeDetectedDocumentType: params.intakeDetectedDocumentType,
+    sourceFileName: params.filename,
+    addressMatchPrefill: params.addressMatchPrefill ?? null,
+  })
+
+  if ("error" in docRes) {
+    await supabase.storage.from("documents").remove([copyRes.destPath]).catch(() => {})
+    return {
+      outcome: "failed",
+      reason: docRes.error,
+      extractedTextLength: params.extractedTextLength,
+      detectedDocumentType: params.intakeDetectedDocumentType,
+    }
+  }
+
+  return {
+    outcome: "linked_existing",
+    propertyId: params.propertyId,
+    propertyAddressId: params.propertyAddressId,
+    documentId: docRes.documentId,
+    analysisRunId: docRes.analysisRunId,
+    finalStoragePath: copyRes.destPath,
+    matchTier: params.matchTier,
+    confidenceScore: params.confidenceScore,
+    normalized: params.normalized,
+    extractedAddressRaw: params.extractedAddressRaw,
+    extractedTextLength: params.extractedTextLength,
+    detectedDocumentType: params.intakeDetectedDocumentType,
+  }
+}
+
+export async function reconcileCommittedIntakeDocument(
+  supabase: SupabaseClient,
+  params: {
+    userId: string
+    intakeUploadId: string
+    filename: string
+    sourceRelativePath?: string | null
+  }
+): Promise<MatchOrCreatePropertySuccess | null> {
+  const { data: docs, error } = await supabase
+    .from("documents")
+    .select(
+      "id, property_id, storage_path, document_type_id, document_types(name), properties!documents_property_id_fkey!inner(user_id)"
+    )
+    .eq("properties.user_id", params.userId)
+    .ilike("storage_path", `%/intake/${params.intakeUploadId}_%`)
+    .limit(2)
+
+  if (error || !docs || docs.length !== 1) {
+    if (error) console.warn("[intake] reconcile committed document lookup failed", error.message)
+    return null
+  }
+
+  const doc = docs[0] as {
+    id: string
+    property_id: string
+    storage_path: string
+    document_types?: { name?: string | null } | { name?: string | null }[] | null
+  }
+  const docTypes = doc.document_types
+  const docTypeName = Array.isArray(docTypes) ? docTypes[0]?.name ?? null : docTypes?.name ?? null
+  const detectedFromType = documentTypeNameToIntakeType(docTypeName)
+  const detected =
+    detectedFromType !== "unknown"
+      ? detectedFromType
+      : detectIntakeDocumentType("", `${params.sourceRelativePath ?? ""}\n${params.filename}`)
+
+  await attachDocumentToPropertyRecord(supabase, {
+    documentId: doc.id,
+    propertyId: doc.property_id,
+    intakeDetectedType: detected,
+    sourceFileName: params.filename,
+    uploadOnlyInlineComplete: true,
+  })
+
+  const [{ data: run }, { data: addressRow }] = await Promise.all([
+    supabase
+      .from("analysis_runs")
+      .select("id")
+      .eq("document_id", doc.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("property_addresses").select("id").eq("property_id", doc.property_id).maybeSingle(),
+  ])
+
+  const analysisRunId = (run?.id as string | null | undefined) ?? null
+  if (!analysisRunId) return null
+
+  return {
+    outcome: "linked_existing",
+    propertyId: doc.property_id,
+    propertyAddressId: (addressRow?.id as string | null | undefined) ?? null,
+    documentId: doc.id,
+    analysisRunId,
+    finalStoragePath: doc.storage_path,
+    matchTier: "strong",
+    confidenceScore: scoreForMatchTier("strong"),
+    normalized: blankNormalizedAddress(),
+    extractedAddressRaw: null,
+    extractedTextLength: 0,
+    detectedDocumentType: detected,
+  }
+}
+
 /**
  * Download intake PDF, extract Belgian-style address, match against `property_addresses`,
  * optionally create a property, copy storage to a property-scoped path, and register `documents` + `analysis_runs`.
@@ -458,6 +757,7 @@ export async function matchOrCreatePropertyFromDocument(
     intakeUploadId: string
     storagePath: string
     filename: string
+    sourceRelativePath?: string | null
   }
 ): Promise<MatchOrCreatePropertyResult> {
   const logPrefix = `[intake] matchOrCreate upload=${params.intakeUploadId}`
@@ -497,11 +797,47 @@ export async function matchOrCreatePropertyFromDocument(
   }
 
   const extractedTextLength = text.length
-  const detectedDocumentType: IntakeDetectedDocumentType = text.trim().length
-    ? detectIntakeDocumentType(text, params.filename)
-    : "unknown"
+  const sourceContext = `${params.sourceRelativePath ?? ""}\n${params.filename}`
+  const detectedDocumentType: IntakeDetectedDocumentType = detectIntakeDocumentType(text, sourceContext)
+  let cachedAddressRows: DbAddressRow[] | null = null
+  async function getAddressRows(): Promise<DbAddressRow[]> {
+    if (!cachedAddressRows) {
+      cachedAddressRows = await fetchAllPropertyAddressesForUser(supabase, params.userId)
+    }
+    return cachedAddressRows
+  }
+
+  async function matchSourceContext(): Promise<SourceContextPropertyMatch | null> {
+    return findPropertyFromSourceContext(supabase, {
+      userId: params.userId,
+      filename: params.filename,
+      sourceRelativePath: params.sourceRelativePath ?? null,
+      addressRows: await getAddressRows(),
+    })
+  }
 
   if (!text.trim()) {
+    if (isUploadOnlyIntakeDocumentType(detectedDocumentType)) {
+      const sourceMatch = await matchSourceContext()
+      if (sourceMatch) {
+        console.info(
+          `${logPrefix} linked upload-only document from folder/file context property=${sourceMatch.propertyId}`
+        )
+        return commitIntakeToExistingProperty(supabase, {
+          intakeUploadId: params.intakeUploadId,
+          storagePath: params.storagePath,
+          filename: params.filename,
+          propertyId: sourceMatch.propertyId,
+          propertyAddressId: sourceMatch.propertyAddressId,
+          intakeDetectedDocumentType: detectedDocumentType,
+          normalized: blankNormalizedAddress(),
+          extractedAddressRaw: null,
+          extractedTextLength,
+          matchTier: sourceMatch.tier,
+          confidenceScore: scoreForMatchTier(sourceMatch.tier),
+        })
+      }
+    }
     console.info(`${logPrefix} no extractable text`)
     return {
       outcome: "needs_manual_review",
@@ -512,7 +848,7 @@ export async function matchOrCreatePropertyFromDocument(
       candidateCountStrong: 0,
       candidateCountMedium: 0,
       extractedTextLength,
-      detectedDocumentType: "unknown",
+      detectedDocumentType,
     }
   }
 
@@ -523,7 +859,31 @@ export async function matchOrCreatePropertyFromDocument(
   let geminiResult: Awaited<ReturnType<typeof extractIntakePropertyAddressWithGemini>> | null = null
   let candidate = heuristicCandidate
 
-  if (!heuristicCandidate) {
+  if (isUploadOnlyIntakeDocumentType(detectedDocumentType)) {
+    const sourceMatch = await matchSourceContext()
+    if (sourceMatch) {
+      console.info(
+        `${logPrefix} linked upload-only document from folder/file context property=${sourceMatch.propertyId}`
+      )
+      return commitIntakeToExistingProperty(supabase, {
+        intakeUploadId: params.intakeUploadId,
+        storagePath: params.storagePath,
+        filename: params.filename,
+        propertyId: sourceMatch.propertyId,
+        propertyAddressId: sourceMatch.propertyAddressId,
+        intakeDetectedDocumentType: detectedDocumentType,
+        normalized: blankNormalizedAddress(),
+        extractedAddressRaw: null,
+        extractedTextLength,
+        matchTier: sourceMatch.tier,
+        confidenceScore: scoreForMatchTier(sourceMatch.tier),
+      })
+    }
+  }
+
+  if (!heuristicCandidate && isUploadOnlyIntakeDocumentType(detectedDocumentType)) {
+    console.info(`${logPrefix} upload-only document has no reliable address; skipping Gemini address extraction`)
+  } else if (!heuristicCandidate) {
     geminiResult = await extractIntakePropertyAddressWithGemini(text)
     candidate = geminiResult.address
   }
@@ -567,7 +927,7 @@ Confidence: ${debugConfidence}`)
   const normalized = normalizeExtractedAddress(candidate)
   const extractedAddressRaw = candidate.raw_line1?.trim() ?? null
 
-  const rows = await fetchAllPropertyAddressesForUser(supabase, params.userId)
+  const rows = await getAddressRows()
   const uniqueMatch = findUniquePropertyAddressMatch(normalized, rows)
 
   let chosen: DbAddressRow | null = null

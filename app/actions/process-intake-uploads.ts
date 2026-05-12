@@ -7,6 +7,7 @@ import { createServerClient } from "@/lib/supabase/server"
 import { resolveOwnerUserId } from "@/lib/supabase/resolve-owner-user-id"
 import {
   matchOrCreatePropertyFromDocument,
+  reconcileCommittedIntakeDocument,
   type MatchOrCreatePropertyResult,
 } from "@/lib/intake/match-or-create-property-from-document"
 
@@ -88,10 +89,10 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
     const stuckCutoffIso = new Date(Date.now() - 2 * 60_000).toISOString()
     const { error: resetErr } = await supabase
       .from("intake_uploads")
-      .update({ processing_status: "uploaded" })
+      .update({ processing_status: "uploaded", updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .eq("processing_status", "processing")
-      .lt("created_at", stuckCutoffIso)
+      .lt("updated_at", stuckCutoffIso)
     if (resetErr) {
       console.warn("[intake] process: stuck row reset failed", resetErr.message)
     }
@@ -102,7 +103,7 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
       .from("intake_uploads")
       .select("id")
       .eq("user_id", userId)
-      .eq("processing_status", "uploaded")
+      .in("processing_status", ["uploaded", "needs_review"])
     if (pendingErr) {
       console.warn("[intake] process: pending row scan failed", pendingErr.message)
     }
@@ -116,7 +117,7 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
     for (const id of allIds) {
       const { data: row, error: fetchErr } = await supabase
         .from("intake_uploads")
-        .select("id, user_id, processing_status, filename, storage_path")
+        .select("id, user_id, processing_status, filename, source_relative_path, storage_path")
         .eq("id", id)
         .maybeSingle()
 
@@ -125,14 +126,50 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
         continue
       }
 
-      if (row.processing_status !== "uploaded" && row.processing_status !== "processing") {
+      if (
+        row.processing_status !== "uploaded" &&
+        row.processing_status !== "processing" &&
+        row.processing_status !== "needs_review"
+      ) {
         continue
       }
 
       const storagePath = row.storage_path as string
       const filename = row.filename as string
+      const sourceRelativePath = (row.source_relative_path as string | null | undefined) ?? null
 
-      await supabase.from("intake_uploads").update({ processing_status: "processing" }).eq("id", id)
+      const reconciled = await reconcileCommittedIntakeDocument(supabase, {
+        userId,
+        intakeUploadId: id,
+        filename,
+        sourceRelativePath,
+      })
+      if (reconciled) {
+        const patch = {
+          ...buildIntakePatch(reconciled, storagePath),
+          updated_at: new Date().toISOString(),
+        }
+        const { error: upErr } = await supabase.from("intake_uploads").update(patch).eq("id", id)
+        if (upErr) {
+          console.error("[intake] process: reconciled intake_uploads update failed", id, upErr.message)
+        } else if (storagePath && storagePath !== reconciled.finalStoragePath) {
+          await supabase.storage
+            .from("documents")
+            .remove([storagePath])
+            .catch((err) => console.warn("[intake] process: intake blob cleanup", err))
+        }
+        revalidatePath(`/properties/${reconciled.propertyId}`)
+        continue
+      }
+
+      if (row.processing_status === "needs_review") {
+        continue
+      }
+
+      await supabase
+        .from("intake_uploads")
+        .update({ processing_status: "processing", updated_at: new Date().toISOString() })
+        .eq("id", id)
 
       try {
         const result = await matchOrCreatePropertyFromDocument(supabase, {
@@ -140,9 +177,10 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
           intakeUploadId: id,
           storagePath,
           filename,
+          sourceRelativePath,
         })
 
-        const patch = buildIntakePatch(result, storagePath)
+        const patch = { ...buildIntakePatch(result, storagePath), updated_at: new Date().toISOString() }
         const { error: upErr } = await supabase.from("intake_uploads").update(patch).eq("id", id)
         if (upErr) {
           console.error("[intake] process: intake_uploads update failed", id, upErr.message)
@@ -169,6 +207,7 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
             processing_status: "failed",
             needs_manual_review: true,
             error_message: `Processing failed: ${msg}`,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", id)
       }

@@ -32,6 +32,7 @@ export async function deleteProperty(formData: FormData) {
   }
 
   revalidatePath("/")
+  revalidatePath("/map")
   revalidatePath(`/properties/${parsed.data.propertyId}`)
 
   return { ok: true as const }

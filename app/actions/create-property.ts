@@ -64,6 +64,7 @@ export async function createProperty(formData: FormData) {
   const newId = created.propertyId
 
   revalidatePath("/")
+  revalidatePath("/map")
   revalidatePath(`/properties/${newId}`)
 
   return { id: newId }
