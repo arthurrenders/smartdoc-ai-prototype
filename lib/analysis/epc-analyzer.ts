@@ -231,7 +231,7 @@ function extractDateAfterLabels(text: string, labelPattern: RegExp): string | nu
 
 /** Deterministic fallback when Gemini misses the certificate issue date. */
 function extractIssueDateFromText(text: string): string | null {
-  const labels = /(?:datum\s+(?:van\s+)?(?:certificaat|afgifte|uitgifte|opmaak|opname)|certificaatdatum|certificaat\s*datum|uitgiftedatum|opmaakdatum|datum\s+opmaak|geldig\s+vanaf|opgemaakt\s+op|datum\s+van\s+rapportering|datum\s+rapportering|datum\s+verslag)\s*[:.\-]?/i
+  const labels = /(?:datum\s+(?:van\s+)?(?:certificaat|afgifte|uitgifte|opmaak|opname|ingebruikname|inschrijving)|certificaatdatum|certificaat\s*datum|uitgiftedatum|opmaakdatum|datum\s+opmaak|datum\s+ingebruikname|ingebruikname|geldig\s+vanaf|opgemaakt\s+op|datum\s+van\s+rapportering|datum\s+rapportering|datum\s+verslag)\s*[:.\-]?/i
   return extractDateAfterLabels(text, labels)
 }
 

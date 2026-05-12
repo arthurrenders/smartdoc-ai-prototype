@@ -110,7 +110,9 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState<string | null>(null)
-  const [analyzing, setAnalyzing] = useState<string | null>(null)
+  // Set so multiple "Analyseren" clicks in parallel each track their own spinner state.
+  // Using a single string used to overwrite the previous run's id, hiding the loading badge.
+  const [analyzing, setAnalyzing] = useState<Set<string>>(() => new Set())
   const [verifyingAddress, setVerifyingAddress] = useState<string | null>(null)
   const [activatingDocument, setActivatingDocument] = useState<string | null>(null)
   const [driveImporting, setDriveImporting] = useState(false)
@@ -293,7 +295,11 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     analysisRunId: string,
     options?: { force?: boolean }
   ) {
-    setAnalyzing(analysisRunId)
+    setAnalyzing((prev) => {
+      const next = new Set(prev)
+      next.add(analysisRunId)
+      return next
+    })
     setFeedbackByDocType((prev) => {
       const next = { ...prev }
       delete next[docTypeId]
@@ -319,7 +325,11 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       await loadData()
       setFeedbackByDocType((prev) => ({ ...prev, [docTypeId]: msg }))
     } finally {
-      setAnalyzing(null)
+      setAnalyzing((prev) => {
+        const next = new Set(prev)
+        next.delete(analysisRunId)
+        return next
+      })
     }
   }
 
@@ -551,7 +561,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
           const analysisRunTerminal =
             analysisRun?.status === "done" || analysisRun?.status === "error"
           const isAnalyzing =
-            analyzing === analysisRun?.id && !analysisRunTerminal
+            !!analysisRun?.id && analyzing.has(analysisRun.id) && !analysisRunTerminal
           const isAlreadyDone = analysisRun?.status === "done"
           const showRunAnalysis =
             !isNonAnalyzed &&
@@ -561,7 +571,12 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
               analysisRun.status === "done" ||
               analysisRun.status === "error")
           const isVerifyingAddr = document ? verifyingAddress === document.id : false
-          const showVerifyAddress = isNonAnalyzed && Boolean(document)
+          // Don't show the button once intake / upload pre-fill or a previous verify run has already
+          // confirmed the address matches the property — saves a redundant Gemini round-trip.
+          const showVerifyAddress =
+            isNonAnalyzed &&
+            Boolean(document) &&
+            document?.address_match_status !== "match"
           const statusForDisplay = isAnalyzing ? "Bezig met analyseren…" : status
           const statusColorClass = getStatusColor(
             isAnalyzing ? "processing" : status

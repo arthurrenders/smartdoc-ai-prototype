@@ -149,6 +149,15 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
         }
 
         if (result.outcome === "linked_existing" || result.outcome === "created_new") {
+          // Patch is persisted — safe to drop the original intake blob now. If this fails it
+          // leaves an orphan in intake/ but causes no functional issue; the next intake load
+          // recovers gracefully because intake_uploads.processing_status is already "processed".
+          if (storagePath && storagePath !== result.finalStoragePath) {
+            await supabase.storage
+              .from("documents")
+              .remove([storagePath])
+              .catch((err) => console.warn("[intake] process: intake blob cleanup", err))
+          }
           revalidatePath(`/properties/${result.propertyId}`)
         }
       } catch (e) {

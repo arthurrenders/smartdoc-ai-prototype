@@ -168,6 +168,15 @@ async function copyIntakeToPropertyStorage(
   const safe = sanitizeStorageSegment(params.filename) || "document.pdf"
   const destPath = `${params.propertyId}/intake/${params.intakeUploadId}_${safe}`
 
+  // Idempotent: a retry after a previous timeout may find the destination already populated.
+  // Skip the copy in that case so the rest of the flow proceeds normally.
+  const { data: existing } = await supabase.storage
+    .from("documents")
+    .list(`${params.propertyId}/intake`, { search: `${params.intakeUploadId}_${safe}` })
+  if (existing?.some((entry) => entry.name === `${params.intakeUploadId}_${safe}`)) {
+    return { destPath }
+  }
+
   const { error: copyErr } = await supabase.storage.from("documents").copy(params.sourcePath, destPath)
   if (copyErr) {
     console.warn("[intake] storage.copy failed, falling back to download+upload", copyErr.message)
@@ -178,7 +187,7 @@ async function copyIntakeToPropertyStorage(
     const buf = Buffer.from(await blob.arrayBuffer())
     const { error: upErr } = await supabase.storage.from("documents").upload(destPath, buf, {
       contentType: "application/pdf",
-      upsert: false,
+      upsert: true,
     })
     if (upErr) {
       return { error: upErr.message }
@@ -234,29 +243,63 @@ async function insertDocumentAndAnalysis(
     insertPayload.address_match_reason = params.addressMatchPrefill.reason
   }
 
-  const { data: document, error: documentError } = await supabase
+  // Retry-safe: if a previous run already inserted this doc and only the patch was lost,
+  // reuse the existing row instead of failing on a unique constraint.
+  const { data: existingDocument } = await supabase
     .from("documents")
-    .insert(insertPayload)
     .select("id")
-    .single()
+    .eq("property_id", pid)
+    .eq("storage_path", params.storagePath)
+    .maybeSingle()
 
-  if (documentError || !document?.id) {
-    await supabase.storage.from("documents").remove([params.storagePath]).catch(() => {})
-    return { error: documentError?.message ?? "document insert failed" }
+  let documentRow: { id: string } | null = (existingDocument as { id: string } | null) ?? null
+  const documentNewlyInserted = !documentRow
+
+  if (!documentRow) {
+    const { data: inserted, error: documentError } = await supabase
+      .from("documents")
+      .insert(insertPayload)
+      .select("id")
+      .single()
+
+    if (documentError || !inserted?.id) {
+      return { error: documentError?.message ?? "document insert failed" }
+    }
+    documentRow = inserted as { id: string }
   }
 
-  const { data: analysisRunRow, error: analysisError } = await supabase
+  const document = documentRow
+
+  // Find an existing analysis_runs row for this document before creating a new one.
+  const { data: existingRun } = await supabase
     .from("analysis_runs")
-    .insert({
-      document_id: document.id,
-      status: "queued",
-    })
     .select("id")
-    .single()
+    .eq("document_id", document.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  let analysisRunRow: { id: string } | null = (existingRun as { id: string } | null) ?? null
+  let analysisError: { message: string } | null = null
+
+  if (!analysisRunRow) {
+    const { data: inserted, error } = await supabase
+      .from("analysis_runs")
+      .insert({
+        document_id: document.id,
+        status: "queued",
+      })
+      .select("id")
+      .single()
+    analysisError = error ?? null
+    analysisRunRow = inserted as { id: string } | null
+  }
 
   if (analysisError || !analysisRunRow?.id) {
-    await supabase.storage.from("documents").remove([params.storagePath]).catch(() => {})
-    await supabase.from("documents").delete().eq("id", document.id)
+    if (documentNewlyInserted) {
+      await supabase.storage.from("documents").remove([params.storagePath]).catch(() => {})
+      await supabase.from("documents").delete().eq("id", document.id)
+    }
     return { error: analysisError?.message ?? "analysis run insert failed" }
   }
 
@@ -694,9 +737,10 @@ Confidence: ${debugConfidence}`)
     }
   }
 
-  await supabase.storage.from("documents").remove([params.storagePath]).catch((err) => {
-    console.warn(`${logPrefix} could not remove intake blob`, err)
-  })
+  // Intentionally keep the intake blob in storage until processIntakeUploads has written the
+  // intake_uploads patch. If this function timed out before the patch update, removing the blob
+  // here would cause the retry to fail with "could not download the file from storage".
+  // Cleanup of the intake source happens in process-intake-uploads.ts after a successful patch.
 
   const confidenceScore = matchTier ? scoreForMatchTier(matchTier) : Math.max(0.74, candidate.confidence)
 

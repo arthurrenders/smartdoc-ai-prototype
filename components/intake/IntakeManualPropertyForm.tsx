@@ -90,7 +90,7 @@ export function IntakeManualPropertyForm({
         <label htmlFor={`intake-addr-${intakeUploadId}`} className="text-xs font-semibold text-brand-dark">
           Address{" "}
           <span className="font-normal text-muted-foreground">
-            {selectedPropertyId ? "(optional when property selected)" : "(required if no property selected)"}
+            {selectedPropertyId ? "(uses selected property's address)" : "(required if no property selected)"}
           </span>
         </label>
         <input
@@ -99,8 +99,8 @@ export function IntakeManualPropertyForm({
           onChange={(e) => setAddress(e.target.value)}
           maxLength={500}
           placeholder="Street + number (city and postal code optional)"
-          className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-          disabled={submitting}
+          className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:bg-muted/60 disabled:text-muted-foreground"
+          disabled={submitting || Boolean(selectedPropertyId)}
         />
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
