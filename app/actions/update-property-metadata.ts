@@ -28,6 +28,19 @@ const Schema = z.object({
 
 export type UpdatePropertyMetadataInput = z.infer<typeof Schema>
 
+export type MetadataSource = "document" | "manual"
+export type MetadataSources = Partial<Record<
+  | "construction_year"
+  | "transaction_type"
+  | "heating_type"
+  | "property_type"
+  | "asking_price"
+  | "bedrooms"
+  | "living_area_m2"
+  | "description",
+  MetadataSource
+>>
+
 function nullIfBlank(s: FormDataEntryValue | null): string | null {
   if (s === null) return null
   const v = typeof s === "string" ? s.trim() : ""
@@ -47,6 +60,19 @@ function numberOrNull(s: FormDataEntryValue | null): number | null {
   const n = parseFloat(v.replace(",", "."))
   return Number.isFinite(n) ? n : null
 }
+
+const TRACKED_FIELDS = [
+  "construction_year",
+  "transaction_type",
+  "heating_type",
+  "property_type",
+  "asking_price",
+  "bedrooms",
+  "living_area_m2",
+  "description",
+] as const
+
+type TrackedField = (typeof TRACKED_FIELDS)[number]
 
 export async function updatePropertyMetadata(
   formData: FormData,
@@ -72,6 +98,35 @@ export async function updatePropertyMetadata(
     const supabase = createServerClient()
     await assertOwnerProperty(supabase, parsed.data.propertyId)
 
+    const { data: current, error: fetchErr } = await supabase
+      .from("properties")
+      .select(
+        "construction_year, transaction_type, heating_type, property_type, asking_price, bedrooms, living_area_m2, description, metadata_sources",
+      )
+      .eq("id", parsed.data.propertyId)
+      .maybeSingle()
+
+    if (fetchErr) return { ok: false, error: fetchErr.message }
+    if (!current) return { ok: false, error: "Pand niet gevonden." }
+
+    const currentTyped = current as Record<TrackedField, unknown> & {
+      metadata_sources: MetadataSources | null
+    }
+
+    const nextSources: MetadataSources = { ...(currentTyped.metadata_sources ?? {}) }
+    for (const field of TRACKED_FIELDS) {
+      const newValue = parsed.data[field]
+      const oldValue = currentTyped[field]
+      const changed = newValue !== oldValue
+      if (changed) {
+        if (newValue === null) {
+          delete nextSources[field]
+        } else {
+          nextSources[field] = "manual"
+        }
+      }
+    }
+
     const { error } = await supabase
       .from("properties")
       .update({
@@ -83,6 +138,7 @@ export async function updatePropertyMetadata(
         bedrooms: parsed.data.bedrooms,
         living_area_m2: parsed.data.living_area_m2,
         description: parsed.data.description,
+        metadata_sources: nextSources,
         updated_at: new Date().toISOString(),
       })
       .eq("id", parsed.data.propertyId)
@@ -112,6 +168,7 @@ export async function getPropertyMetadata(
         living_area_m2: number | null
         description: string | null
       }
+      sources: MetadataSources
     }
   | { ok: false; error: string }
 > {
@@ -121,24 +178,36 @@ export async function getPropertyMetadata(
     const { data, error } = await supabase
       .from("properties")
       .select(
-        "construction_year, transaction_type, heating_type, property_type, asking_price, bedrooms, living_area_m2, description",
+        "construction_year, transaction_type, heating_type, property_type, asking_price, bedrooms, living_area_m2, description, metadata_sources",
       )
       .eq("id", propertyId)
       .maybeSingle()
     if (error) return { ok: false, error: error.message }
     if (!data) return { ok: false, error: "Pand niet gevonden." }
+    const row = data as {
+      construction_year: number | null
+      transaction_type: string | null
+      heating_type: string | null
+      property_type: string | null
+      asking_price: number | null
+      bedrooms: number | null
+      living_area_m2: number | null
+      description: string | null
+      metadata_sources: MetadataSources | null
+    }
     return {
       ok: true,
-      metadata: data as {
-        construction_year: number | null
-        transaction_type: string | null
-        heating_type: string | null
-        property_type: string | null
-        asking_price: number | null
-        bedrooms: number | null
-        living_area_m2: number | null
-        description: string | null
+      metadata: {
+        construction_year: row.construction_year,
+        transaction_type: row.transaction_type,
+        heating_type: row.heating_type,
+        property_type: row.property_type,
+        asking_price: row.asking_price,
+        bedrooms: row.bedrooms,
+        living_area_m2: row.living_area_m2,
+        description: row.description,
       },
+      sources: row.metadata_sources ?? {},
     }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Kon gegevens niet laden." }

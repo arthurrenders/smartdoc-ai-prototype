@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState, useTransition, type FormEvent } from "react"
-import { Building2, Shuffle, X as XIcon } from "lucide-react"
+import { Building2, FileText, Shuffle, X as XIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import {
   getPropertyMetadata,
   updatePropertyMetadata,
+  type MetadataSources,
 } from "@/app/actions/update-property-metadata"
 
 type Props = {
@@ -35,65 +36,60 @@ const EMPTY: Metadata = {
 }
 
 type RandomFields = {
-  construction_year: number
   transaction_type: "sale" | "rent"
-  heating_type: "gas" | "oil" | "electric" | "heat_pump" | "district"
-  property_type: "house" | "apartment" | "land" | "commercial"
   asking_price: number
   bedrooms: number
-  living_area_m2: number | null
 }
 
-function randomMetadata(): RandomFields {
-  const years = Array.from({ length: 75 }, (_, i) => 1950 + i)
+function randomDemoValues(currentPropertyType: string): RandomFields {
   const transactions = ["sale", "rent"] as const
-  const heatings = ["gas", "oil", "electric", "heat_pump", "district"] as const
-  const types = ["house", "apartment", "land", "commercial"] as const
   const pricesSale = [225_000, 285_000, 345_000, 410_000, 525_000, 680_000, 795_000]
   const pricesRent = [750, 950, 1_150, 1_350, 1_600, 1_950]
   const pick = <T,>(arr: readonly T[]) => arr[Math.floor(Math.random() * arr.length)]
   const intBetween = (min: number, max: number) =>
     Math.floor(Math.random() * (max - min + 1)) + min
-  const tx = pick(transactions)
-  const propertyType = pick(types)
 
-  let bedrooms = 0
-  let living_area_m2: number | null = null
-  if (propertyType === "house") {
-    bedrooms = intBetween(2, 5)
-    living_area_m2 = intBetween(100, 220)
-  } else if (propertyType === "apartment") {
-    bedrooms = intBetween(1, 3)
-    living_area_m2 = intBetween(55, 130)
-  } else if (propertyType === "commercial") {
-    bedrooms = 0
-    living_area_m2 = intBetween(80, 400)
-  } else {
-    // land — no bedrooms or living area
-    bedrooms = 0
-    living_area_m2 = null
+  const tx = pick(transactions)
+
+  let bedrooms: number
+  switch (currentPropertyType) {
+    case "house":
+      bedrooms = intBetween(2, 5)
+      break
+    case "apartment":
+      bedrooms = intBetween(1, 3)
+      break
+    case "land":
+    case "commercial":
+      bedrooms = 0
+      break
+    default:
+      bedrooms = intBetween(1, 4)
   }
 
   return {
-    construction_year: pick(years),
     transaction_type: tx,
-    heating_type: pick(heatings),
-    property_type: propertyType,
     asking_price: tx === "sale" ? pick(pricesSale) : pick(pricesRent),
     bedrooms,
-    living_area_m2,
   }
 }
+
+const DOC_ELIGIBLE_FIELDS = new Set([
+  "construction_year",
+  "heating_type",
+  "property_type",
+  "living_area_m2",
+])
 
 export function EditPropertyMetadataButton({ propertyId }: Props) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [metadata, setMetadata] = useState<Metadata>(EMPTY)
+  const [sources, setSources] = useState<MetadataSources>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  // Controlled state for all fields the random-fill button populates.
   const [constructionYear, setConstructionYear] = useState<string>("")
   const [transactionType, setTransactionType] = useState<string>("")
   const [heatingType, setHeatingType] = useState<string>("")
@@ -111,6 +107,7 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
       if (cancelled) return
       if (result.ok) {
         setMetadata(result.metadata)
+        setSources(result.sources)
         setConstructionYear(
           result.metadata.construction_year !== null ? String(result.metadata.construction_year) : "",
         )
@@ -135,14 +132,10 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
   }, [isOpen, propertyId])
 
   function applyRandom() {
-    const r = randomMetadata()
-    setConstructionYear(String(r.construction_year))
+    const r = randomDemoValues(propertyType)
     setTransactionType(r.transaction_type)
-    setHeatingType(r.heating_type)
-    setPropertyType(r.property_type)
     setAskingPrice(String(r.asking_price))
     setBedrooms(String(r.bedrooms))
-    setLivingAreaM2(r.living_area_m2 !== null ? String(r.living_area_m2) : "")
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -187,7 +180,8 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">Pandgegevens bewerken</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Deze velden voeden de geschiktheidsregels van Smart Export.
+                  Velden met <span className="font-medium text-primary">Uit documenten</span> zijn
+                  automatisch ingevuld op basis van de geanalyseerde attesten.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -196,7 +190,7 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
                   onClick={applyRandom}
                   disabled={loading || isPending}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-white px-3 py-1.5 text-xs font-medium text-primary shadow-sm transition-colors hover:bg-primary/10 disabled:opacity-50"
-                  title="Vul de vijf demovelden met realistische willekeurige waarden"
+                  title="Vul transactie, vraagprijs en slaapkamers willekeurig in (overige velden komen uit de documenten)"
                 >
                   <Shuffle className="h-3.5 w-3.5" aria-hidden />
                   Vul willekeurig in
@@ -219,7 +213,11 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
                 <input type="hidden" name="propertyId" value={propertyId} />
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Field label="Pandtype" htmlFor="property_type">
+                  <Field
+                    label="Pandtype"
+                    htmlFor="property_type"
+                    source={DOC_ELIGIBLE_FIELDS.has("property_type") ? sources.property_type : undefined}
+                  >
                     <select
                       id="property_type"
                       name="property_type"
@@ -250,7 +248,11 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
                     </select>
                   </Field>
 
-                  <Field label="Bouwjaar" htmlFor="construction_year">
+                  <Field
+                    label="Bouwjaar"
+                    htmlFor="construction_year"
+                    source={sources.construction_year}
+                  >
                     <input
                       id="construction_year"
                       name="construction_year"
@@ -263,7 +265,11 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
                     />
                   </Field>
 
-                  <Field label="Verwarmingstype" htmlFor="heating_type">
+                  <Field
+                    label="Verwarmingstype"
+                    htmlFor="heating_type"
+                    source={sources.heating_type}
+                  >
                     <select
                       id="heating_type"
                       name="heating_type"
@@ -307,7 +313,11 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
                     />
                   </Field>
 
-                  <Field label="Bewoonbare oppervlakte (m²)" htmlFor="living_area_m2">
+                  <Field
+                    label="Bewoonbare oppervlakte (m²)"
+                    htmlFor="living_area_m2"
+                    source={sources.living_area_m2}
+                  >
                     <input
                       id="living_area_m2"
                       name="living_area_m2"
@@ -368,17 +378,30 @@ const selectClass = inputClass
 function Field({
   label,
   htmlFor,
+  source,
   children,
 }: {
   label: string
   htmlFor: string
+  source?: "document" | "manual"
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
-        {label}
-      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
+          {label}
+        </label>
+        {source === "document" && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
+            title="Deze waarde is automatisch overgenomen uit een geanalyseerd document."
+          >
+            <FileText className="h-3 w-3" aria-hidden />
+            Uit documenten
+          </span>
+        )}
+      </div>
       {children}
     </div>
   )

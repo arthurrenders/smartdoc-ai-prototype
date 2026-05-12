@@ -22,7 +22,8 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Arthu\\\\OneDrive\\\\Bureaublad\\\\GITHUB REPOS\\\\smartdoc\\\\smartdoc-ai-prototype\" -Recurse -Filter \"*address*\" -File)",
       "mcp__claude_ai_Supabase__list_projects",
       "mcp__claude_ai_Supabase__execute_sql",
-      "mcp__claude_ai_Supabase__get_advisors"
+      "mcp__claude_ai_Supabase__get_advisors",
+      "mcp__claude_ai_Supabase__apply_migration"
     ]
   }
 }
