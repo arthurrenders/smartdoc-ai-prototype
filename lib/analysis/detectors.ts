@@ -17,6 +17,7 @@ export type AnalysisResult = {
   epc_score_letter?: string | null
   energy_consumption_kwh_m2_year?: number | null
   certificate_date?: string | null
+  inspection_date?: string | null
   expiry_date?: string | null
   is_expired?: boolean | null
   // Property-metadata fields (optional, used to sync property columns after a successful run).

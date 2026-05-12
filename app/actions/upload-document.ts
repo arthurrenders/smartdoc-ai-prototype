@@ -183,7 +183,9 @@ export async function uploadDocument(formData: FormData) {
     }
 
     revalidatePath(`/properties/${propertyId}`)
+    revalidatePath("/map")
     revalidatePath("/")
+    revalidatePath("/analytics")
 
     return { ok: true, documentId: document.id, analysisRunId: analysisRunRow.id as string }
   } catch (error) {

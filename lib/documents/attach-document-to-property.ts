@@ -144,6 +144,13 @@ async function resolveDocumentTypeNameById(
   return (data?.name as string | null) ?? null
 }
 
+function revalidatePropertyStatusPaths(propertyId: string) {
+  revalidatePath(`/properties/${propertyId}`)
+  revalidatePath("/")
+  revalidatePath("/map")
+  revalidatePath("/analytics")
+}
+
 export type AttachDocumentToPropertyParams = {
   documentId: string
   propertyId: string
@@ -287,7 +294,7 @@ export async function attachDocumentToProperty(
     }
     analysisRunId = inserted.id as string
   } else if (latest?.status === "done" && latest.result_json != null) {
-    revalidatePath(`/properties/${pid}`)
+    revalidatePropertyStatusPaths(pid)
     return { ok: true }
   } else if (latest?.status === "processing") {
     return { ok: true }
@@ -323,13 +330,13 @@ export async function attachDocumentToProperty(
         shortCircuitErr.message
       )
     } else {
-      revalidatePath(`/properties/${pid}`)
+      revalidatePropertyStatusPaths(pid)
       return { ok: true }
     }
   }
 
   if (!params.triggerAnalysis && !shouldAutoCompleteUploadOnly) {
-    revalidatePath(`/properties/${pid}`)
+    revalidatePropertyStatusPaths(pid)
     return { ok: true }
   }
 
@@ -343,6 +350,6 @@ export async function attachDocumentToProperty(
     return { ok: false, error: exec.error }
   }
 
-  revalidatePath(`/properties/${pid}`)
+  revalidatePropertyStatusPaths(pid)
   return { ok: true }
 }

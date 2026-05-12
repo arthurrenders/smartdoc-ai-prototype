@@ -336,6 +336,9 @@ function transformElectricalToAnalysisResult(data: ElectricalAIResponse): Analys
     summary,
     flags,
     confidence: 0.9,
+    inspection_date: data.inspection_date ?? null,
+    expiry_date: data.expiry_date ?? null,
+    is_expired: data.is_expired ?? null,
     ...(property_address ? { property_address } : {}),
   }
 

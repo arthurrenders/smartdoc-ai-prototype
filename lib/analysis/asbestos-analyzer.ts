@@ -300,6 +300,22 @@ function rawTextLooksLikeAsbestosInventoryPresent(text: string | undefined): boo
   return sectionHit && materiaalHit
 }
 
+function normalizeAsbestosScore(score: string | null | undefined): string {
+  if (!score) return ""
+  return score
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function isNonSafeAsbestosScore(score: string | null | undefined): boolean {
+  const normalized = normalizeAsbestosScore(score)
+  return /\bniet\s*-?\s*asbestveilig\b/.test(normalized)
+}
+
 function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: string): AnalysisResult {
   const flags: Flag[] = []
   let status: "red" | "orange" | "green" = "green"
@@ -323,6 +339,8 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
 
   const redFlags = data.red_flags || []
   const inventory = data.asbestos_inventory || []
+  const hasNonSafeScore = isNonSafeAsbestosScore(data.asbestos_score)
+  const rawInventoryPresent = rawTextLooksLikeAsbestosInventoryPresent(rawText)
 
   if (redFlags.includes("expired_asbestos_certificate") || data.is_expired === true) {
     flags.push({
@@ -333,7 +351,16 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
     status = "red"
   }
 
-  if (redFlags.includes("high_risk_asbestos")) {
+  if (hasNonSafeScore) {
+    flags.push({
+      severity: "red",
+      title: "Asbestos certificate is not asbestos-safe",
+      details: `The certificate score is "${data.asbestos_score || "niet-asbestveilig"}". Professional asbestos follow-up is required before treating the property as compliant.`,
+    })
+    status = "red"
+  }
+
+  if (redFlags.includes("high_risk_asbestos") && !hasNonSafeScore) {
     flags.push({
       severity: "red",
       title: "High-risk asbestos",
@@ -353,8 +380,8 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
     if (status === "green") status = "orange"
   }
 
-  if (redFlags.includes("missing_inventory") && inventory.length === 0 && !rawTextLooksLikeAsbestosInventoryPresent(rawText)) {
-    if (rawTextLooksLikeAsbestosInventoryPresent(rawText)) {
+  if (redFlags.includes("missing_inventory") && inventory.length === 0) {
+    if (rawInventoryPresent) {
       flags.push({
         severity: "orange",
         title: "Inventory not parsed automatically",
@@ -434,6 +461,9 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
     summary,
     flags,
     confidence: 0.9,
+    certificate_date: data.certificate_date ?? null,
+    expiry_date: data.expiry_date ?? null,
+    is_expired: data.is_expired ?? null,
     construction_year: data.building_year ?? null,
     ...(property_address ? { property_address } : {}),
   }

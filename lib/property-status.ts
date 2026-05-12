@@ -49,6 +49,7 @@ export type AnalysisRunStatus = "queued" | "processing" | "done" | "error"
 /** One document's type and its latest analysis summary (for property aggregation). */
 export type DocumentWithAnalysis = {
   documentTypeId: string
+  documentTypeName?: string | null
   analysis?: DocumentAnalysisSummary | null
   /**
    * Latest `analysis_runs.status`. When this is anything other than `"done"` (or omitted), the
@@ -71,6 +72,7 @@ export type PropertyStatusResult = {
 }
 
 const UPCOMING_DAYS = 90
+const NON_ANALYZED_DOCUMENT_TYPE_NAME_SET = new Set<string>(NON_ANALYZED_DOCUMENT_TYPE_NAMES)
 
 function parseExpiry(expiry: string | null | undefined): Date | null {
   if (!expiry || typeof expiry !== "string") return null
@@ -86,6 +88,21 @@ function isUpcoming(expiryDate: Date | null): boolean {
   return expiryDate >= now && expiryDate <= limit
 }
 
+function isUploadOnlyDocument(doc: DocumentWithAnalysis): boolean {
+  return Boolean(
+    doc.documentTypeName &&
+      NON_ANALYZED_DOCUMENT_TYPE_NAME_SET.has(doc.documentTypeName)
+  )
+}
+
+export function getEffectiveDocumentStatus(
+  doc: DocumentWithAnalysis
+): DocumentAnalysisSummary["status"] {
+  if (doc.analysisRunStatus === "done") return doc.analysis?.status
+  if (isUploadOnlyDocument(doc)) return doc.analysis?.status ?? "green"
+  return undefined
+}
+
 /**
  * Computes overall property status and counts from required document types and
  * the documents (with their latest analysis) for that property.
@@ -94,22 +111,22 @@ function isUpcoming(expiryDate: Date | null): boolean {
  * - **red**: any analyzed document is `red` OR all required documents are missing
  * - **orange**: any analyzed document is `orange`, any expiring soon, or some (but not all) required
  *   documents missing
- * - **pending**: uploads exist for required types but at least one has no completed analysis yet
- *   (queued/processing/error). Never green until the realtor runs analysis.
- * - **green**: all required documents present, all `analysis_runs.status === "done"`, all `green`
+ * - **pending**: uploads exist for analyzed required types but at least one has no completed analysis yet
+ *   (queued/processing/error). Upload-only types count as green once present.
+ * - **green**: all required documents present, all analyzed types are `done`, all effectively `green`
  */
 export function computePropertyStatus(
   requiredTypeIds: string[],
   documentsWithAnalysis: DocumentWithAnalysis[]
 ): PropertyStatusResult {
   const requiredSet = new Set(requiredTypeIds)
-  type Bucket = { summary: DocumentAnalysisSummary; runStatus: AnalysisRunStatus | null | undefined }
+  type Bucket = DocumentWithAnalysis
   const byType = new Map<string, Bucket>()
   let expiriesCount = 0
 
   for (const doc of documentsWithAnalysis) {
     const summary = doc.analysis || {}
-    byType.set(doc.documentTypeId, { summary, runStatus: doc.analysisRunStatus ?? null })
+    byType.set(doc.documentTypeId, doc)
     const expiry = parseExpiry(summary.expiry_date)
     if (isUpcoming(expiry)) expiriesCount++
   }
@@ -125,8 +142,8 @@ export function computePropertyStatus(
 
   for (const [typeId, bucket] of byType) {
     const isRequired = requiredSet.has(typeId)
-    const analyzed = bucket.runStatus === "done"
-    const status = analyzed ? bucket.summary.status : undefined
+    const status = getEffectiveDocumentStatus(bucket)
+    const analyzed = Boolean(status)
 
     if (status === "red") hasRed = true
     else if (status === "orange") hasOrange = true
@@ -168,15 +185,19 @@ export function computePropertyStatus(
  * Extracts a DocumentAnalysisSummary from an analysis result (e.g. AnalysisResult or result_json from DB).
  */
 export function toDocumentAnalysisSummary(
-  result: { status?: string; expiry_date?: string | null } | null | undefined
+  result: { status?: string; expiry_date?: string | null; summary?: string | null } | null | undefined
 ): DocumentAnalysisSummary {
   if (!result) return {}
   const status =
     result.status === "red" || result.status === "orange" || result.status === "green"
       ? result.status
       : undefined
+  const summaryExpiry =
+    typeof result.summary === "string"
+      ? result.summary.match(/expiry date:\s*([^\n|]+)/i)?.[1]?.trim() ?? null
+      : null
   return {
     ...(status ? { status } : {}),
-    expiry_date: result.expiry_date ?? null,
+    expiry_date: result.expiry_date ?? summaryExpiry ?? null,
   }
 }

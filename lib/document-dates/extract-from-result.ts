@@ -46,10 +46,12 @@ export function extractDocumentDatesFromResult(
 
   const t = documentTypeName?.toUpperCase() ?? ""
 
-  if (t === "EPC") {
+  if (t === "ELECTRICAL") {
+    add("inspection", result.inspection_date ?? result.certificate_date ?? undefined, "structured")
+  } else {
     add("certificate", result.certificate_date ?? undefined, "structured")
-    add("expiry", result.expiry_date ?? undefined, "structured")
   }
+  add("expiry", result.expiry_date ?? undefined, "structured")
 
   parseSummaryForDates(result.summary, add)
 

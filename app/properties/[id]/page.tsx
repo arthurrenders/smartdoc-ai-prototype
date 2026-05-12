@@ -192,7 +192,7 @@ export default async function PropertyPage({
                   : `${data.stats.pendingCount} documenten zijn nog niet geanalyseerd`}
               </p>
               <p className="mt-0.5 text-slate-600">
-                Klik op &quot;Run Analysis&quot; bij het document om de AI-analyse te starten. Pas dan worden bevindingen meegenomen in de nalevingsscore.
+                Klik op &quot;Analyseren&quot; bij het document om de AI-analyse te starten. Pas dan worden bevindingen meegenomen in de nalevingsscore.
               </p>
             </div>
           </div>

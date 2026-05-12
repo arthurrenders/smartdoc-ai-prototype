@@ -232,6 +232,9 @@ export async function executeAnalysisRunPipeline(
       console.error("Failed to mark analysis_run as error:", e)
     }
     revalidatePath(`/properties/${propertyId}`)
+    revalidatePath("/map")
+    revalidatePath("/")
+    revalidatePath("/analytics")
   }
 
   try {
@@ -574,7 +577,9 @@ export async function executeAnalysisRunPipeline(
     }
 
     revalidatePath(`/properties/${propertyId}`)
+    revalidatePath("/map")
     revalidatePath("/")
+    revalidatePath("/analytics")
 
     return { success: true, result }
   } catch (pipelineError) {

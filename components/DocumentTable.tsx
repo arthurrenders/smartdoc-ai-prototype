@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Upload, Play, RotateCw, FileQuestion, FileText, MapPin } from "lucide-react"
 import { uploadDocument } from "@/app/actions/upload-document"
 import { verifyDocumentAddress } from "@/app/actions/verify-document-address"
@@ -106,6 +107,7 @@ type ReanalyzePrompt = {
 }
 
 export default function DocumentTable({ propertyId, wrapInCard = true }: DocumentTableProps) {
+  const router = useRouter()
   const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
@@ -233,6 +235,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     verifyFd.append("documentId", documentId)
     await verifyDocumentAddress(verifyFd)
     await loadData()
+    router.refresh()
     afterLoadData?.()
   }
 
@@ -317,12 +320,14 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     try {
       const result = await runAnalysis(formData)
       await loadData()
+      router.refresh()
       if (result.error && result.persistedToDb !== true) {
         setFeedbackByDocType((prev) => ({ ...prev, [docTypeId]: result.error! }))
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Onbekende fout"
       await loadData()
+      router.refresh()
       setFeedbackByDocType((prev) => ({ ...prev, [docTypeId]: msg }))
     } finally {
       setAnalyzing((prev) => {
@@ -367,6 +372,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       formData.append("documentId", documentId)
       const result = await verifyDocumentAddress(formData)
       await loadData()
+      router.refresh()
       if (!result.ok) {
         setFeedbackByDocType((prev) => ({
           ...prev,
@@ -396,6 +402,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
         documentTypeId,
       })
       await loadData()
+      router.refresh()
       if (!result.ok) {
         setFeedbackByDocType((prev) => ({
           ...prev,

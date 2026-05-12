@@ -3,6 +3,7 @@
 import { createServerClient } from "@/lib/supabase/server"
 import {
   computePropertyStatus,
+  getEffectiveDocumentStatus,
   toDocumentAnalysisSummary,
   REQUIRED_DOCUMENT_TYPE_NAMES,
   type DocumentWithAnalysis,
@@ -79,7 +80,7 @@ type DocumentWithRelations = {
   document_type_id: string | null
   is_active?: boolean | null
   created_at?: string | null
-  document_types?: { id: string; name: string }
+  document_types?: DocumentTypeRelation
   analysis_runs?: Array<{
     id: string
     status: string
@@ -91,6 +92,13 @@ type DocumentWithRelations = {
       flags?: Array<{ severity?: string; title?: string; details?: string }>
     }
   }>
+}
+
+type DocumentTypeRelation = { id: string; name: string } | Array<{ id: string; name: string }> | null
+
+function documentTypeNameFromRelation(relation: DocumentTypeRelation | undefined): string | null {
+  if (Array.isArray(relation)) return relation[0]?.name ?? null
+  return relation?.name ?? null
 }
 
 export async function getPropertyDetail(propertyId: string): Promise<PropertyDetailData | null> {
@@ -168,6 +176,7 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
       const run = pickLatestAnalysisRun((doc as DocumentWithRelations).analysis_runs)
       byType.set(doc.document_type_id, {
         documentTypeId: doc.document_type_id,
+        documentTypeName: documentTypeNameFromRelation((doc as DocumentWithRelations).document_types),
         analysis: toDocumentAnalysisSummary(run?.result_json),
         analysisRunStatus: (run?.status ?? null) as DocumentWithAnalysis["analysisRunStatus"],
       })
@@ -183,7 +192,8 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
     for (const doc of currentDocuments) {
       const run = pickLatestAnalysisRun((doc as DocumentWithRelations).analysis_runs)
       const result = run?.result_json
-      const typeName = (doc as DocumentWithRelations).document_types?.name ?? "Document"
+      const typeName =
+        documentTypeNameFromRelation((doc as DocumentWithRelations).document_types) ?? "Document"
       const st = result?.status
       const analysisStatus =
         st === "red" || st === "orange" || st === "green" ? st : undefined
@@ -234,10 +244,10 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
         : "No document analyses available yet. Upload and run analysis for each required document type."
 
     const requiredTotal = requiredTypeIds.length
-    // Only count documents that were actually analyzed and came back green — uploaded-but-pending
-    // docs must never inflate the compliance score.
+    // Count analyzed green documents plus upload-only required docs.
+    // Upload-only required docs are satisfied by being present.
     const validCount = documentsWithAnalysis.filter(
-      (d) => d.analysisRunStatus === "done" && d.analysis?.status === "green"
+      (d) => getEffectiveDocumentStatus(d) === "green"
     ).length
     const summaryCounts: PropertySummaryCounts = {
       validCount,
@@ -381,7 +391,7 @@ function buildSuggestedActions(
     list.push(`Request missing document(s) from the seller${labelList}.`)
   }
   if (stats.expiriesCount > 0) {
-    list.push("Renew expired certificate(s) or schedule renewal before validity end.")
+    list.push("Review certificate(s) expiring soon and schedule renewal before validity end.")
   }
   if (hasExpiredEpc && !list.some((s) => s.toLowerCase().includes("renew"))) {
     list.push("Renew expired EPC.")

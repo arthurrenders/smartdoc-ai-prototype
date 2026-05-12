@@ -27,12 +27,20 @@ type DocumentWithRelations = {
   document_type_id: string | null
   is_active?: boolean | null
   created_at?: string | null
+  document_types?: DocumentTypeRelation
   analysis_runs?: Array<{
     id: string
     status: string
     created_at?: string
     result_json?: { status?: string; expiry_date?: string }
   }>
+}
+
+type DocumentTypeRelation = { id: string; name: string } | Array<{ id: string; name: string }> | null
+
+function documentTypeNameFromRelation(relation: DocumentTypeRelation | undefined): string | null {
+  if (Array.isArray(relation)) return relation[0]?.name ?? null
+  return relation?.name ?? null
 }
 
 type AddrRow = {
@@ -160,6 +168,7 @@ export async function getMapMarkers(searchQuery?: string): Promise<{
         const run = pickLatestAnalysisRun((doc as DocumentWithRelations).analysis_runs)
         byType.set(doc.document_type_id, {
           documentTypeId: doc.document_type_id,
+          documentTypeName: documentTypeNameFromRelation((doc as DocumentWithRelations).document_types),
           analysis: toDocumentAnalysisSummary(run?.result_json),
           analysisRunStatus: (run?.status ?? null) as DocumentWithAnalysis["analysisRunStatus"],
         })
