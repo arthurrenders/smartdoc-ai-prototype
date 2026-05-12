@@ -67,6 +67,7 @@ export async function resolveIntakeManualProperty(input: z.infer<typeof schema>)
 
     revalidatePath("/intake")
     revalidatePath("/")
+    revalidatePath("/map")
     revalidatePath(`/properties/${res.propertyId}`)
     return { ok: true, propertyId: res.propertyId }
   } catch (e) {

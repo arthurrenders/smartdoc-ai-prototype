@@ -65,15 +65,13 @@ function statusBadgeClass(status: IntakeProcessingStatus): string {
 /** User-facing queue state (per-file); distinct from raw `processing_status` for Matched vs Created. */
 function formatQueueStatus(row: IntakeUploadRow): string {
   const s = row.processing_status
+  if (row.matched_property_id) return "Matched"
+  if (row.created_property_id) return "Created"
   if (s === "uploaded") return "Pending"
   if (s === "processing") return "Processing"
   if (s === "needs_review") return "Needs review"
   if (s === "failed") return "Failed"
-  if (s === "processed") {
-    if (row.matched_property_id) return "Matched"
-    if (row.created_property_id) return "Created"
-    return "Processed"
-  }
+  if (s === "processed") return "Processed"
   return (s as string).replace(/_/g, " ")
 }
 
@@ -107,6 +105,12 @@ function canEnterPropertyManually(row: IntakeUploadRow, propId: string | null): 
 }
 
 function formatIntakeMatchSummary(row: IntakeUploadRow): string {
+  if (row.created_property_id) {
+    return `Created property - ${matchTierFromScore(row.confidence_score)} match / extraction`
+  }
+  if (row.matched_property_id) {
+    return `Linked to existing - ${matchTierFromScore(row.confidence_score)}`
+  }
   if (row.processing_status === "failed") {
     return row.error_message?.slice(0, 120) ?? "Processing failed"
   }
@@ -212,11 +216,11 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
   }, [])
 
   async function handleDeleteQueueRow(row: IntakeUploadRow) {
-    if (row.processing_status === "processing") {
+    const linked = Boolean(row.matched_property_id || row.created_property_id || row.processing_status === "processed")
+    if (row.processing_status === "processing" && !linked) {
       setMessage({ type: "err", text: "This file is currently processing. Try again after it finishes." })
       return
     }
-    const linked = Boolean(row.matched_property_id || row.created_property_id || row.processing_status === "processed")
     const ok = window.confirm(
       linked
         ? "Remove this row from the intake queue? The linked property document will stay in place."
@@ -664,12 +668,13 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                 {queueRows.map((row) => {
                   const propId = row.matched_property_id ?? row.created_property_id
                   const manualEligible = canEnterPropertyManually(row, propId)
+                  const displayStatus = propId ? "processed" : row.processing_status
                   return (
                     <tr
                       key={row.id}
                       className={cn(
                         "border-b border-[hsl(var(--border))] last:border-0",
-                        row.needs_manual_review && "bg-amber-50/60 dark:bg-amber-950/20"
+                        row.needs_manual_review && !propId && "bg-amber-50/60 dark:bg-amber-950/20"
                       )}
                     >
                       <td className="min-w-[320px] max-w-[420px] px-4 py-3">
@@ -691,7 +696,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                         <span
                           className={cn(
                             "inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold",
-                            statusBadgeClass(row.processing_status)
+                            statusBadgeClass(displayStatus)
                           )}
                         >
                           {formatQueueStatus(row)}
@@ -728,7 +733,9 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                         )}
                       </td>
                       <td className="min-w-[280px] px-4 py-3 align-top">
-                        {row.processing_status === "uploaded" || row.processing_status === "processing" ? (
+                        {propId ? (
+                          <span className="text-xs text-muted-foreground">OK</span>
+                        ) : row.processing_status === "uploaded" || row.processing_status === "processing" ? (
                           <span className="text-xs text-muted-foreground">Awaiting pipeline</span>
                         ) : manualEligible ? (
                           <div className="space-y-2">
@@ -772,11 +779,11 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                         <button
                           type="button"
                           onClick={() => void handleDeleteQueueRow(row)}
-                          disabled={row.processing_status === "processing" || deletingIntakeId === row.id}
+                          disabled={(!propId && row.processing_status === "processing") || deletingIntakeId === row.id}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-white text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                           aria-label={`Delete ${row.filename} from intake queue`}
                           title={
-                            row.processing_status === "processing"
+                            !propId && row.processing_status === "processing"
                               ? "Processing rows can be deleted after processing finishes"
                               : "Delete intake queue row"
                           }

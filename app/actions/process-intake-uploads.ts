@@ -159,6 +159,7 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
             .catch((err) => console.warn("[intake] process: intake blob cleanup", err))
         }
         revalidatePath(`/properties/${reconciled.propertyId}`)
+        revalidatePath("/map")
         continue
       }
 
@@ -197,6 +198,7 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
               .catch((err) => console.warn("[intake] process: intake blob cleanup", err))
           }
           revalidatePath(`/properties/${result.propertyId}`)
+          revalidatePath("/map")
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unexpected error"
@@ -215,6 +217,7 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
 
     revalidatePath("/intake")
     revalidatePath("/")
+    revalidatePath("/map")
     return { ok: true }
   } catch (e) {
     return {

@@ -268,6 +268,7 @@ function rawTextLooksLikeAsbestosInventoryPresent(text: string | undefined): boo
     "asbesthoudend materiaal",
     "asbesthoudende materialen",
     "asbestinventaris",
+    "inventory",
     "inventaris",
     "materialen overzicht",
     "materialenoverzicht",
@@ -290,7 +291,10 @@ function rawTextLooksLikeAsbestosInventoryPresent(text: string | undefined): boo
     "remvoering",
     "isolatieplaat",
     "schoorsteen",
+    "dak",
+    "roof",
   ]
+  if (/\b(?:inventaris|inventory)\s*:\s*[\p{L}\p{N}]/iu.test(text)) return true
   const sectionHit = sectionCues.some((c) => lower.includes(c))
   const materiaalHit = materiaalCues.some((c) => lower.includes(c))
   return sectionHit && materiaalHit
@@ -318,6 +322,7 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
   }
 
   const redFlags = data.red_flags || []
+  const inventory = data.asbestos_inventory || []
 
   if (redFlags.includes("expired_asbestos_certificate") || data.is_expired === true) {
     flags.push({
@@ -348,7 +353,7 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
     if (status === "green") status = "orange"
   }
 
-  if (redFlags.includes("missing_inventory")) {
+  if (redFlags.includes("missing_inventory") && inventory.length === 0 && !rawTextLooksLikeAsbestosInventoryPresent(rawText)) {
     if (rawTextLooksLikeAsbestosInventoryPresent(rawText)) {
       flags.push({
         severity: "orange",
@@ -377,7 +382,6 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
     if (status === "green") status = "orange"
   }
 
-  const inventory = data.asbestos_inventory || []
   if (inventory.length > 0) {
     const locations = inventory
       .map((item) => item.location)

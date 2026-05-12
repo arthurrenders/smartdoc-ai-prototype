@@ -339,13 +339,17 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
     if (status === "green") status = "orange"
   }
 
-  if (redFlags.includes("suspicious_energy_value") || (epcData.energy_consumption_kwh_m2_year !== null && epcData.energy_consumption_kwh_m2_year > 1000)) {
+  const hasImplausibleEnergyValue =
+    epcData.energy_consumption_kwh_m2_year !== null &&
+    (epcData.energy_consumption_kwh_m2_year > 1000 || epcData.energy_consumption_kwh_m2_year < -100)
+
+  if (hasImplausibleEnergyValue) {
     flags.push({
-      severity: "red",
+      severity: "orange",
       title: "Suspicious Energy Consumption Value",
       details: `The energy consumption value (${epcData.energy_consumption_kwh_m2_year} kWh/m²/year) is unusually high and may indicate an error.`,
     })
-    status = "red"
+    if (status === "green") status = "orange"
   }
 
   // Determine status based on EPC score if no red flags

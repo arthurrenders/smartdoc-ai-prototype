@@ -428,7 +428,9 @@ async function createProperty(
 
 function optionalNominatimUserAgent(): string | null {
   const ua = process.env.NOMINATIM_USER_AGENT?.trim()
-  return ua && ua.length >= 8 ? ua : null
+  if (ua && ua.length >= 8) return ua
+  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  return site && site.length >= 8 ? `SmartDocAI/0.1 (${site})` : "SmartDocAI/0.1 (local development)"
 }
 
 async function geocodeAndEnrichNewProperty(
