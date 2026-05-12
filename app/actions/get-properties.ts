@@ -1,7 +1,7 @@
 "use server"
 
 import { createServerClient } from "@/lib/supabase/server"
-import { getOwnerUserId } from "@/lib/supabase/ownership"
+import { tryGetOwnerUserId } from "@/lib/supabase/ownership"
 
 export type PropertyRow = {
   id: string
@@ -12,7 +12,8 @@ export type PropertyRow = {
 export async function getProperties(): Promise<{ data: PropertyRow[]; error: string | null }> {
   try {
     const supabase = createServerClient()
-    const ownerUserId = await getOwnerUserId(supabase)
+    const ownerUserId = await tryGetOwnerUserId(supabase)
+    if (!ownerUserId) return { data: [], error: null }
     const { data, error } = await supabase
       .from("properties")
       .select("id,created_at,display_name")

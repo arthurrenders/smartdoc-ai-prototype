@@ -3,7 +3,7 @@
 import { createServerClient } from "@/lib/supabase/server"
 import { labelForDocumentDateType } from "@/lib/document-dates/date-type-label"
 import { pickName, pickDocTypeName } from "@/lib/supabase-helpers"
-import { getOwnerPropertyIds } from "@/lib/supabase/ownership"
+import { tryGetOwnerPropertyIds } from "@/lib/supabase/ownership"
 
 export type UpcomingDeadlineRow = {
   id: string
@@ -22,7 +22,7 @@ export async function getUpcomingDeadlines(limit = 20): Promise<{
 }> {
   try {
     const supabase = createServerClient()
-    const propertyIds = await getOwnerPropertyIds(supabase)
+    const propertyIds = await tryGetOwnerPropertyIds(supabase)
     if (propertyIds.length === 0) return { data: [], error: null }
     const today = new Date().toISOString().slice(0, 10)
 

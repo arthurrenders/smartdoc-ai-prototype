@@ -76,7 +76,15 @@ export async function analyzeEPCWithAI(
     debugLog("=== END PARSED JSON ===")
 
     const explicitLetter = extractExplicitEpcLetter(normalizedText)
-    const epcData = mergeEnergyDerivedEpcLetter(normalizeParsedEpcResponse(parsed), explicitLetter)
+    let epcData = mergeEnergyDerivedEpcLetter(normalizeParsedEpcResponse(parsed), explicitLetter)
+    if (!epcData.certificate_date) {
+      const fallbackIssued = extractIssueDateFromText(normalizedText)
+      if (fallbackIssued) epcData = { ...epcData, certificate_date: fallbackIssued }
+    }
+    if (!epcData.expiry_date) {
+      const fallbackExpiry = extractExpiryDateFromText(normalizedText)
+      if (fallbackExpiry) epcData = { ...epcData, expiry_date: fallbackExpiry }
+    }
     debugLog("=== COERCED EPC DATA ===")
     debugLog(JSON.stringify(epcData, null, 2))
     debugLog("=== END COERCED EPC DATA ===")
@@ -172,6 +180,65 @@ export async function analyzeEPCWithAI(
       promptVersion: PROMPT_VERSION,
     }
   }
+}
+
+const DUTCH_MONTHS: Record<string, number> = {
+  januari: 1, februari: 2, maart: 3, april: 4, mei: 5, juni: 6,
+  juli: 7, augustus: 8, september: 9, oktober: 10, november: 11, december: 12,
+  jan: 1, feb: 2, mrt: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, okt: 10, nov: 11, dec: 12,
+}
+
+function toIsoDate(year: number, month: number, day: number): string | null {
+  if (year < 1990 || year > 2100) return null
+  if (month < 1 || month > 12) return null
+  if (day < 1 || day > 31) return null
+  const mm = String(month).padStart(2, "0")
+  const dd = String(day).padStart(2, "0")
+  return `${year}-${mm}-${dd}`
+}
+
+function extractDateAfterLabels(text: string, labelPattern: RegExp): string | null {
+  const labelMatch = labelPattern.exec(text)
+  if (!labelMatch) return null
+  const window = text.slice(labelMatch.index + labelMatch[0].length, labelMatch.index + labelMatch[0].length + 80)
+
+  const numericMatch = window.match(/(\d{1,2})[\s./-](\d{1,2})[\s./-](\d{2,4})/)
+  if (numericMatch) {
+    let y = parseInt(numericMatch[3], 10)
+    if (y < 100) y += y >= 70 ? 1900 : 2000
+    const iso = toIsoDate(y, parseInt(numericMatch[2], 10), parseInt(numericMatch[1], 10))
+    if (iso) return iso
+  }
+
+  const isoMatch = window.match(/(\d{4})[\s./-](\d{1,2})[\s./-](\d{1,2})/)
+  if (isoMatch) {
+    const iso = toIsoDate(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10), parseInt(isoMatch[3], 10))
+    if (iso) return iso
+  }
+
+  const monthMatch = window.match(/(\d{1,2})\s+([a-zA-Z]+)\.?\s+(\d{4})/)
+  if (monthMatch) {
+    const monthName = monthMatch[2].toLowerCase()
+    const month = DUTCH_MONTHS[monthName]
+    if (month) {
+      const iso = toIsoDate(parseInt(monthMatch[3], 10), month, parseInt(monthMatch[1], 10))
+      if (iso) return iso
+    }
+  }
+
+  return null
+}
+
+/** Deterministic fallback when Gemini misses the certificate issue date. */
+function extractIssueDateFromText(text: string): string | null {
+  const labels = /(?:datum\s+(?:van\s+)?(?:certificaat|afgifte|uitgifte|opmaak|opname)|certificaatdatum|certificaat\s*datum|uitgiftedatum|opmaakdatum|datum\s+opmaak|geldig\s+vanaf|opgemaakt\s+op|datum\s+van\s+rapportering|datum\s+rapportering|datum\s+verslag)\s*[:.\-]?/i
+  return extractDateAfterLabels(text, labels)
+}
+
+/** Deterministic fallback when Gemini misses the expiry date. */
+function extractExpiryDateFromText(text: string): string | null {
+  const labels = /(?:geldig\s+tot|vervaldatum|verloopt\s+op|einddatum|geldig\s+t\.?e\.?m\.?)\s*[:.\-]?/i
+  return extractDateAfterLabels(text, labels)
 }
 
 /** Prefer a letter explicitly printed in the EPC; otherwise derive from kWh/m²/year when possible. */

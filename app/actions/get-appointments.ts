@@ -1,7 +1,7 @@
 "use server"
 
 import { createServerClient } from "@/lib/supabase/server"
-import { getOwnerUserId } from "@/lib/supabase/ownership"
+import { tryGetOwnerUserId } from "@/lib/supabase/ownership"
 import type { AppointmentEntry } from "@/lib/app-types"
 
 export type { AppointmentEntry }
@@ -63,7 +63,8 @@ export async function getAppointments(opts?: {
 }): Promise<{ data: AppointmentEntry[]; error: string | null }> {
   try {
     const supabase = createServerClient()
-    const ownerUserId = await getOwnerUserId(supabase)
+    const ownerUserId = await tryGetOwnerUserId(supabase)
+    if (!ownerUserId) return { data: [], error: null }
 
     const from =
       opts?.from ??

@@ -2,7 +2,7 @@
 
 import { createServerClient } from "@/lib/supabase/server"
 import { pickName, pickDocTypeName } from "@/lib/supabase-helpers"
-import { getOwnerPropertyIds } from "@/lib/supabase/ownership"
+import { tryGetOwnerPropertyIds } from "@/lib/supabase/ownership"
 
 export type CalendarDateEntry = {
   id: string
@@ -21,7 +21,7 @@ export async function getCalendarDates(): Promise<{
 }> {
   try {
     const supabase = createServerClient()
-    const propertyIds = await getOwnerPropertyIds(supabase)
+    const propertyIds = await tryGetOwnerPropertyIds(supabase)
     if (propertyIds.length === 0) return { data: [], error: null }
     const start = new Date()
     start.setUTCFullYear(start.getUTCFullYear() - 1)

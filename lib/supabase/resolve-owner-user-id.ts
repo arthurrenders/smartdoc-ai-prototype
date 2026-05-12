@@ -46,3 +46,12 @@ export async function resolveOwnerUserId(supabase: SupabaseAdmin): Promise<strin
       "or set DEMO_PROPERTY_ID to an existing property id so user_id can be read from that row."
   )
 }
+
+/** Non-throwing variant: returns `null` when no owner can be resolved (zero properties + no env var). */
+export async function tryResolveOwnerUserId(supabase: SupabaseAdmin): Promise<string | null> {
+  try {
+    return await resolveOwnerUserId(supabase)
+  } catch {
+    return null
+  }
+}

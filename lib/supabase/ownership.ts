@@ -1,13 +1,27 @@
 import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { resolveOwnerUserId } from "@/lib/supabase/resolve-owner-user-id"
+import { resolveOwnerUserId, tryResolveOwnerUserId } from "@/lib/supabase/resolve-owner-user-id"
 
 export async function getOwnerUserId(supabase: SupabaseClient): Promise<string> {
   return resolveOwnerUserId(supabase as Parameters<typeof resolveOwnerUserId>[0])
 }
 
+/** Non-throwing variant for read-only dashboard actions — returns null when no owner can be resolved. */
+export async function tryGetOwnerUserId(supabase: SupabaseClient): Promise<string | null> {
+  return tryResolveOwnerUserId(supabase as Parameters<typeof tryResolveOwnerUserId>[0])
+}
+
 export async function getOwnerPropertyIds(supabase: SupabaseClient): Promise<string[]> {
   const userId = await getOwnerUserId(supabase)
+  const { data, error } = await supabase.from("properties").select("id").eq("user_id", userId)
+  if (error) throw new Error(error.message)
+  return ((data as Array<{ id: string }> | null) ?? []).map((row) => row.id)
+}
+
+/** Non-throwing variant: returns [] when no owner can be resolved. */
+export async function tryGetOwnerPropertyIds(supabase: SupabaseClient): Promise<string[]> {
+  const userId = await tryGetOwnerUserId(supabase)
+  if (!userId) return []
   const { data, error } = await supabase.from("properties").select("id").eq("user_id", userId)
   if (error) throw new Error(error.message)
   return ((data as Array<{ id: string }> | null) ?? []).map((row) => row.id)

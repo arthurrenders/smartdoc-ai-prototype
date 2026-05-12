@@ -222,7 +222,7 @@ export async function analyzeAsbestosWithAI(
     const asbestosData = coerceAsbestosData(parsed)
 
     debugLog("Transforming asbestos AI data to analysis result...")
-    const result = transformAsbestosToAnalysisResult(asbestosData)
+    const result = transformAsbestosToAnalysisResult(asbestosData, normalizedText)
     debugLog("=== FINAL ASBESTOS ANALYSIS RESULT ===")
     debugLog(JSON.stringify(result, null, 2))
     debugLog("=== END FINAL ASBESTOS ANALYSIS RESULT ===")
@@ -256,7 +256,47 @@ export async function analyzeAsbestosWithAI(
   }
 }
 
-function transformAsbestosToAnalysisResult(data: AsbestosAIResponse): AnalysisResult {
+/**
+ * Heuristic check: looks for an inventory section + at least one materiaal cue in the raw PDF text.
+ * Used to suppress the AI's "missing_inventory" red flag when the inventory is clearly present in the
+ * document but Gemini failed to parse it into a structured shape.
+ */
+function rawTextLooksLikeAsbestosInventoryPresent(text: string | undefined): boolean {
+  if (!text) return false
+  const lower = text.toLowerCase()
+  const sectionCues = [
+    "asbesthoudend materiaal",
+    "asbesthoudende materialen",
+    "asbestinventaris",
+    "inventaris",
+    "materialen overzicht",
+    "materialenoverzicht",
+    "lijst van asbest",
+    "lijst materialen",
+    "locatie",
+    "hoeveelheid",
+    "materiaaltype",
+  ]
+  const materiaalCues = [
+    "dakbedekking",
+    "golfplaat",
+    "leien",
+    "pijpisolatie",
+    "kit",
+    "vloerbedekking",
+    "gevelbekleding",
+    "asbestcement",
+    "vinyl",
+    "remvoering",
+    "isolatieplaat",
+    "schoorsteen",
+  ]
+  const sectionHit = sectionCues.some((c) => lower.includes(c))
+  const materiaalHit = materiaalCues.some((c) => lower.includes(c))
+  return sectionHit && materiaalHit
+}
+
+function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: string): AnalysisResult {
   const flags: Flag[] = []
   let status: "red" | "orange" | "green" = "green"
   const summaryParts: string[] = []
@@ -309,13 +349,23 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse): AnalysisRe
   }
 
   if (redFlags.includes("missing_inventory")) {
-    flags.push({
-      severity: "orange",
-      title: "Missing asbestos inventory",
-      details:
-        "The certificate indicates asbestos risk but does not list a detailed asbestos inventory.",
-    })
-    if (status === "green") status = "orange"
+    if (rawTextLooksLikeAsbestosInventoryPresent(rawText)) {
+      flags.push({
+        severity: "orange",
+        title: "Inventory not parsed automatically",
+        details:
+          "The document appears to contain an asbestos inventory but it could not be parsed automatically — please review manually.",
+      })
+      if (status === "green") status = "orange"
+    } else {
+      flags.push({
+        severity: "orange",
+        title: "Missing asbestos inventory",
+        details:
+          "The certificate indicates asbestos risk but does not list a detailed asbestos inventory.",
+      })
+      if (status === "green") status = "orange"
+    }
   }
 
   if (redFlags.includes("invalid_quantity")) {

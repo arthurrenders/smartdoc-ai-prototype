@@ -51,6 +51,27 @@ export function detectDocumentTypeFromPdfText(text: string): DetectedDocumentKin
     return "electrical"
   }
 
+  // Broader cue-based fallback: electrical inspection reports frequently use these phrases
+  // without the strict "elektrische installatie" wording (e.g. "DE INSTALATIE IS CONFORM"
+  // with the typo, or just "Verslagnummer … Adres installatie …").
+  const electricalCues = [
+    "verslagnummer",
+    "adres installatie",
+    "datum van onderzoek",
+    "de installatie is",
+    "de instalatie is",
+    "aardingsweerstand",
+    "differentieelschakelaar",
+    "controle-organisme",
+    "controleorganisme",
+    "keuringsverslag",
+    "elektrisch keuringsverslag",
+  ]
+  const cueHits = electricalCues.reduce((n, cue) => (t.includes(cue) ? n + 1 : n), 0)
+  if (cueHits >= 2 || (cueHits >= 1 && (t.includes("conform") || t.includes("keuring")))) {
+    return "electrical"
+  }
+
   if (
     t.includes("asbestattest") ||
     t.includes("asbestveilig") ||

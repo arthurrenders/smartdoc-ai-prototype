@@ -111,6 +111,26 @@ function detectIntakeDocumentType(text: string, filename = ""): IntakeDetectedDo
   if (t.includes("keuring") && (t.includes("elektr") || t.includes("installatie") || t.includes("arei"))) {
     return "electricity"
   }
+  // Cue-based electrical detection for inspection reports that don't use the word "keuring"
+  // (e.g. "Verslagnummer … Adres installatie … DE INSTALATIE IS CONFORM").
+  {
+    const cues = [
+      "verslagnummer",
+      "adres installatie",
+      "datum van onderzoek",
+      "de installatie is",
+      "de instalatie is",
+      "aardingsweerstand",
+      "differentieelschakelaar",
+      "controle-organisme",
+      "controleorganisme",
+      "keuringsverslag",
+    ]
+    const hits = cues.reduce((n, c) => (t.includes(c) ? n + 1 : n), 0)
+    if (hits >= 2 || (hits >= 1 && (t.includes("conform") || t.includes("arei")))) {
+      return "electricity"
+    }
+  }
   if (
     t.includes("bodemattest") ||
     t.includes("ovam") ||
@@ -175,6 +195,13 @@ async function insertDocumentAndAnalysis(
     storagePath: string
     intakeDetectedDocumentType?: IntakeDetectedDocumentType | null
     sourceFileName?: string | null
+    /** When the property was matched/auto-created FROM this document's address, pass the address pieces so the row can be pre-verified. */
+    addressMatchPrefill?: {
+      extractedAddress: string | null
+      expectedAddress: string | null
+      confidence: number
+      reason: string
+    } | null
   }
 ): Promise<{ documentId: string; analysisRunId: string } | { error: string }> {
   const pid = params.propertyId?.trim()
@@ -191,14 +218,25 @@ async function insertDocumentAndAnalysis(
     }
   }
 
+  const insertPayload: Record<string, unknown> = {
+    property_id: pid,
+    document_type_id: null,
+    storage_path: params.storagePath,
+    status: "uploaded",
+  }
+
+  if (params.addressMatchPrefill) {
+    insertPayload.expected_property_id = pid
+    insertPayload.expected_address = params.addressMatchPrefill.expectedAddress
+    insertPayload.extracted_document_address = params.addressMatchPrefill.extractedAddress
+    insertPayload.address_match_status = "match"
+    insertPayload.address_match_confidence = params.addressMatchPrefill.confidence
+    insertPayload.address_match_reason = params.addressMatchPrefill.reason
+  }
+
   const { data: document, error: documentError } = await supabase
     .from("documents")
-    .insert({
-      property_id: pid,
-      document_type_id: null,
-      storage_path: params.storagePath,
-      status: "uploaded",
-    })
+    .insert(insertPayload)
     .select("id")
     .single()
 
@@ -622,11 +660,22 @@ Confidence: ${debugConfidence}`)
     }
   }
 
+  const prefillReason = created
+    ? "Property was auto-created from this document's address."
+    : `Address matched existing property (${matchTier ?? "strong"} signal).`
+  const prefillConfidence = matchTier ? scoreForMatchTier(matchTier) : Math.max(0.85, candidate.confidence)
+
   const docRes = await insertDocumentAndAnalysis(supabase, {
     propertyId,
     storagePath: copyRes.destPath,
     intakeDetectedDocumentType: detectedDocumentType,
     sourceFileName: params.filename,
+    addressMatchPrefill: {
+      extractedAddress: extractedAddressRaw,
+      expectedAddress: extractedAddressRaw,
+      confidence: prefillConfidence,
+      reason: prefillReason,
+    },
   })
 
   if ("error" in docRes) {
