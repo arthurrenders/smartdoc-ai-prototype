@@ -50,7 +50,7 @@ function coerceFlags(raw: unknown): Flag[] {
       row.severity === "red" || row.severity === "orange" || row.severity === "green"
         ? row.severity
         : "orange"
-    const title = typeof row.title === "string" && row.title.trim() ? row.title.trim() : "Urban-planning finding"
+    const title = typeof row.title === "string" && row.title.trim() ? row.title.trim() : "Stedenbouwkundige bevinding"
     const details = typeof row.details === "string" ? row.details.trim() : ""
     out.push({ severity, title, details })
   }
@@ -112,16 +112,16 @@ function transformUrbanToAnalysisResult(data: UrbanPlanningAIResponse, text: str
     if (!flags.some((f) => f.title.toLowerCase().includes("handhaving") || f.title.toLowerCase().includes("enforcement"))) {
       flags.push({
         severity: "red",
-        title: "Urban-planning enforcement or violation",
-        details: "The document mentions a violation, enforcement item, or unresolved permit issue. Review before transaction completion.",
+        title: "Handhaving of overtreding vermeld",
+        details: "Het document vermeldt een overtreding, handhavingsitem of onopgelost vergunningsprobleem. Controleer dit voor het afsluiten van de transactie.",
       })
     }
   } else if (hasRestrictions && status === "green") {
     status = "orange"
     flags.push({
       severity: "orange",
-      title: "Urban-planning restriction or follow-up",
-      details: "The document mentions restrictions or follow-up actions that should be checked before publication or sale.",
+      title: "Stedenbouwkundige beperking of opvolging",
+      details: "Het document vermeldt beperkingen of opvolgacties die gecontroleerd moeten worden voor publicatie of verkoop.",
     })
   }
 
@@ -153,7 +153,7 @@ export async function analyzeUrbanPlanningWithAI(
 
   try {
     const prompt = `You analyze Belgian urban-planning information documents for real estate managers.
-Documents may be called stedenbouwkundige inlichtingen, vastgoedinformatie, stedenbouwkundig uittreksel, or omgevingsinformatie.
+Documents may be called stedenbouwkundige inlichtingen, stedenbouwkundig attest, vastgoedinformatie, stedenbouwkundig uittreksel, or omgevingsinformatie.
 
 Return ONLY valid JSON with:
 {
@@ -177,6 +177,7 @@ Severity guidance:
 - red: building violation, enforcement, unresolved permit conflict, demolition order, or illegal construction signal.
 - orange: important restriction, zoning limitation, missing/unclear permit detail, heritage/flood/future planning note, or action advisable.
 - green: no explicit urban-planning issue or action is apparent.
+Use Dutch for summary, flag titles, and flag details.
 Only flag genuine findings from the text. If uncertain, use orange and explain what must be checked.
 
 Document text:
@@ -200,11 +201,13 @@ ${textToSend}${isTruncated ? "\n\n[Document truncated for length]" : ""}`
     }
   } catch (error) {
     const ux = userFacingAnalysisFailureFromError(error)
+    const metadata = extractUrbanPlanningMetadata(normalizedText)
     return {
       result: {
         status: "orange",
         summary: ux.summary,
         flags: [{ severity: "orange", title: ux.title, details: ux.details }],
+        ...metadata,
       },
       modelName,
       promptVersion: PROMPT_VERSION,

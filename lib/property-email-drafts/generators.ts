@@ -12,7 +12,9 @@ function isWrongDocumentFlag(data: PropertyDetailData): boolean {
   return data.flags.some(
     (f) =>
       f.title.toLowerCase().includes("wrong document type") ||
-      f.details.toLowerCase().includes("wrong document")
+      f.title.toLowerCase().includes("verkeerd documenttype") ||
+      f.details.toLowerCase().includes("wrong document") ||
+      f.details.toLowerCase().includes("verkeerde rij")
   )
 }
 

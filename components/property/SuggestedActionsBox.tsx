@@ -15,9 +15,9 @@ export function SuggestedActionsBox({ actions, className = "" }: SuggestedAction
           <CheckCircle2 className="h-5 w-5" aria-hidden />
         </div>
         <div>
-          <h2 className="saas-section-heading">Suggested next steps</h2>
+          <h2 className="saas-section-heading">Aanbevolen volgende stappen</h2>
           <p className="saas-section-subheading">
-            AI-recommended actions based on document status
+            Aanbevolen acties op basis van de documentstatus
           </p>
         </div>
       </div>

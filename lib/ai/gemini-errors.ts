@@ -21,43 +21,43 @@ export function userFacingAnalysisFailureFromError(error: unknown): UserFacingAi
     message.includes("Quota exceeded")
   ) {
     return {
-      summary: "Gemini API rate limit or daily quota exceeded.",
-      title: "API quota exceeded",
+      summary: "Gemini API-limiet of dagquota overschreden.",
+      title: "API-quota overschreden",
       details:
-        "The free tier allows a limited number of requests per day per model. Wait a few minutes and try again, enable billing for a higher limit, or set GEMINI_MODEL / GEMINI_MODEL_FALLBACK in .env.local. See https://ai.google.dev/gemini-api/docs/rate-limits",
+        "De gratis laag laat een beperkt aantal aanvragen per dag per model toe. Wacht even en probeer opnieuw, activeer billing voor een hogere limiet of stel GEMINI_MODEL / GEMINI_MODEL_FALLBACK in .env.local in. Zie https://ai.google.dev/gemini-api/docs/rate-limits",
     }
   }
 
   if (status === 401 || status === 403) {
     return {
-      summary: "Gemini API rejected the request (authentication).",
-      title: "API access denied",
+      summary: "Gemini API heeft de aanvraag geweigerd (authenticatie).",
+      title: "API-toegang geweigerd",
       details:
-        "Check GEMINI_API_KEY in .env.local and that the key is allowed for Generative Language API.",
+        "Controleer GEMINI_API_KEY in .env.local en kijk na of de sleutel toegang heeft tot de Generative Language API.",
     }
   }
 
   if (status === 503 || message.toLowerCase().includes("unavailable")) {
     return {
-      summary: "Gemini API is temporarily unavailable.",
-      title: "Service unavailable",
-      details: "Retry shortly. If it persists, check https://status.cloud.google.com/",
+      summary: "Gemini API is tijdelijk niet beschikbaar.",
+      title: "Service tijdelijk niet beschikbaar",
+      details: "Probeer straks opnieuw. Als dit blijft gebeuren, controleer https://status.cloud.google.com/",
     }
   }
 
   if (message.includes("No content in LLM response") || message.toLowerCase().includes("no usable")) {
     return {
-      summary: "The model returned no text for this request.",
-      title: "Empty model response",
+      summary: "Het model gaf geen tekst terug voor deze aanvraag.",
+      title: "Lege modelrespons",
       details:
-        "The API responded without text (blocked, filtered, or empty candidates). Try another PDF export or a different model.",
+        "De API antwoordde zonder tekst (geblokkeerd, gefilterd of lege kandidaten). Probeer een andere PDF-export of een ander model.",
     }
   }
 
   const trimmed = message.length > 600 ? `${message.slice(0, 600)}…` : message
   return {
-    summary: "Could not complete automatic analysis for this document.",
-    title: "Analysis incomplete",
-    details: trimmed || "The AI request failed or returned no usable response.",
+    summary: "Automatische analyse kon niet worden afgerond voor dit document.",
+    title: "Analyse onvolledig",
+    details: trimmed || "De AI-aanvraag is mislukt of gaf geen bruikbare respons terug.",
   }
 }

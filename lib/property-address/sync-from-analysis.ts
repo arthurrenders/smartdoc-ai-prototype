@@ -15,9 +15,13 @@ function normAddr(s: string): string {
 
 /** Never persist address sync when the analyzer flagged a mismatched document type. */
 function isWrongDocumentTypeResult(result: AnalysisResult): boolean {
-  if (result.summary.toLowerCase().includes("wrong document type")) return true
+  const summary = result.summary.toLowerCase()
+  if (summary.includes("wrong document type") || summary.includes("verkeerd documenttype")) return true
   if (
-    result.flags.some((f) => f.title.toLowerCase().includes("wrong document type"))
+    result.flags.some((f) => {
+      const title = f.title.toLowerCase()
+      return title.includes("wrong document type") || title.includes("verkeerd documenttype")
+    })
   ) {
     return true
   }

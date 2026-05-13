@@ -205,11 +205,13 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
         ...(summaryStr ? { analysisSummary: summaryStr.slice(0, 600) } : {}),
       })
       if (result?.summary) {
-        summaryParts.push(`${typeName}: ${result.summary}`)
+        summaryParts.push(`${DOC_DUTCH_LABELS[typeName] ?? typeName}: ${result.summary}`)
         const s = (result.summary as string).toLowerCase()
         if (
           s.includes("manual review") ||
+          s.includes("handmatige controle") ||
           s.includes("wrong document type") ||
+          s.includes("verkeerd documenttype") ||
           s.includes("ai analysis failed")
         ) {
           if (doc.document_type_id) manualReviewTypeIds.add(doc.document_type_id)
@@ -241,7 +243,7 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
     const executiveSummary =
       summaryParts.length > 0
         ? summaryParts.join(" ")
-        : "No document analyses available yet. Upload and run analysis for each required document type."
+        : "Nog geen documentanalyses beschikbaar. Laad documenten op en voer per vereist documenttype een analyse uit."
 
     const requiredTotal = requiredTypeIds.length
     // Count required current documents whose latest analysis is effectively green.
@@ -337,13 +339,13 @@ function buildSummaryParagraph(counts: {
   if (urgentActionNeeded) {
     const parts: string[] = []
     if (missingCount > 0) parts.push(`${missingCount} ontbreekt`)
-    if (manualReviewCount > 0) parts.push(`${manualReviewCount} vereist handmatige review`)
+    if (manualReviewCount > 0) parts.push(`${manualReviewCount} vereist handmatige controle`)
     return `Urgente actie vereist: ${parts.join(", ")}. Los deze problemen op vóór het afsluiten van de transactie.`
   }
   const parts: string[] = []
   if (validCount > 0) parts.push(`${validCount} geldig`)
   if (missingCount > 0) parts.push(`${missingCount} ontbreekt`)
-  if (manualReviewCount > 0) parts.push(`${manualReviewCount} vereist handmatige review`)
+  if (manualReviewCount > 0) parts.push(`${manualReviewCount} vereist handmatige controle`)
   const summary = parts.length > 0 ? `${parts.join(", ")}. ` : ""
   return `${summary}Zie de aanbevolen acties voor vervolgstappen.`
 }
@@ -358,27 +360,34 @@ function buildSuggestedActions(
   const hasWrongDocType = flags.some(
     (f) =>
       f.title.toLowerCase().includes("wrong document type") ||
-      f.details.toLowerCase().includes("wrong document")
+      f.title.toLowerCase().includes("verkeerd documenttype") ||
+      f.details.toLowerCase().includes("wrong document") ||
+      f.details.toLowerCase().includes("verkeerde rij")
   )
   const hasManualReview = flags.some(
     (f) =>
       f.title.toLowerCase().includes("manual review") ||
-      f.details.toLowerCase().includes("manual review")
+      f.title.toLowerCase().includes("handmatige controle") ||
+      f.details.toLowerCase().includes("manual review") ||
+      f.details.toLowerCase().includes("handmatig")
   )
   const hasAsbestosRisk = flags.some(
     (f) =>
       (f.documentTypeName?.toLowerCase().includes("asbestos") && f.severity !== "green") ||
-      f.title.toLowerCase().includes("asbestos")
+      (f.documentTypeName?.toLowerCase().includes("asbest") && f.severity !== "green") ||
+      f.title.toLowerCase().includes("asbestos") ||
+      f.title.toLowerCase().includes("asbest")
   )
   const hasExpiredEpc = flags.some(
     (f) =>
       (f.documentTypeName === "EPC" && f.severity === "red") ||
-      f.title.toLowerCase().includes("expired")
+      f.title.toLowerCase().includes("expired") ||
+      f.title.toLowerCase().includes("verlopen")
   )
   const hasOrange = flags.some((f) => f.severity === "orange")
 
   if (hasRed) {
-    list.push("Address critical issues before closing the transaction.")
+    list.push("Los kritieke punten op voor het afsluiten van de transactie.")
   }
   if (stats.missingCount > 0) {
     const missingLabels = missingRequiredDocumentNames
@@ -387,31 +396,31 @@ function buildSuggestedActions(
       missingLabels.length > 0
         ? ` (${missingLabels.join(", ")})`
         : ""
-    list.push(`Request missing document(s) from the seller${labelList}.`)
+    list.push(`Vraag ontbrekende documenten op bij de verkoper${labelList}.`)
   }
   if (stats.expiriesCount > 0) {
-    list.push("Review certificate(s) expiring soon and schedule renewal before validity end.")
+    list.push("Controleer attesten die binnenkort vervallen en plan tijdig vernieuwing.")
   }
-  if (hasExpiredEpc && !list.some((s) => s.toLowerCase().includes("renew"))) {
-    list.push("Renew expired EPC.")
+  if (hasExpiredEpc && !list.some((s) => s.toLowerCase().includes("epc"))) {
+    list.push("Vernieuw het verlopen EPC-attest.")
   }
   if (hasWrongDocType) {
-    list.push("Review wrong document type upload and request the correct certificate.")
+    list.push("Controleer de verkeerd opgeladen PDF en vraag het juiste attest op.")
   }
   if (hasManualReview && !hasWrongDocType) {
-    list.push("Manually validate unclear analysis result and request correct document if needed.")
+    list.push("Controleer het onduidelijke analyseresultaat handmatig en vraag indien nodig het correcte document op.")
   }
-  if (hasAsbestosRisk && !list.some((s) => s.toLowerCase().includes("asbestos"))) {
-    list.push("Follow up on asbestos risk findings with a specialist or seller.")
+  if (hasAsbestosRisk && !list.some((s) => s.toLowerCase().includes("asbest"))) {
+    list.push("Volg de asbestbevindingen op met de verkoper of een specialist.")
   }
   if (hasOrange && !hasRed && !list.length) {
-    list.push("Review warnings and follow up with the seller or a specialist if needed.")
+    list.push("Controleer de waarschuwingen en volg indien nodig op met de verkoper of een specialist.")
   }
   if (list.length === 0) {
-    list.push("All documents are in order. No action required.")
+    list.push("Alle documenten zijn in orde. Geen actie vereist.")
   }
 
-  const primary = list[0] ?? "Review document status."
+  const primary = list[0] ?? "Controleer de documentstatus."
   const followUps = list.slice(1, 4)
   return { primary, followUps }
 }

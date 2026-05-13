@@ -328,19 +328,19 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
   const summaryParts: string[] = []
 
   if (data.asbestos_score) {
-    summaryParts.push(`Asbestos score: ${data.asbestos_score}`)
+    summaryParts.push(`Asbestscore: ${data.asbestos_score}`)
   }
   if (data.building_year != null) {
-    summaryParts.push(`Building year: ${data.building_year}`)
+    summaryParts.push(`Bouwjaar: ${data.building_year}`)
   }
   if (data.certificate_number) {
-    summaryParts.push(`Certificate: ${data.certificate_number}`)
+    summaryParts.push(`Attest: ${data.certificate_number}`)
   }
   if (data.certificate_date) {
-    summaryParts.push(`Certificate date: ${data.certificate_date}`)
+    summaryParts.push(`Attestdatum: ${data.certificate_date}`)
   }
   if (data.expiry_date) {
-    summaryParts.push(`Expiry date: ${data.expiry_date}`)
+    summaryParts.push(`Vervaldatum: ${data.expiry_date}`)
   }
 
   const redFlags = data.red_flags || []
@@ -351,8 +351,8 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
   if (redFlags.includes("expired_asbestos_certificate") || data.is_expired === true) {
     flags.push({
       severity: "red",
-      title: "Expired asbestos certificate",
-      details: `The asbestos certificate expired on ${data.expiry_date || "unknown date"}. A new certificate is required.`,
+      title: "Asbestattest verlopen",
+      details: `Het asbestattest is verlopen op ${data.expiry_date || "onbekende datum"}. Een nieuw attest is vereist.`,
     })
     status = "red"
   }
@@ -360,8 +360,8 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
   if (hasNonSafeScore) {
     flags.push({
       severity: "red",
-      title: "Asbestos certificate is not asbestos-safe",
-      details: `The certificate score is "${data.asbestos_score || "niet-asbestveilig"}". Professional asbestos follow-up is required before treating the property as compliant.`,
+      title: "Asbestattest is niet asbestveilig",
+      details: `De attestscore is "${data.asbestos_score || "niet-asbestveilig"}". Professionele asbestopvolging is nodig voor dit pand als conform kan worden behandeld.`,
     })
     status = "red"
   }
@@ -369,9 +369,9 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
   if (redFlags.includes("high_risk_asbestos") && !hasNonSafeScore) {
     flags.push({
       severity: "red",
-      title: "High-risk asbestos",
+      title: "Verhoogd asbestrisico",
       details:
-        "The certificate indicates a high-risk asbestos situation (niet-asbestveilig – verhoogd risico). Immediate professional remediation is required.",
+        "Het attest wijst op een verhoogd asbestrisico. Onmiddellijke professionele opvolging is vereist.",
     })
     status = "red"
   }
@@ -379,9 +379,9 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
   if (redFlags.includes("missing_required_certificate")) {
     flags.push({
       severity: "orange",
-      title: "Missing required asbestos certificate",
+      title: "Verplicht asbestattest ontbreekt",
       details:
-        "The building appears to require an asbestos certificate (building year before 2001) but no valid certificate is present.",
+        "Het gebouw lijkt een asbestattest te vereisen (bouwjaar voor 2001), maar er is geen geldig attest aanwezig.",
     })
     if (status === "green") status = "orange"
   }
@@ -390,17 +390,17 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
     if (rawInventoryPresent) {
       flags.push({
         severity: "orange",
-        title: "Inventory not parsed automatically",
+        title: "Inventaris niet automatisch uitgelezen",
         details:
-          "The document appears to contain an asbestos inventory but it could not be parsed automatically — please review manually.",
+          "Het document lijkt een asbestinventaris te bevatten, maar die kon niet automatisch worden uitgelezen. Controleer dit handmatig.",
       })
       if (status === "green") status = "orange"
     } else {
       flags.push({
         severity: "orange",
-        title: "Missing asbestos inventory",
+        title: "Asbestinventaris ontbreekt",
         details:
-          "The certificate indicates asbestos risk but does not list a detailed asbestos inventory.",
+          "Het attest vermeldt asbestrisico, maar bevat geen gedetailleerde asbestinventaris.",
       })
       if (status === "green") status = "orange"
     }
@@ -409,8 +409,8 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
   if (redFlags.includes("invalid_quantity")) {
     flags.push({
       severity: "orange",
-      title: "Invalid asbestos quantity",
-      details: "One or more asbestos materials have an invalid or non-positive quantity.",
+      title: "Ongeldige asbesthoeveelheid",
+      details: "Een of meer asbestmaterialen hebben een ongeldige of niet-positieve hoeveelheid.",
     })
     if (status === "green") status = "orange"
   }
@@ -420,7 +420,7 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
       .map((item) => item.location)
       .filter((loc): loc is string => !!loc)
     if (locations.length > 0) {
-      summaryParts.push(`Asbestos locations: ${locations.join(", ")}`)
+      summaryParts.push(`Asbestlocaties: ${locations.join(", ")}`)
     }
   }
 
@@ -441,16 +441,16 @@ function transformAsbestosToAnalysisResult(data: AsbestosAIResponse, rawText?: s
       flags: [
         {
           severity: "orange",
-          title: "Incomplete automatic extraction",
+          title: "Automatische extractie onvolledig",
           details:
-            "The PDF text may be incomplete, scanned without OCR, or in an unexpected layout. Open the document to verify, or try a text-based export.",
+            "De PDF-tekst is mogelijk onvolledig, gescand zonder OCR of onverwacht opgebouwd. Open het document ter controle of probeer een tekstgebaseerde export.",
         },
       ],
     }
   }
 
   const summary =
-    summaryParts.length > 0 ? summaryParts.join(" | ") : "Asbestos certificate analyzed"
+    summaryParts.length > 0 ? summaryParts.join(" | ") : "Asbestattest geanalyseerd"
 
   const property_address =
     structuredAddressFromSchemaFields({

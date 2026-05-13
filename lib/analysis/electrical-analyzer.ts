@@ -210,29 +210,29 @@ function transformElectricalToAnalysisResult(data: ElectricalAIResponse): Analys
   if (data.wrong_document_type && data.red_flags && data.red_flags.includes("wrong_document_type")) {
     return {
       status: "orange",
-      summary: "Wrong document type uploaded.",
+      summary: "Verkeerd documenttype opgeladen.",
       flags: [
         {
           severity: "orange",
-          title: "Wrong document type",
+          title: "Verkeerd documenttype",
           details:
-            "This file appears to be a different document type (for example an EPC certificate), not an electrical inspection document.",
+            "Dit bestand lijkt een ander documenttype te zijn, niet een elektrische keuring.",
         },
       ],
     }
   }
 
   if (data.inspection_result) {
-    summaryParts.push(`Inspection result: ${data.inspection_result}`)
+    summaryParts.push(`Keuringsresultaat: ${data.inspection_result}`)
   }
   if (data.certificate_number) {
-    summaryParts.push(`Certificate: ${data.certificate_number}`)
+    summaryParts.push(`Attest: ${data.certificate_number}`)
   }
   if (data.inspection_date) {
-    summaryParts.push(`Inspection date: ${data.inspection_date}`)
+    summaryParts.push(`Keuringsdatum: ${data.inspection_date}`)
   }
   if (data.expiry_date) {
-    summaryParts.push(`Expiry date: ${data.expiry_date}`)
+    summaryParts.push(`Vervaldatum: ${data.expiry_date}`)
   }
   if (data.installation_year != null) {
     summaryParts.push(`Installation year: ${data.installation_year}`)
@@ -255,9 +255,9 @@ function transformElectricalToAnalysisResult(data: ElectricalAIResponse): Analys
   if (redFlags.includes("non_compliant_installation") || data.inspection_result === "niet-conform") {
     flags.push({
       severity: "red",
-      title: "Non-compliant electrical installation",
+      title: "Elektrische installatie niet conform",
       details:
-        "The inspection concludes that the electrical installation is not compliant with Belgian AREI regulations.",
+        "De keuring besluit dat de elektrische installatie niet conform de Belgische AREI-regels is.",
     })
     status = "red"
   }
@@ -312,7 +312,7 @@ function transformElectricalToAnalysisResult(data: ElectricalAIResponse): Analys
     return {
       status: "orange",
       summary:
-        "Electrical inspection document reviewed — key fields were not extracted automatically.",
+        "Elektrische keuring nagekeken - kerngegevens konden niet automatisch worden uitgelezen.",
       flags: [
         {
           severity: "orange",
@@ -325,7 +325,7 @@ function transformElectricalToAnalysisResult(data: ElectricalAIResponse): Analys
   }
 
   const summary =
-    summaryParts.length > 0 ? summaryParts.join(" | ") : "Electrical inspection document analyzed"
+    summaryParts.length > 0 ? summaryParts.join(" | ") : "Elektrische keuring geanalyseerd"
 
   const property_address =
     structuredAddressFromSchemaFields({

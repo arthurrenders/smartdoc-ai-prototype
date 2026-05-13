@@ -175,15 +175,26 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     if (asbestos && lower.includes("asbest")) return asbestos.id
 
     const soil = documentTypes.find((t) => t.name === "SOIL_CERTIFICATE")
-    if (soil && (lower.includes("bodem") || lower.includes("soil") || lower.includes("ovam"))) return soil.id
+    if (
+      soil &&
+      (lower.includes("bodem") ||
+        lower.includes("soil") ||
+        lower.includes("ovam") ||
+        lower.includes("grondeninformatie") ||
+        lower.includes("grondinformatie"))
+    ) {
+      return soil.id
+    }
 
     const urban = documentTypes.find((t) => t.name === "URBAN_PLANNING_INFO")
     if (
       urban &&
       (lower.includes("stedenbouw") ||
         lower.includes("stedebouw") ||
+        lower.includes("stedenbouwkundig attest") ||
         lower.includes("urban") ||
-        lower.includes("vastgoedinformatie"))
+        lower.includes("vastgoedinformatie") ||
+        lower.includes("omgevingsinformatie"))
     ) {
       return urban.id
     }
@@ -203,7 +214,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     formData.append("file", file)
     const result = await uploadDocument(formData)
     if (!result.ok) {
-      let errorMessage = result.error || "Upload failed"
+      let errorMessage = result.error || "Upload mislukt"
       if (result.details) {
         const detailsStr = Object.entries(result.details)
           .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
@@ -423,7 +434,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
         const documentTypeId = inferDocumentTypeIdFromFileName(file.name)
         if (!documentTypeId) {
           throw new Error(
-            "Geen documenttype herkend in de bestandsnaam. Hernoem het bestand (bijv. epc, asbest, elektrisch) of upload via de juiste rij."
+            "Geen documenttype herkend in de bestandsnaam. Hernoem het bestand (bijv. epc, asbest, elektrisch, bodem of stedenbouw) of laad het op via de juiste rij."
           )
         }
         await uploadPdfThroughManualPipeline(file, documentTypeId, () => setUploading(null))
@@ -467,12 +478,39 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
     }
   }
 
+  function getStatusLabel(status: string): string {
+    switch (status.toLowerCase()) {
+      case "missing":
+        return "Ontbreekt"
+      case "uploaded":
+        return "Opgeladen"
+      case "queued":
+      case "nog niet geanalyseerd":
+        return "Nog niet geanalyseerd"
+      case "processing":
+        return "Bezig"
+      case "green":
+        return "In orde"
+      case "orange":
+        return "Aandachtspunt"
+      case "red":
+        return "Kritiek"
+      case "done":
+        return "Klaar"
+      case "fout":
+      case "error":
+        return "Fout"
+      default:
+        return status
+    }
+  }
+
   if (loading) {
     return (
       <div className={wrapInCard ? "saas-card py-12" : "py-8"}>
         <div className="flex flex-col items-center justify-center gap-3 text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden />
-          <p className="text-sm text-muted-foreground">Loading documents…</p>
+          <p className="text-sm text-muted-foreground">Documenten laden...</p>
         </div>
       </div>
     )
@@ -491,16 +529,16 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       )}
       <div className="flex flex-col gap-3 rounded-xl border border-dashed border-[hsl(var(--border))] bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">Import from Google Drive</p>
+          <p className="text-sm font-medium text-foreground">Importeren uit Google Drive</p>
           <p className="text-xs text-muted-foreground">
-            Sign in with Google, choose PDFs from your Drive, then upload and analyze them like local files.
+            Meld aan met Google, kies PDF-bestanden uit je Drive en laad ze op zoals lokale bestanden.
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
           {driveImporting && (
             <p className="flex items-center gap-2 rounded-full bg-background px-3 py-1 text-xs text-muted-foreground">
               <span className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent" />
-              Importing from Google Drive…
+              Importeren uit Google Drive...
             </p>
           )}
           <button
@@ -512,22 +550,21 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
             <span className="flex h-5 w-5 items-center justify-center rounded-sm bg-primary/10">
               <FileText className="h-3.5 w-3.5 text-primary" />
             </span>
-            <span>Import from Google Drive</span>
+            <span>Importeren uit Google Drive</span>
           </button>
         </div>
       </div>
       {documentTypes.length === 0 ? (
         <div className="saas-empty-state">
           <FileQuestion className="h-12 w-12 sm:h-14 sm:w-14 saas-empty-state-icon" aria-hidden />
-          <p className="saas-empty-state-title">No document types configured</p>
+          <p className="saas-empty-state-title">Geen documenttypes geconfigureerd</p>
           <p className="saas-empty-state-description">
-            Document types will appear here once they are set up for this property.
+            Documenttypes verschijnen hier zodra ze voor dit pand zijn ingesteld.
           </p>
         </div>
       ) : (
         documentTypes.map((docType) => {
           const { status, document, analysisRun } = getDocumentData(docType.id)
-          const versions = getDocumentVersions(docType.id)
           const isUploading = uploading === docType.id
           const isNonAnalyzed = NON_ANALYZED_DOC_TYPE_SET.has(docType.name)
           /** Terminal runs no longer "busy" — avoids a frame where fresh data is `done` but `analyzing` is not cleared yet (after loadData, before finally). */
@@ -550,7 +587,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
             isNonAnalyzed &&
             Boolean(document) &&
             document?.address_match_status !== "match"
-          const statusForDisplay = isAnalyzing ? "Bezig met analyseren…" : status
+          const statusForDisplay = isAnalyzing ? "Bezig met analyseren..." : getStatusLabel(status)
           const statusColorClass = getStatusColor(
             isAnalyzing ? "processing" : status
           )
@@ -610,7 +647,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                     >
                       {isAlreadyDone ? <RotateCw className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                       {isAnalyzing
-                        ? "Running…"
+                        ? "Bezig..."
                         : isAlreadyDone
                           ? "Opnieuw analyseren"
                           : "Analyseren"}
@@ -624,7 +661,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                       title="Vergelijk het adres in het PDF met het adres van het pand"
                     >
                       <MapPin className="h-4 w-4" />
-                      {isVerifyingAddr ? "Bezig…" : "Adres controleren"}
+                      {isVerifyingAddr ? "Bezig..." : "Adres controleren"}
                     </button>
                   )}
                   {document && (
@@ -649,7 +686,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                     className="saas-btn-primary"
                   >
                     <Upload className="h-4 w-4" />
-                    {isUploading ? "Uploading…" : "Upload"}
+                    {isUploading ? "Opladen..." : "Opladen"}
                   </button>
                 </div>
               </div>
@@ -660,18 +697,6 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
                   role="alert"
                 >
                   {rowFeedback}
-                </div>
-              )}
-
-              {versions.length > 1 && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-3 text-sm text-blue-900">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">
-                    Nieuwste versie wordt gebruikt
-                  </p>
-                  <p className="mt-1 text-xs text-blue-700">
-                    SmartDoc gebruikt automatisch de laatste upload voor status, export en samenvattingen.
-                    {versions.length - 1} oudere versie{versions.length - 1 === 1 ? "" : "s"} blijven alleen beschikbaar via de opslaggeschiedenis.
-                  </p>
                 </div>
               )}
 
@@ -687,7 +712,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
 
               {showResults && analysisRun.result_json && !isAnalysisErrorPayload(analysisRun.result_json) && (
                 <div className="rounded-lg border border-[hsl(var(--border))] bg-muted/50 px-4 py-3.5 text-sm">
-                  <p className="font-medium text-foreground">Summary</p>
+                  <p className="font-medium text-foreground">Samenvatting</p>
                   <div className="mt-2 space-y-1.5 leading-relaxed text-muted-foreground">
                     {(() => {
                       const result = analysisRun.result_json as AnalysisResult
@@ -753,7 +778,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   if (wrapInCard) {
     return (
       <div className="saas-card">
-        <h2 className="saas-section-heading mb-6">Documents</h2>
+        <h2 className="saas-section-heading mb-6">Documenten</h2>
         {content}
         {reanalyzeModal}
       </div>

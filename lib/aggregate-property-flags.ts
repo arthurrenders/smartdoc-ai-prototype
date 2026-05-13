@@ -25,12 +25,19 @@ export type DocumentFlagsInput = {
 }
 
 const TITLE_WRONG_DOCUMENT_TYPE = "wrong document type"
+const TITLE_WRONG_DOCUMENT_TYPE_NL = "verkeerd documenttype"
 const TITLE_MANUAL_REVIEW = "manual review required"
+const TITLE_MANUAL_REVIEW_NL = "handmatige controle nodig"
 
 function isWrongDocumentTypeFlag(flag: FlagInput): boolean {
   const t = (flag.title || "").toLowerCase()
   const d = (flag.details || "").toLowerCase()
-  return t.includes(TITLE_WRONG_DOCUMENT_TYPE) || d.includes("wrong document")
+  return (
+    t.includes(TITLE_WRONG_DOCUMENT_TYPE) ||
+    t.includes(TITLE_WRONG_DOCUMENT_TYPE_NL) ||
+    d.includes("wrong document") ||
+    d.includes("verkeerde rij")
+  )
 }
 
 function isManualReviewFlag(flag: FlagInput): boolean {
@@ -38,9 +45,13 @@ function isManualReviewFlag(flag: FlagInput): boolean {
   const d = (flag.details || "").toLowerCase()
   return (
     t.includes(TITLE_MANUAL_REVIEW) ||
+    t.includes(TITLE_MANUAL_REVIEW_NL) ||
     d.includes(TITLE_MANUAL_REVIEW) ||
+    d.includes("handmatige controle") ||
     t.includes("analysis incomplete") ||
+    t.includes("analyse onvolledig") ||
     t.includes("api quota exceeded") ||
+    t.includes("api-quota overschreden") ||
     t.includes("empty model response")
   )
 }
@@ -50,15 +61,21 @@ function isSpecificFlag(flag: FlagInput): boolean {
   return (
     isWrongDocumentTypeFlag(flag) ||
     t.includes("expired") ||
+    t.includes("verlopen") ||
     t.includes("invalid") ||
     t.includes("non-compliant") ||
+    t.includes("niet conform") ||
     t.includes("wrong document") ||
+    t.includes("verkeerd documenttype") ||
     t.includes("high-risk") ||
     t.includes("high risk") ||
+    t.includes("verhoogd risico") ||
     t.includes("poor energy") ||
     t.includes("moderate energy") ||
     t.includes("missing") ||
-    t.includes("asbestos") && (t.includes("risk") || t.includes("expired") || t.includes("inventory"))
+    t.includes("ontbreekt") ||
+    t.includes("asbestos") && (t.includes("risk") || t.includes("expired") || t.includes("inventory")) ||
+    t.includes("asbest") && (t.includes("risico") || t.includes("verlopen") || t.includes("inventaris"))
   )
 }
 

@@ -88,7 +88,8 @@ export function detectDocumentTypeFromPdfText(text: string): DetectedDocumentKin
     t.includes("bodemattest") ||
     t.includes("ovam") ||
     t.includes("bodeminformatie") ||
-    t.includes("grondinformatieregister")
+    t.includes("grondinformatieregister") ||
+    t.includes("grondeninformatieregister")
   ) {
     return "soil_certificate"
   }
@@ -96,7 +97,9 @@ export function detectDocumentTypeFromPdfText(text: string): DetectedDocumentKin
   if (
     t.includes("stedenbouwkundige inlichtingen") ||
     t.includes("stedenbouwkundig uittreksel") ||
+    t.includes("stedenbouwkundig attest") ||
     t.includes("vastgoedinformatie") ||
+    t.includes("omgevingsinformatie") ||
     t.includes("omgevingsvergunning") ||
     t.includes("stedenbouwkundige voorschriften")
   ) {
@@ -110,15 +113,15 @@ export function detectDocumentTypeFromPdfText(text: string): DetectedDocumentKin
 function humanLabelForDetectedType(detected: Exclude<DetectedDocumentKind, "unknown">): string {
   switch (detected) {
     case "epc":
-      return "an EPC (energy performance) certificate"
+      return "een EPC-attest"
     case "electrical":
-      return "an electrical inspection / AREI document"
+      return "een elektrische keuring / AREI-document"
     case "asbestos":
-      return "an asbestos certificate"
+      return "een asbestattest"
     case "soil_certificate":
-      return "a soil certificate / bodemattest"
+      return "een bodemattest"
     case "urban_planning_info":
-      return "an urban-planning information document"
+      return "stedenbouwkundige inlichtingen"
   }
 }
 
@@ -128,13 +131,13 @@ function expectedSlotLabel(documentTypeName: string): string {
     case "EPC":
       return "EPC"
     case "ELECTRICAL":
-      return "electrical inspection"
+      return "elektrische keuring"
     case "ASBESTOS":
-      return "asbestos"
+      return "asbestattest"
     case "SOIL_CERTIFICATE":
-      return "soil certificate / bodemattest"
+      return "bodemattest"
     case "URBAN_PLANNING_INFO":
-      return "urban-planning information"
+      return "stedenbouwkundige inlichtingen"
     default:
       return documentTypeName
   }
@@ -146,17 +149,17 @@ function notRecognizedAsExpectedDocumentMessage(
 ): { summary: string; details: string } {
   const expected =
     expectedDbName === "EPC"
-      ? "an EPC"
+      ? "een EPC"
       : expectedDbName === "ELECTRICAL"
-        ? "an electrical inspection"
+        ? "een elektrische keuring"
         : expectedDbName === "ASBESTOS"
-          ? "an asbestos"
+          ? "een asbestattest"
           : expectedDbName === "SOIL_CERTIFICATE"
-            ? "a soil certificate"
-            : "an urban-planning information"
+            ? "een bodemattest"
+            : "stedenbouwkundige inlichtingen"
   return {
-    summary: `This document type was not recognized as ${expected} document.`,
-    details: `The PDF text did not match the usual keywords for ${expectedSlotLabel(expectedDbName)}. Check that you uploaded the correct file, or try a text-based PDF export.`,
+    summary: `Dit documenttype werd niet herkend als ${expected}.`,
+    details: `De PDF-tekst bevat niet de gebruikelijke sleutelwoorden voor ${expectedSlotLabel(expectedDbName)}. Controleer of het juiste bestand is opgeladen of probeer een tekstgebaseerde PDF-export.`,
   }
 }
 
@@ -278,7 +281,7 @@ export async function executeAnalysisRunPipeline(
           flags: [
             {
               severity: "orange" as const,
-              title: "Document type not recognized",
+              title: "Documenttype niet herkend",
               details,
             },
           ],
@@ -288,12 +291,12 @@ export async function executeAnalysisRunPipeline(
         const detectedHuman = humanLabelForDetectedType(detectedType)
         result = {
           status: "orange" as const,
-          summary: `Wrong document type: the PDF looks like ${detectedHuman}, but you uploaded it under ${expectedSlotLabel("EPC")}.`,
+          summary: `Verkeerd documenttype: de PDF lijkt op ${detectedHuman}, maar werd opgeladen onder ${expectedSlotLabel("EPC")}.`,
           flags: [
             {
               severity: "orange" as const,
-              title: "Wrong document type",
-              details: `Based on the text in this file, it matches ${detectedHuman}. This upload slot is for ${expectedSlotLabel("EPC")}. Please upload the correct PDF in the matching row.`,
+              title: "Verkeerd documenttype",
+              details: `Op basis van de tekst lijkt dit bestand op ${detectedHuman}. Deze rij is bedoeld voor ${expectedSlotLabel("EPC")}. Laad de juiste PDF op in de passende rij.`,
             },
           ],
         }
@@ -308,12 +311,12 @@ export async function executeAnalysisRunPipeline(
           modelName = ANALYSIS_MODEL_AI_FAILED
           result = {
             status: "orange" as const,
-            summary: "AI analysis failed. Manual review required.",
+            summary: "AI-analyse mislukt. Handmatige controle nodig.",
             flags: [
               {
                 severity: "orange" as const,
-                title: "Manual review required",
-                details: "Automatic AI analysis failed and the document must be checked manually.",
+                title: "Handmatige controle nodig",
+                details: "De automatische AI-analyse is mislukt. Controleer het document handmatig.",
               },
             ],
           }
@@ -329,7 +332,7 @@ export async function executeAnalysisRunPipeline(
           flags: [
             {
               severity: "orange" as const,
-              title: "Document type not recognized",
+              title: "Documenttype niet herkend",
               details,
             },
           ],
@@ -339,12 +342,12 @@ export async function executeAnalysisRunPipeline(
         const detectedHuman = humanLabelForDetectedType(detectedType)
         result = {
           status: "orange" as const,
-          summary: `Wrong document type: the PDF looks like ${detectedHuman}, but you uploaded it under ${expectedSlotLabel("ELECTRICAL")}.`,
+          summary: `Verkeerd documenttype: de PDF lijkt op ${detectedHuman}, maar werd opgeladen onder ${expectedSlotLabel("ELECTRICAL")}.`,
           flags: [
             {
               severity: "orange" as const,
-              title: "Wrong document type",
-              details: `Based on the text in this file, it matches ${detectedHuman}. This upload slot is for ${expectedSlotLabel("ELECTRICAL")}. Please upload the correct PDF in the matching row.`,
+              title: "Verkeerd documenttype",
+              details: `Op basis van de tekst lijkt dit bestand op ${detectedHuman}. Deze rij is bedoeld voor ${expectedSlotLabel("ELECTRICAL")}. Laad de juiste PDF op in de passende rij.`,
             },
           ],
         }
@@ -359,12 +362,12 @@ export async function executeAnalysisRunPipeline(
           modelName = ANALYSIS_MODEL_AI_FAILED
           result = {
             status: "orange" as const,
-            summary: "AI analysis failed. Manual review required.",
+            summary: "AI-analyse mislukt. Handmatige controle nodig.",
             flags: [
               {
                 severity: "orange" as const,
-                title: "Manual review required",
-                details: "Automatic AI analysis failed and the document must be checked manually.",
+                title: "Handmatige controle nodig",
+                details: "De automatische AI-analyse is mislukt. Controleer het document handmatig.",
               },
             ],
           }
@@ -380,7 +383,7 @@ export async function executeAnalysisRunPipeline(
           flags: [
             {
               severity: "orange" as const,
-              title: "Document type not recognized",
+              title: "Documenttype niet herkend",
               details,
             },
           ],
@@ -390,12 +393,12 @@ export async function executeAnalysisRunPipeline(
         const detectedHuman = humanLabelForDetectedType(detectedType)
         result = {
           status: "orange" as const,
-          summary: `Wrong document type: the PDF looks like ${detectedHuman}, but you uploaded it under ${expectedSlotLabel("ASBESTOS")}.`,
+          summary: `Verkeerd documenttype: de PDF lijkt op ${detectedHuman}, maar werd opgeladen onder ${expectedSlotLabel("ASBESTOS")}.`,
           flags: [
             {
               severity: "orange" as const,
-              title: "Wrong document type",
-              details: `Based on the text in this file, it matches ${detectedHuman}. This upload slot is for ${expectedSlotLabel("ASBESTOS")}. Please upload the correct PDF in the matching row.`,
+              title: "Verkeerd documenttype",
+              details: `Op basis van de tekst lijkt dit bestand op ${detectedHuman}. Deze rij is bedoeld voor ${expectedSlotLabel("ASBESTOS")}. Laad de juiste PDF op in de passende rij.`,
             },
           ],
         }
@@ -410,12 +413,12 @@ export async function executeAnalysisRunPipeline(
           modelName = ANALYSIS_MODEL_AI_FAILED
           result = {
             status: "orange" as const,
-            summary: "AI analysis failed. Manual review required.",
+            summary: "AI-analyse mislukt. Handmatige controle nodig.",
             flags: [
               {
                 severity: "orange" as const,
-                title: "Manual review required",
-                details: "Automatic AI analysis failed and the document must be checked manually.",
+                title: "Handmatige controle nodig",
+                details: "De automatische AI-analyse is mislukt. Controleer het document handmatig.",
               },
             ],
           }
@@ -428,19 +431,19 @@ export async function executeAnalysisRunPipeline(
         result = {
           status: "orange" as const,
           summary,
-          flags: [{ severity: "orange" as const, title: "Document type not recognized", details }],
+          flags: [{ severity: "orange" as const, title: "Documenttype niet herkend", details }],
         }
       } else if (detectedType !== "soil_certificate") {
         modelName = ANALYSIS_MODEL_RULE_BASED
         const detectedHuman = humanLabelForDetectedType(detectedType)
         result = {
           status: "orange" as const,
-          summary: `Wrong document type: the PDF looks like ${detectedHuman}, but you uploaded it under ${expectedSlotLabel("SOIL_CERTIFICATE")}.`,
+          summary: `Verkeerd documenttype: de PDF lijkt op ${detectedHuman}, maar werd opgeladen onder ${expectedSlotLabel("SOIL_CERTIFICATE")}.`,
           flags: [
             {
               severity: "orange" as const,
-              title: "Wrong document type",
-              details: `Based on the text in this file, it matches ${detectedHuman}. This upload slot is for ${expectedSlotLabel("SOIL_CERTIFICATE")}. Please upload the correct PDF in the matching row.`,
+              title: "Verkeerd documenttype",
+              details: `Op basis van de tekst lijkt dit bestand op ${detectedHuman}. Deze rij is bedoeld voor ${expectedSlotLabel("SOIL_CERTIFICATE")}. Laad de juiste PDF op in de passende rij.`,
             },
           ],
         }
@@ -457,19 +460,19 @@ export async function executeAnalysisRunPipeline(
         result = {
           status: "orange" as const,
           summary,
-          flags: [{ severity: "orange" as const, title: "Document type not recognized", details }],
+          flags: [{ severity: "orange" as const, title: "Documenttype niet herkend", details }],
         }
       } else if (detectedType !== "urban_planning_info") {
         modelName = ANALYSIS_MODEL_RULE_BASED
         const detectedHuman = humanLabelForDetectedType(detectedType)
         result = {
           status: "orange" as const,
-          summary: `Wrong document type: the PDF looks like ${detectedHuman}, but you uploaded it under ${expectedSlotLabel("URBAN_PLANNING_INFO")}.`,
+          summary: `Verkeerd documenttype: de PDF lijkt op ${detectedHuman}, maar werd opgeladen onder ${expectedSlotLabel("URBAN_PLANNING_INFO")}.`,
           flags: [
             {
               severity: "orange" as const,
-              title: "Wrong document type",
-              details: `Based on the text in this file, it matches ${detectedHuman}. This upload slot is for ${expectedSlotLabel("URBAN_PLANNING_INFO")}. Please upload the correct PDF in the matching row.`,
+              title: "Verkeerd documenttype",
+              details: `Op basis van de tekst lijkt dit bestand op ${detectedHuman}. Deze rij is bedoeld voor ${expectedSlotLabel("URBAN_PLANNING_INFO")}. Laad de juiste PDF op in de passende rij.`,
             },
           ],
         }
@@ -483,7 +486,7 @@ export async function executeAnalysisRunPipeline(
       modelName = ANALYSIS_MODEL_RULE_BASED
       result = {
         status: "green" as const,
-        summary: "Document reviewed - unknown type",
+        summary: "Document nagekeken - onbekend type",
         flags: [],
       }
     }

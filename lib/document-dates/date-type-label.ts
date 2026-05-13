@@ -2,11 +2,11 @@
  * Human-friendly labels for document_dates.date_type (storage + display).
  */
 const LABEL_BY_TYPE: Record<string, string> = {
-  certificate: "Certificate date",
-  expiry: "Expiry date",
-  inspection: "Inspection date",
-  follow_up: "Follow-up date",
-  remediation_deadline: "Remediation deadline",
+  certificate: "Attestdatum",
+  expiry: "Vervaldatum",
+  inspection: "Keuringsdatum",
+  follow_up: "Opvolgdatum",
+  remediation_deadline: "Saneringsdeadline",
 }
 
 export function labelForDocumentDateType(dateType: string): string {

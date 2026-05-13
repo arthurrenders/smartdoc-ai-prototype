@@ -15,9 +15,9 @@ export function AISummaryCard({ summary, className = "" }: AISummaryCardProps) {
           <FileText className="h-5 w-5" aria-hidden />
         </div>
         <div>
-          <h2 className="saas-section-heading">AI Executive Summary</h2>
+          <h2 className="saas-section-heading">AI-samenvatting</h2>
           <p className="saas-section-subheading">
-            Combined overview of all analyzed documents
+            Gecombineerd overzicht van alle geanalyseerde documenten
           </p>
         </div>
       </div>

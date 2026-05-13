@@ -6,6 +6,13 @@ import { cn } from "@/lib/utils"
 import type { FlagItem } from "@/app/actions/get-property-detail"
 
 const DOC_TYPE_ORDER = ["EPC", "ASBESTOS", "ELECTRICAL", "SOIL_CERTIFICATE", "URBAN_PLANNING_INFO"] as const
+const DOC_TYPE_DUTCH_LABELS: Record<string, string> = {
+  EPC: "EPC-attest",
+  ASBESTOS: "Asbestattest",
+  ELECTRICAL: "Elektrische keuring",
+  SOIL_CERTIFICATE: "Bodemattest",
+  URBAN_PLANNING_INFO: "Stedenbouwkundige inlichtingen",
+}
 
 type RedFlagsListProps = {
   flags: FlagItem[]
@@ -21,11 +28,71 @@ const severityStyles = {
 function groupFlagsByDocumentType(flags: FlagItem[]): Map<string, FlagItem[]> {
   const byType = new Map<string, FlagItem[]>()
   for (const flag of flags) {
-    const key = flag.documentTypeName ?? "Other"
+    const key = flag.documentTypeName ?? "OTHER"
     if (!byType.has(key)) byType.set(key, [])
     byType.get(key)!.push(flag)
   }
   return byType
+}
+
+function dutchDocTypeLabel(name: string): string {
+  if (name === "OTHER") return "Overig"
+  return DOC_TYPE_DUTCH_LABELS[name] ?? name
+}
+
+function dutchFlagTitle(title: string): string {
+  const t = title.trim().toLowerCase()
+  if (t === "document type not recognized") return "Documenttype niet herkend"
+  if (t === "wrong document type") return "Verkeerd documenttype"
+  if (t === "manual review required") return "Handmatige controle nodig"
+  if (t === "api quota exceeded") return "API-quota overschreden"
+  if (t === "api access denied") return "API-toegang geweigerd"
+  if (t === "service unavailable") return "Service tijdelijk niet beschikbaar"
+  if (t === "empty model response") return "Lege modelrespons"
+  if (t === "analysis incomplete") return "Analyse onvolledig"
+  if (t === "soil remediation required") return "Bodemsanering vereist"
+  if (t === "soil contamination mentioned") return "Bodemverontreiniging vermeld"
+  if (t === "urban-planning enforcement or violation") return "Handhaving of overtreding vermeld"
+  if (t === "urban-planning restriction or follow-up") return "Stedenbouwkundige beperking of opvolging"
+  if (t === "expired epc certificate") return "EPC-attest verlopen"
+  if (t.includes("non-compliant electrical")) return "Elektrische installatie niet conform"
+  if (t.includes("high-risk asbestos") || t.includes("high risk asbestos")) return "Verhoogd asbestrisico"
+  return title
+}
+
+function dutchFlagDetails(flag: FlagItem): string {
+  const title = flag.title.trim().toLowerCase()
+  const details = flag.details.trim()
+  const d = details.toLowerCase()
+
+  if (title === "document type not recognized") {
+    return "De PDF-tekst bevatte niet de gebruikelijke sleutelwoorden voor dit documenttype. Controleer of het juiste bestand is opgeladen."
+  }
+  if (title === "wrong document type") {
+    return "Het bestand lijkt in een verkeerde rij te zijn opgeladen. Laad de PDF op bij het juiste documenttype."
+  }
+  if (title === "manual review required") {
+    return "De automatische AI-analyse is mislukt. Controleer het document handmatig."
+  }
+  if (title === "soil remediation required") {
+    return "Het bodemattest vermeldt een sanerings- of opruimingsplicht. Volg dit op voor het afsluiten van de transactie."
+  }
+  if (title === "soil contamination mentioned") {
+    return "Het attest vermeldt bodemverontreiniging of een relevante registervermelding. Controleer de details voor het afsluiten."
+  }
+  if (title === "urban-planning enforcement or violation") {
+    return "Het document vermeldt een overtreding, handhavingsitem of onopgelost vergunningsprobleem. Controleer dit voor het afsluiten van de transactie."
+  }
+  if (title === "urban-planning restriction or follow-up") {
+    return "Het document vermeldt beperkingen of opvolgacties die gecontroleerd moeten worden voor publicatie of verkoop."
+  }
+  if (d.includes("automatic ai analysis failed")) {
+    return "De automatische AI-analyse is mislukt. Controleer het document handmatig."
+  }
+  if (d.includes("pdf text did not match")) {
+    return "De PDF-tekst bevatte niet de gebruikelijke sleutelwoorden voor dit documenttype. Controleer of het juiste bestand is opgeladen."
+  }
+  return details
 }
 
 export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
@@ -98,7 +165,7 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
             return (
               <div key={docType} className="flex flex-col gap-2">
                 <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                  {docType}
+                  {dutchDocTypeLabel(docType)}
                 </h3>
                 <ul className="flex flex-col gap-3" role="list">
                   {items.map((flag, index) => (
@@ -117,7 +184,7 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium text-foreground">{flag.title}</span>
+                          <span className="font-medium text-foreground">{dutchFlagTitle(flag.title)}</span>
                           {flag.occurrenceCount != null && flag.occurrenceCount > 1 && (
                             <span className="text-xs text-muted-foreground">
                               Gevonden in {flag.occurrenceCount} documenten
@@ -125,7 +192,7 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
                           )}
                         </div>
                         {flag.details && (
-                          <p className="mt-1 text-sm text-muted-foreground">{flag.details}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{dutchFlagDetails(flag)}</p>
                         )}
                       </div>
                     </li>

@@ -65,13 +65,13 @@ function statusBadgeClass(status: IntakeProcessingStatus): string {
 /** User-facing queue state (per-file); distinct from raw `processing_status` for Matched vs Created. */
 function formatQueueStatus(row: IntakeUploadRow): string {
   const s = row.processing_status
-  if (row.matched_property_id) return "Matched"
-  if (row.created_property_id) return "Created"
-  if (s === "uploaded") return "Pending"
-  if (s === "processing") return "Processing"
-  if (s === "needs_review") return "Needs review"
-  if (s === "failed") return "Failed"
-  if (s === "processed") return "Processed"
+  if (row.matched_property_id) return "Gekoppeld"
+  if (row.created_property_id) return "Aangemaakt"
+  if (s === "uploaded") return "In wachtrij"
+  if (s === "processing") return "Bezig"
+  if (s === "needs_review") return "Controle nodig"
+  if (s === "failed") return "Mislukt"
+  if (s === "processed") return "Verwerkt"
   return (s as string).replace(/_/g, " ")
 }
 
@@ -82,9 +82,9 @@ function formatConfidencePercent(score: number | null): string {
 
 function matchTierFromScore(score: number | null): string {
   if (score == null || Number.isNaN(score)) return "—"
-  if (score >= 0.88) return "Strong"
-  if (score >= 0.72) return "Medium"
-  return "Low"
+  if (score >= 0.88) return "Sterk"
+  if (score >= 0.72) return "Gemiddeld"
+  return "Laag"
 }
 
 function localStatusBadgeClass(status: LocalQueueRow["status"]): string {
@@ -106,25 +106,25 @@ function canEnterPropertyManually(row: IntakeUploadRow, propId: string | null): 
 
 function formatIntakeMatchSummary(row: IntakeUploadRow): string {
   if (row.created_property_id) {
-    return `Created property - ${matchTierFromScore(row.confidence_score)} match / extraction`
+    return `Pand aangemaakt - ${matchTierFromScore(row.confidence_score)} match / extractie`
   }
   if (row.matched_property_id) {
-    return `Linked to existing - ${matchTierFromScore(row.confidence_score)}`
+    return `Gekoppeld aan bestaand pand - ${matchTierFromScore(row.confidence_score)}`
   }
   if (row.processing_status === "failed") {
-    return row.error_message?.slice(0, 120) ?? "Processing failed"
+    return row.error_message?.slice(0, 120) ?? "Verwerking mislukt"
   }
   if (row.processing_status === "needs_review") {
-    return row.error_message?.slice(0, 160) ?? "Manual review"
+    return row.error_message?.slice(0, 160) ?? "Handmatige controle"
   }
   if (row.created_property_id) {
-    return `Created property · ${matchTierFromScore(row.confidence_score)} match / extraction`
+    return `Pand aangemaakt - ${matchTierFromScore(row.confidence_score)} match / extractie`
   }
   if (row.matched_property_id) {
-    return `Linked to existing · ${matchTierFromScore(row.confidence_score)}`
+    return `Gekoppeld aan bestaand pand - ${matchTierFromScore(row.confidence_score)}`
   }
   if (row.processing_status === "uploaded" || row.processing_status === "processing") {
-    return "Awaiting pipeline…"
+    return "Wacht op verwerking..."
   }
   return "—"
 }
@@ -285,7 +285,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
         relativePath,
         size: file.size,
         status: "uploading",
-        message: "Uploading",
+        message: "Opladen",
       }))
       setLocalQueueRows((prev) => [...localRows, ...prev])
       try {
@@ -296,7 +296,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           const chunk = rows.slice(offset, offset + UPLOAD_CHUNK_SIZE)
           const localChunk = localRows.slice(offset, offset + UPLOAD_CHUNK_SIZE)
           const localKeys = localChunk.map((row) => row.key)
-          updateLocalQueueRows(localKeys, { status: "uploading", message: "Uploading" })
+          updateLocalQueueRows(localKeys, { status: "uploading", message: "Opladen" })
           const formData = new FormData()
           for (const { file, relativePath } of chunk) {
             formData.append("files", file)
@@ -305,10 +305,10 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
 
           const res = await bulkIntakeUpload(formData)
           if (!res.ok && !res.results.some((r) => r.intakeId)) {
-            updateLocalQueueRows(localKeys, { status: "failed", message: res.error ?? "Upload failed" })
+            updateLocalQueueRows(localKeys, { status: "failed", message: res.error ?? "Upload mislukt" })
             setMessage({
               type: "err",
-              text: res.error ?? "Upload failed.",
+              text: res.error ?? "Upload mislukt.",
             })
             router.refresh()
             return
@@ -410,16 +410,16 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
           role="alert"
         >
-          Could not load intake queue: {loadError}
+          Intakewachtrij kon niet worden geladen: {loadError}
         </div>
       )}
 
       <section className="saas-card space-y-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-brand-dark">Upload documents</h2>
+            <h2 className="text-lg font-semibold text-brand-dark">Documenten opladen</h2>
             <p className="text-sm text-muted-foreground">
-              PDFs only: EPC, asbestattest, elektrische keuring, bodemattest en stedenbouwkundige inlichtingen.
+              Alleen PDF&apos;s: EPC, asbestattest, elektrische keuring, bodemattest en stedenbouwkundige inlichtingen.
               SmartDoc koppelt ze aan het juiste pand en start daarna de analyse.
             </p>
           </div>
@@ -429,7 +429,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
             className="inline-flex items-center gap-2 self-start rounded-lg border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm font-medium text-brand-dark shadow-sm transition hover:bg-muted/40"
           >
             <RefreshCw className="h-4 w-4" />
-            Refresh
+            Vernieuwen
           </button>
         </div>
 
@@ -463,10 +463,9 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           <div className="rounded-full bg-brand-dark/10 p-4 text-brand-dark">
             <Upload className="h-8 w-8" />
           </div>
-          <p className="mt-4 font-medium text-brand-dark">Drag & drop PDFs or folders here</p>
+          <p className="mt-4 font-medium text-brand-dark">Sleep PDF&apos;s of mappen hierheen</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Click to pick files, or use the Choose folder control below. Nested folders are scanned (PDFs only; up to 500
-            files per drop).
+            Klik om bestanden te kiezen of gebruik de mapknop hieronder. Submappen worden mee gescand (alleen PDF&apos;s, maximaal 500 bestanden per keer).
           </p>
           <input
             ref={inputRef}
@@ -499,7 +498,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
             className="inline-flex items-center gap-2 rounded-lg border border-brand-light/50 bg-brand-light/10 px-4 py-2.5 text-sm font-semibold text-brand-dark shadow-sm transition hover:bg-brand-light/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <FolderInput className="h-4 w-4" />
-            Choose folder
+            Map kiezen
           </button>
           <input
             ref={(el) => {
@@ -533,14 +532,14 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
             onClick={() => void handleGoogleDriveClick()}
             disabled={isWorking || driveImporting}
             className="inline-flex items-center gap-2 rounded-lg border border-brand-light/50 bg-white px-4 py-2.5 text-sm font-semibold text-brand-dark shadow-sm ring-1 ring-brand-light/30 transition hover:bg-brand-light/10 disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label="Import PDFs from Google Drive"
+            aria-label="PDF's importeren uit Google Drive"
           >
             {driveImporting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Cloud className="h-4 w-4 text-brand-light" />
             )}
-            {driveImporting ? "Importing from Drive…" : "Import from Google Drive"}
+            {driveImporting ? "Importeren uit Drive..." : "Importeren uit Google Drive"}
           </button>
 
         </div>
@@ -548,7 +547,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
         {isWorking && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin text-brand-light" />
-            Uploading and matching properties…
+            Documenten opladen en panden koppelen...
           </div>
         )}
 
@@ -756,7 +755,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
                         {propId ? (
                           <span className="text-xs text-muted-foreground">OK</span>
                         ) : row.processing_status === "uploaded" || row.processing_status === "processing" ? (
-                          <span className="text-xs text-muted-foreground">Awaiting pipeline</span>
+                          <span className="text-xs text-muted-foreground">Wacht op verwerking</span>
                         ) : manualEligible ? (
                           <div className="space-y-2">
                             {manualFormIntakeId === row.id ? (

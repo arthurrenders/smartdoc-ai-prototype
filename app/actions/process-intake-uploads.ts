@@ -16,17 +16,17 @@ const MAX_INTAKE_ROWS_PER_CALL = 3
 function humanReviewMessage(result: Extract<MatchOrCreatePropertyResult, { outcome: "needs_manual_review" }>): string {
   switch (result.reason) {
     case "ambiguous_match":
-      return `Manual review: ambiguous property match (${result.candidateCountStrong} strong, ${result.candidateCountMedium} medium candidates).`
+      return `Handmatige controle: dubbelzinnige pandmatch (${result.candidateCountStrong} sterke, ${result.candidateCountMedium} gemiddelde kandidaten).`
     case "no_address_in_text":
-      return "Manual review: could not extract a confident Belgian address line from the PDF."
+      return "Handmatige controle: geen betrouwbaar Belgisch adres uit de PDF gehaald."
     case "pdf_text_empty":
-      return "Manual review: PDF contains no extractable text (may be scanned images only)."
+      return "Handmatige controle: de PDF bevat geen extraheerbare tekst (mogelijk alleen gescande beelden)."
     case "pdf_download_failed":
-      return "Manual review: could not download the file from storage."
+      return "Handmatige controle: bestand kon niet uit de opslag worden gedownload."
     case "extraction_insufficient_for_autocreate":
-      return "Manual review: a likely address was extracted (see Address column). Add the postal code or confirm / edit below, or link an existing property."
+      return "Handmatige controle: er werd een mogelijk adres gevonden. Voeg de postcode toe, bevestig of bewerk hieronder, of koppel een bestaand pand."
     default:
-      return "Manual review required."
+      return "Handmatige controle nodig."
   }
 }
 

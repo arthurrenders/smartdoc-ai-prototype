@@ -54,14 +54,25 @@ function inferTypeIdFromFileName(
   const asbestos = rows.find((t) => t.name.toLowerCase().includes("asbestos"))
   if (asbestos && lower.includes("asbest")) return asbestos.id
   const soil = rows.find((t) => t.name === "SOIL_CERTIFICATE")
-  if (soil && (lower.includes("bodem") || lower.includes("soil") || lower.includes("ovam"))) return soil.id
+  if (
+    soil &&
+    (lower.includes("bodem") ||
+      lower.includes("soil") ||
+      lower.includes("ovam") ||
+      lower.includes("grondeninformatie") ||
+      lower.includes("grondinformatie"))
+  ) {
+    return soil.id
+  }
   const urban = rows.find((t) => t.name === "URBAN_PLANNING_INFO")
   if (
     urban &&
     (lower.includes("stedenbouw") ||
       lower.includes("stedebouw") ||
+      lower.includes("stedenbouwkundig attest") ||
       lower.includes("urban") ||
-      lower.includes("vastgoedinformatie"))
+      lower.includes("vastgoedinformatie") ||
+      lower.includes("omgevingsinformatie"))
   ) {
     return urban.id
   }

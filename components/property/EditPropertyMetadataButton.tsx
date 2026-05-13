@@ -170,7 +170,11 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
           role="dialog"
           aria-modal="true"
           aria-label="Pandgegevens bewerken"
-          onClick={() => setIsOpen(false)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsOpen(false)
+            }
+          }}
         >
           <div
             className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-background shadow-2xl"

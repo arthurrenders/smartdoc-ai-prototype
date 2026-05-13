@@ -37,12 +37,20 @@ export function calculateConfidence(result: AnalysisResult, text: string): numbe
   }
 
   // Medium confidence if summary is specific and detailed
-  if (result.summary.length > 50 && !result.summary.includes("reviewed - no issues")) {
+  if (
+    result.summary.length > 50 &&
+    !result.summary.includes("reviewed - no issues") &&
+    !result.summary.includes("geen problemen")
+  ) {
     return 0.7
   }
 
   // Low confidence if summary is generic or empty
-  if (result.summary.length < 20 || result.summary.includes("reviewed - no issues")) {
+  if (
+    result.summary.length < 20 ||
+    result.summary.includes("reviewed - no issues") ||
+    result.summary.includes("geen problemen")
+  ) {
     return 0.3
   }
 
@@ -57,19 +65,19 @@ export function analyzeElectrical(text: string): AnalysisResult {
   if (normalizedText.includes("niet conform")) {
     flags.push({
       severity: "red",
-      title: "Non-Compliant Electrical Installation",
-      details: "Document indicates non-compliance with electrical standards ('niet conform' detected).",
+      title: "Elektrische installatie niet conform",
+      details: "Het document vermeldt dat de elektrische installatie niet conform is.",
     })
     return {
       status: "red",
-      summary: "Critical: Non-compliant electrical installation detected",
+      summary: "Kritiek: elektrische installatie niet conform",
       flags,
     }
   }
 
   return {
     status: "green",
-    summary: "Electrical installation appears compliant",
+    summary: "Elektrische installatie lijkt conform",
     flags: [],
   }
 }
@@ -120,12 +128,12 @@ export function analyzeEPC(text: string): AnalysisResult {
       if (expiryDate.getTime() < today.setHours(0, 0, 0, 0)) {
         flags.push({
           severity: "red",
-          title: "Expired EPC certificate",
-          details: "The EPC certificate validity date has passed.",
+          title: "EPC-attest verlopen",
+          details: "De geldigheidsdatum van het EPC-attest is verstreken.",
         })
         return {
           status: "red",
-          summary: "EPC certificate has expired",
+          summary: "EPC-attest is verlopen",
           flags,
         }
       }
@@ -144,29 +152,29 @@ export function analyzeEPC(text: string): AnalysisResult {
     if (epcClass === "F" || epcClass === "G") {
       flags.push({
         severity: "red",
-        title: `Poor Energy Performance (Class ${epcClass})`,
-        details: `EPC class ${epcClass} indicates very poor energy performance. Immediate improvement recommended.`,
+        title: `Zwakke energieprestatie (klasse ${epcClass})`,
+        details: `EPC-klasse ${epcClass} wijst op een zeer zwakke energieprestatie. Verbetering is dringend aanbevolen.`,
       })
       return {
         status: "red",
-        summary: `Poor EPC rating: Class ${epcClass}`,
+        summary: `Zwakke EPC-score: klasse ${epcClass}`,
         flags,
       }
     } else if (epcClass === "E" || epcClass === "D") {
       flags.push({
         severity: "orange",
-        title: `Moderate Energy Performance (Class ${epcClass})`,
-        details: `EPC class ${epcClass} indicates moderate energy performance. Consider improvements.`,
+        title: `Matige energieprestatie (klasse ${epcClass})`,
+        details: `EPC-klasse ${epcClass} wijst op een matige energieprestatie. Overweeg verbeteringen.`,
       })
       return {
         status: "orange",
-        summary: `Moderate EPC rating: Class ${epcClass}`,
+        summary: `Matige EPC-score: klasse ${epcClass}`,
         flags,
       }
     } else {
       return {
         status: "green",
-        summary: `Good EPC rating: Class ${epcClass}`,
+        summary: `Goede EPC-score: klasse ${epcClass}`,
         flags: [],
       }
     }
@@ -178,29 +186,29 @@ export function analyzeEPC(text: string): AnalysisResult {
     if (score >= 331) {
       flags.push({
         severity: "red",
-        title: `Poor Energy Performance (Score: ${score})`,
-        details: `EPC score of ${score} indicates very poor energy performance (Class F or G). Immediate improvement recommended.`,
+        title: `Zwakke energieprestatie (score: ${score})`,
+        details: `EPC-score ${score} wijst op een zeer zwakke energieprestatie (klasse F of G). Verbetering is dringend aanbevolen.`,
       })
       return {
         status: "red",
-        summary: `Poor EPC score: ${score}`,
+        summary: `Zwakke EPC-score: ${score}`,
         flags,
       }
     } else if (score >= 231) {
       flags.push({
         severity: "orange",
-        title: `Moderate Energy Performance (Score: ${score})`,
-        details: `EPC score of ${score} indicates moderate energy performance (Class E). Consider improvements.`,
+        title: `Matige energieprestatie (score: ${score})`,
+        details: `EPC-score ${score} wijst op een matige energieprestatie (klasse E). Overweeg verbeteringen.`,
       })
       return {
         status: "orange",
-        summary: `Moderate EPC score: ${score}`,
+        summary: `Matige EPC-score: ${score}`,
         flags,
       }
     } else {
       return {
         status: "green",
-        summary: `Good EPC score: ${score}`,
+        summary: `Goede EPC-score: ${score}`,
         flags: [],
       }
     }
@@ -209,7 +217,7 @@ export function analyzeEPC(text: string): AnalysisResult {
   // If no EPC class or score detected, default to green
   return {
     status: "green",
-    summary: "EPC document reviewed - no issues detected",
+    summary: "EPC-attest nagekeken - geen problemen gevonden",
     flags: [],
   }
 }
@@ -251,19 +259,19 @@ export function analyzeAsbestos(text: string): AnalysisResult {
   if (foundPhrases.length > 0) {
     flags.push({
       severity: "red",
-      title: "High-Risk Asbestos Content Detected",
-      details: `Document indicates elevated asbestos risk: ${foundPhrases.join(", ")}. Immediate professional assessment required.`,
+      title: "Verhoogd asbestrisico gedetecteerd",
+      details: `Het document vermeldt verhoogd asbestrisico: ${foundPhrases.join(", ")}. Professionele beoordeling is nodig.`,
     })
     return {
       status: "red",
-      summary: "Critical: High-risk asbestos content detected",
+      summary: "Kritiek: verhoogd asbestrisico gedetecteerd",
       flags,
     }
   }
 
   return {
     status: "green",
-    summary: "Asbestos document reviewed - no high-risk indicators found",
+    summary: "Asbestdocument nagekeken - geen hoogrisico-indicatoren gevonden",
     flags: [],
   }
 }

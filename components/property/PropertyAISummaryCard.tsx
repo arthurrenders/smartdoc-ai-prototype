@@ -73,7 +73,7 @@ export function PropertyAISummaryCard({
       </div>
 
       {hasCounts && (
-        <div className="grid grid-cols-2 gap-3" aria-label="Document counts">
+        <div className="grid grid-cols-2 gap-3" aria-label="Documenttellingen">
           <div className="flex items-center gap-2.5 rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-3 py-2.5 shadow-sm">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
             <div className="min-w-0">
@@ -92,7 +92,7 @@ export function PropertyAISummaryCard({
             <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
             <div className="min-w-0">
               <p className="text-lg font-bold tabular-nums text-foreground">{manualReviewCount}</p>
-              <p className="text-[11px] text-muted-foreground">Handm. review</p>
+              <p className="text-[11px] text-muted-foreground">Handm. controle</p>
             </div>
           </div>
           <div className="flex flex-col justify-center rounded-lg border border-[hsl(var(--card-border))] bg-card/80 px-3 py-2.5 shadow-sm">

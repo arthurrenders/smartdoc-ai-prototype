@@ -55,7 +55,7 @@ function coerceFlags(raw: unknown): Flag[] {
       row.severity === "red" || row.severity === "orange" || row.severity === "green"
         ? row.severity
         : "orange"
-    const title = typeof row.title === "string" && row.title.trim() ? row.title.trim() : "Soil certificate finding"
+    const title = typeof row.title === "string" && row.title.trim() ? row.title.trim() : "Bodemattestbevinding"
     const details = typeof row.details === "string" ? row.details.trim() : ""
     out.push({ severity, title, details })
   }
@@ -99,9 +99,52 @@ function propertyAddressFromSoil(data: SoilCertificateAIResponse): AnalysisResul
   }) ?? undefined
 }
 
-function transformSoilToAnalysisResult(data: SoilCertificateAIResponse): AnalysisResult {
+function normalizeForSoilRules(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function isBenignSoilRegisterEntry(text: string): boolean {
+  const t = normalizeForSoilRules(text)
+  const hasNoIndications =
+    /geen aanwijzingen.{0,180}(bodemverontreiniging|risicogrond)/.test(t) ||
+    /geen aanwijzingen voor bodemverontreiniging/.test(t)
+  const noRemediationCue =
+    !/\b(saneringsplicht|sanering verplicht|bodemsanering verplicht|bodemsaneringsproject|beschrijvend bodemonderzoek verplicht|gebruiksbeperking|voorzorgsmaatregel|veiligheidsmaatregel|verontreiniging vastgesteld)\b/.test(t)
+  return hasNoIndications && noRemediationCue
+}
+
+function isBenignSoilRegisterFlag(flag: Flag): boolean {
+  const text = `${flag.title} ${flag.details}`.toLowerCase()
+  return (
+    text.includes("grondeninformatieregister") ||
+    text.includes("grondinformatieregister") ||
+    text.includes("register") ||
+    text.includes("bodemverontreinig") ||
+    text.includes("contamination") ||
+    text.includes("risicogrond") ||
+    text.includes("risk")
+  )
+}
+
+function transformSoilToAnalysisResult(data: SoilCertificateAIResponse, text: string): AnalysisResult {
   const flags = data.flags ?? []
   const summaryParts: string[] = []
+  const benignRegisterEntry = isBenignSoilRegisterEntry(text)
+
+  if (benignRegisterEntry) {
+    data.contamination_found = false
+    data.remediation_required = false
+    data.restrictions_or_actions = null
+    for (let i = flags.length - 1; i >= 0; i--) {
+      if (isBenignSoilRegisterFlag(flags[i])) flags.splice(i, 1)
+    }
+  }
+
   if (data.certificate_number) summaryParts.push(`Bodemattest: ${data.certificate_number}`)
   if (data.certificate_date) summaryParts.push(`Datum: ${data.certificate_date}`)
   if (data.conclusion) summaryParts.push(`Conclusie: ${data.conclusion}`)
@@ -112,20 +155,30 @@ function transformSoilToAnalysisResult(data: SoilCertificateAIResponse): Analysi
   let status: "red" | "orange" | "green" = data.status ?? "green"
   if (data.remediation_required === true) {
     status = "red"
-    if (!flags.some((f) => f.title.toLowerCase().includes("remediation"))) {
+    if (!flags.some((f) => {
+      const title = f.title.toLowerCase()
+      return title.includes("remediation") || title.includes("sanering")
+    })) {
       flags.push({
         severity: "red",
-        title: "Soil remediation required",
-        details: "The soil certificate indicates a remediation or clean-up obligation. Follow up before transaction completion.",
+        title: "Bodemsanering vereist",
+        details: "Het bodemattest vermeldt een sanerings- of opruimingsplicht. Volg dit op voor het afsluiten van de transactie.",
       })
     }
   } else if (data.contamination_found === true && status === "green") {
     status = "orange"
     flags.push({
       severity: "orange",
-      title: "Soil contamination mentioned",
-      details: "The certificate mentions soil contamination or a related register entry. Review the certificate details before closing.",
+      title: "Bodemverontreiniging vermeld",
+      details: "Het attest vermeldt bodemverontreiniging of een relevante registervermelding. Controleer de details voor het afsluiten.",
     })
+  }
+
+  if (benignRegisterEntry && flags.length === 0) {
+    status = "green"
+    summaryParts.push(
+      "Opname in het grondeninformatieregister zonder aanwijzingen voor bodemverontreiniging of risicogrond."
+    )
   }
 
   if (!summaryParts.length && flags.length === 0) {
@@ -181,6 +234,8 @@ Severity guidance:
 - red: remediation, clean-up, legal restriction, or explicit blocking action is required.
 - orange: contamination, register entry, unclear conclusion, missing key fields, or follow-up is advisable.
 - green: no soil risk or action is apparent from the certificate.
+Important: if the text says the ground is included in the grondeninformatieregister but OVAM has no indications of soil contamination and no indication that it is a risicogrond, this is green and must not be flagged.
+Use Dutch for summary, flag titles, and flag details.
 Only flag genuine findings from the text. If uncertain, use orange and explain what must be checked.
 
 Document text:
@@ -198,7 +253,7 @@ ${textToSend}${isTruncated ? "\n\n[Document truncated for length]" : ""}`
     const parsed = parseJsonFromModelOutput(content)
     const data = coerceSoilData(parsed)
     return {
-      result: transformSoilToAnalysisResult(data),
+      result: transformSoilToAnalysisResult(data, normalizedText),
       modelName,
       promptVersion: PROMPT_VERSION,
     }

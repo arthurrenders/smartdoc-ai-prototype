@@ -100,12 +100,12 @@ export async function analyzeEPCWithAI(
       const property_address = propertyAddressFromEpc(epcData)
       const expiredResult: AnalysisResult = {
         status: "red",
-        summary: "EPC certificate expired",
+        summary: "EPC-attest verlopen",
         flags: [
           {
             severity: "red",
-            title: "Expired EPC certificate",
-            details: `The EPC certificate expired on ${epcData.expiry_date}`,
+            title: "EPC-attest verlopen",
+            details: `Het EPC-attest is verlopen op ${epcData.expiry_date}`,
           },
         ],
         confidence: 0.9,
@@ -291,19 +291,19 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
 
   // Build summary with extracted values
   if (epcData.epc_score_letter) {
-    summaryParts.push(`EPC Score: ${epcData.epc_score_letter}`)
+    summaryParts.push(`EPC-score: ${epcData.epc_score_letter}`)
   }
   if (epcData.energy_consumption_kwh_m2_year !== null) {
-    summaryParts.push(`Energy: ${epcData.energy_consumption_kwh_m2_year} kWh/m²/year`)
+    summaryParts.push(`Energie: ${epcData.energy_consumption_kwh_m2_year} kWh/m2/jaar`)
   }
   if (epcData.certificate_date) {
-    summaryParts.push(`Certificate Date: ${epcData.certificate_date}`)
+    summaryParts.push(`Attestdatum: ${epcData.certificate_date}`)
   }
   if (epcData.expiry_date) {
-    summaryParts.push(`Expiry Date: ${epcData.expiry_date}`)
+    summaryParts.push(`Vervaldatum: ${epcData.expiry_date}`)
   }
   if (epcData.is_expired === true) {
-    summaryParts.push("Status: EXPIRED")
+    summaryParts.push("Status: verlopen")
   }
 
   // Process red flags from AI response
@@ -312,8 +312,8 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
   if (redFlags.includes("expired_epc") || epcData.is_expired === true) {
     flags.push({
       severity: "red",
-      title: "Expired EPC Certificate",
-      details: `The EPC certificate expired on ${epcData.expiry_date || "unknown date"}. A new certificate is required.`,
+      title: "EPC-attest verlopen",
+      details: `Het EPC-attest is verlopen op ${epcData.expiry_date || "onbekende datum"}. Een nieuw attest is vereist.`,
     })
     status = "red"
   }
@@ -321,8 +321,8 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
   if (redFlags.includes("invalid_epc_score") || !epcData.epc_score_letter) {
     flags.push({
       severity: "orange",
-      title: "Invalid or Missing EPC Score",
-      details: "The EPC score could not be determined from the document.",
+      title: "EPC-score ontbreekt of is ongeldig",
+      details: "De EPC-score kon niet uit het document worden gehaald.",
     })
     if (status === "green") status = "orange"
   }
@@ -330,8 +330,8 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
   if (redFlags.includes("missing_energy_value") || epcData.energy_consumption_kwh_m2_year === null) {
     flags.push({
       severity: "orange",
-      title: "Missing Energy Consumption Value",
-      details: "The energy consumption value could not be extracted from the document.",
+      title: "Energieverbruik ontbreekt",
+      details: "Het energieverbruik kon niet uit het document worden gehaald.",
     })
     if (status === "green") status = "orange"
   }
@@ -339,8 +339,8 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
   if (redFlags.includes("missing_certificate_date") || !epcData.certificate_date) {
     flags.push({
       severity: "orange",
-      title: "Missing Certificate Date",
-      details: "The certificate date could not be extracted from the document.",
+      title: "Attestdatum ontbreekt",
+      details: "De attestdatum kon niet uit het document worden gehaald.",
     })
     if (status === "green") status = "orange"
   }
@@ -352,8 +352,8 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
   if (hasImplausibleEnergyValue) {
     flags.push({
       severity: "orange",
-      title: "Suspicious Energy Consumption Value",
-      details: `The energy consumption value (${epcData.energy_consumption_kwh_m2_year} kWh/m²/year) is unusually high and may indicate an error.`,
+      title: "Verdachte energieverbruikswaarde",
+      details: `Het energieverbruik (${epcData.energy_consumption_kwh_m2_year} kWh/m2/jaar) is ongewoon hoog en kan op een fout wijzen.`,
     })
     if (status === "green") status = "orange"
   }
@@ -364,22 +364,22 @@ function transformEPCToAnalysisResult(epcData: EPCResponse): AnalysisResult {
       status = "red"
       flags.push({
         severity: "red",
-        title: "Poor Energy Performance (Class F)",
-        details: "EPC class F indicates very poor energy performance. Immediate improvement recommended.",
+        title: "Zwakke energieprestatie (klasse F)",
+        details: "EPC-klasse F wijst op een zeer zwakke energieprestatie. Verbetering is dringend aanbevolen.",
       })
     } else if (epcData.epc_score_letter === "E" || epcData.epc_score_letter === "D") {
       status = "orange"
       flags.push({
         severity: "orange",
-        title: `Moderate Energy Performance (Class ${epcData.epc_score_letter})`,
-        details: `EPC class ${epcData.epc_score_letter} indicates moderate energy performance. Consider improvements.`,
+        title: `Matige energieprestatie (klasse ${epcData.epc_score_letter})`,
+        details: `EPC-klasse ${epcData.epc_score_letter} wijst op een matige energieprestatie. Overweeg verbeteringen.`,
       })
     }
   }
 
   const summary = summaryParts.length > 0 
     ? summaryParts.join(" | ")
-    : "EPC document analyzed"
+    : "EPC-attest geanalyseerd"
 
   const property_address = propertyAddressFromEpc(epcData)
 

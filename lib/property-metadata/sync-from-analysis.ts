@@ -7,10 +7,14 @@ const PROPERTY_TYPE_VALUES = new Set(["house", "apartment", "land", "commercial"
 const URBAN_PLANNING_DOCUMENT_TYPE = "URBAN_PLANNING_INFO"
 
 function isWrongDocumentTypeResult(result: AnalysisResult): boolean {
-  if (result.summary?.toLowerCase().includes("wrong document type")) return true
+  const summary = result.summary?.toLowerCase() ?? ""
+  if (summary.includes("wrong document type") || summary.includes("verkeerd documenttype")) return true
   if (
     Array.isArray(result.flags) &&
-    result.flags.some((f) => f.title.toLowerCase().includes("wrong document type"))
+    result.flags.some((f) => {
+      const title = f.title.toLowerCase()
+      return title.includes("wrong document type") || title.includes("verkeerd documenttype")
+    })
   ) {
     return true
   }

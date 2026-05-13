@@ -48,15 +48,20 @@ export function structuredAddressFromSchemaFields(fields: {
 
 function isUnreliableAnalysisResult(r: AnalysisResult): boolean {
   const s = r.summary.toLowerCase()
-  if (s.includes("wrong document type")) return true
-  if (s.includes("ai analysis failed")) return true
-  if (s.includes("could not complete automatic analysis")) return true
+  if (s.includes("wrong document type") || s.includes("verkeerd documenttype")) return true
+  if (s.includes("ai analysis failed") || s.includes("ai-analyse mislukt")) return true
+  if (s.includes("could not complete automatic analysis") || s.includes("automatische analyse kon niet")) return true
   if (s.includes("quota exceeded") || s.includes("rate limit") || s.includes("daily quota")) return true
   if (r.flags.some((f) => f.title === "Wrong document type")) return true
+  if (r.flags.some((f) => f.title === "Verkeerd documenttype")) return true
   if (r.flags.some((f) => f.title === "API quota exceeded")) return true
+  if (r.flags.some((f) => f.title === "API-quota overschreden")) return true
   if (r.flags.some((f) => f.title === "Empty model response")) return true
+  if (r.flags.some((f) => f.title === "Lege modelrespons")) return true
   if (r.flags.some((f) => f.title === "Manual review required")) return true
+  if (r.flags.some((f) => f.title === "Handmatige controle nodig")) return true
   if (r.flags.some((f) => f.title === "Analysis incomplete")) return true
+  if (r.flags.some((f) => f.title === "Analyse onvolledig")) return true
   if (r.flags.some((f) => f.title === "Incomplete automatic extraction")) return true
   return false
 }

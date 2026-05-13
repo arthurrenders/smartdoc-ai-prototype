@@ -115,16 +115,19 @@ function detectIntakeDocumentType(text: string, filename = ""): IntakeDetectedDo
     f.includes("bodemattest") ||
     f.includes("ovam") ||
     f.includes("bodeminformatie") ||
-    f.includes("grondinformatieregister")
+    f.includes("grondinformatieregister") ||
+    f.includes("grondeninformatieregister")
   ) {
     return "soil_certificate"
   }
   if (
     f.includes("stedenbouwkundige inlichtingen") ||
     f.includes("stedenbouwkundig uittreksel") ||
+    f.includes("stedenbouwkundig attest") ||
     f.includes("stedenbouw") ||
     f.includes("stedebouw") ||
     f.includes("vastgoedinformatie") ||
+    f.includes("omgevingsinformatie") ||
     f.includes("omgevingsvergunning")
   ) {
     return "urban_planning_info"
@@ -161,16 +164,19 @@ function detectIntakeDocumentType(text: string, filename = ""): IntakeDetectedDo
     t.includes("bodemattest") ||
     t.includes("ovam") ||
     t.includes("bodeminformatie") ||
-    t.includes("grondinformatieregister")
+    t.includes("grondinformatieregister") ||
+    t.includes("grondeninformatieregister")
   ) {
     return "soil_certificate"
   }
   if (
     t.includes("stedenbouwkundige inlichtingen") ||
     t.includes("stedenbouwkundig uittreksel") ||
+    t.includes("stedenbouwkundig attest") ||
     t.includes("stedenbouw") ||
     t.includes("stedebouw") ||
     t.includes("vastgoedinformatie") ||
+    t.includes("omgevingsinformatie") ||
     t.includes("omgevingsvergunning")
   ) {
     return "urban_planning_info"
