@@ -7,12 +7,15 @@ import type {
   PropertyExportContext,
   PropertyMetadata,
 } from "./types"
+import { getCurrentDocumentsByType } from "@/lib/current-documents"
 
 type DocRow = {
   id: string
+  document_type_id: string | null
   storage_path: string
   status: string
   is_active?: boolean | null
+  created_at?: string | null
   document_types: { name: string } | { name: string }[] | null
   analysis_runs:
     | {
@@ -50,15 +53,14 @@ export async function loadPropertyExportContext(propertyId: string): Promise<Pro
   const { data: docs, error: docErr } = await supabase
     .from("documents")
     .select(
-      "id, storage_path, status, is_active, document_types(name), analysis_runs(id, status, result_json, created_at)",
+      "id, document_type_id, storage_path, status, is_active, created_at, document_types(name), analysis_runs(id, status, result_json, created_at)",
     )
     .eq("property_id", propertyId)
     .order("created_at", { ascending: false })
     .order("created_at", { foreignTable: "analysis_runs", ascending: false })
   if (docErr) throw new Error(docErr.message)
 
-  const documents: DocumentForExport[] = ((docs as DocRow[] | null) ?? [])
-    .filter((row) => row.is_active !== false)
+  const documents: DocumentForExport[] = getCurrentDocumentsByType((docs as DocRow[] | null) ?? [])
     .map((row) => {
     const dt = Array.isArray(row.document_types) ? row.document_types[0] : row.document_types
     const latestRun = (row.analysis_runs ?? [])[0]

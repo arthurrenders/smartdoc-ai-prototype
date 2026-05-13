@@ -244,8 +244,7 @@ export async function getPropertyDetail(propertyId: string): Promise<PropertyDet
         : "No document analyses available yet. Upload and run analysis for each required document type."
 
     const requiredTotal = requiredTypeIds.length
-    // Count analyzed green documents plus upload-only required docs.
-    // Upload-only required docs are satisfied by being present.
+    // Count required current documents whose latest analysis is effectively green.
     const validCount = documentsWithAnalysis.filter(
       (d) => getEffectiveDocumentStatus(d) === "green"
     ).length

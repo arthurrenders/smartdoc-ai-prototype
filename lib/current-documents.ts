@@ -1,10 +1,12 @@
 /**
- * Helpers to select the current/active document per required document type.
- * Used so property status, summaries, and flags are based only on the latest
- * document per type (not historical or replaced uploads).
+ * Helpers to select the current document per required document type.
+ * The current document is always the latest upload for that property + type.
+ * The legacy `is_active` column may still exist for compatibility, but it no
+ * longer decides which document powers status, summaries, exports, or dates.
  */
 
 export type DocumentWithTimestamp = {
+  id?: string | null
   document_type_id: string | null
   created_at?: string | null
   is_active?: boolean | null
@@ -13,8 +15,7 @@ export type DocumentWithTimestamp = {
 
 /**
  * Returns one document per document_type_id: the one with the latest created_at.
- * Use this to get "current active documents" so that status and flags are not
- * polluted by older uploads of the same type.
+ * Use this so status and flags are not polluted by older uploads of the same type.
  */
 export function getCurrentDocumentsByType<T extends DocumentWithTimestamp>(
   documents: T[]
@@ -26,17 +27,15 @@ export function getCurrentDocumentsByType<T extends DocumentWithTimestamp>(
     const existing = byType.get(typeId)
     const docTime = doc.created_at ? new Date(doc.created_at).getTime() : 0
     const existingTime = existing?.created_at ? new Date(existing.created_at).getTime() : 0
-    const docActive = doc.is_active !== false
-    const existingActive = existing?.is_active !== false
     if (!existing) {
       byType.set(typeId, doc)
       continue
     }
-    if (docActive && !existingActive) {
+    if (docTime > existingTime) {
       byType.set(typeId, doc)
       continue
     }
-    if (docActive === existingActive && docTime > existingTime) {
+    if (docTime === existingTime && String(doc.id ?? "") > String(existing.id ?? "")) {
       byType.set(typeId, doc)
     }
   }

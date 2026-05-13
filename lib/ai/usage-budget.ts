@@ -31,6 +31,10 @@ function dailyCap(): number {
   return n
 }
 
+export function getDailyLlmCallCap(): number {
+  return dailyCap()
+}
+
 function todayUtcIso(): string {
   // Use UTC so the same key matches what the SQL function defaults to.
   return new Date().toISOString().slice(0, 10)
@@ -55,6 +59,21 @@ async function readTodayRow(): Promise<UsageRow | null> {
     return null
   }
   return (data as UsageRow | null) ?? null
+}
+
+export async function getTodayLlmUsageSnapshot(): Promise<{
+  day: string
+  cap: number
+  geminiCalls: number
+  groqCalls: number
+}> {
+  const row = await readTodayRow()
+  return {
+    day: todayUtcIso(),
+    cap: dailyCap(),
+    geminiCalls: row?.gemini_calls ?? 0,
+    groqCalls: row?.groq_calls ?? 0,
+  }
 }
 
 /**

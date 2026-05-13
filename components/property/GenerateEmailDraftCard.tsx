@@ -84,7 +84,7 @@ export function GenerateEmailDraftCard({
   allowDocumentMismatch,
   gmailConnected = false,
   gmailEmail = null,
-  appLanguage = "en",
+  appLanguage = "nl",
 }: GenerateEmailDraftCardProps) {
   const availability = { allowMissingDocs, allowRedFlags, allowDocumentMismatch }
   const defaultKind =

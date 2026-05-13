@@ -9,7 +9,11 @@ import type { AnalysisResult, Flag } from "./detectors"
 import { structuredAddressFromSchemaFields } from "@/lib/property-address/extract-from-analysis"
 import { GEMINI_MODEL, generateContentWithRetry } from "@/lib/ai/gemini"
 import { userFacingAnalysisFailureFromError } from "@/lib/ai/gemini-errors"
-import { getTextFromGeminiResponse, parseJsonFromModelOutput } from "@/lib/ai/json-from-model"
+import {
+  assertParseableJsonFromModelOutput,
+  getTextFromGeminiResponse,
+  parseJsonFromModelOutput,
+} from "@/lib/ai/json-from-model"
 
 const PROMPT_VERSION = "2.0"
 const DEBUG_ANALYSIS_LOGS = process.env.DEBUG_ANALYSIS_LOGS === "1"
@@ -59,6 +63,8 @@ export async function analyzeEPCWithAI(
     const response = await generateContentWithRetry({
       model: GEMINI_MODEL,
       contents: prompt,
+    }, {
+      validateText: assertParseableJsonFromModelOutput,
     })
     modelName = `${response.provider}:${response.model}`
     const content = getTextFromGeminiResponse(response)

@@ -7,7 +7,6 @@ import { uploadDocument } from "@/app/actions/upload-document"
 import { verifyDocumentAddress } from "@/app/actions/verify-document-address"
 import { getDocumentTypes, getDocumentsForProperty } from "@/app/actions/get-documents"
 import { runAnalysis } from "@/app/actions/run-analysis"
-import { chooseActiveDocumentVersion } from "@/app/actions/set-active-document-version"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
 import { DocumentPreviewButton } from "@/components/property/DocumentPreviewButton"
 import {
@@ -116,7 +115,6 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
   // Using a single string used to overwrite the previous run's id, hiding the loading badge.
   const [analyzing, setAnalyzing] = useState<Set<string>>(() => new Set())
   const [verifyingAddress, setVerifyingAddress] = useState<string | null>(null)
-  const [activatingDocument, setActivatingDocument] = useState<string | null>(null)
   const [driveImporting, setDriveImporting] = useState(false)
   const [feedbackByDocType, setFeedbackByDocType] = useState<Record<string, string>>({})
   const [driveFeedback, setDriveFeedback] = useState<string | null>(null)
@@ -256,9 +254,7 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
         analysisRun: null,
       }
     }
-    const activeCandidates = candidates.filter((d) => d.is_active !== false)
-    const pool = activeCandidates.length ? activeCandidates : candidates
-    const doc = pool.reduce((a, b) => {
+    const doc = candidates.reduce((a, b) => {
       const ta = new Date(a.created_at).getTime()
       const tb = new Date(b.created_at).getTime()
       return tb >= ta ? b : a
@@ -384,36 +380,6 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
       setFeedbackByDocType((prev) => ({ ...prev, [documentTypeId]: msg }))
     } finally {
       setVerifyingAddress(null)
-    }
-  }
-
-  async function handleChooseActiveDocument(documentTypeId: string, documentId: string) {
-    setActivatingDocument(documentId)
-    setFeedbackByDocType((prev) => {
-      const next = { ...prev }
-      delete next[documentTypeId]
-      return next
-    })
-
-    try {
-      const result = await chooseActiveDocumentVersion({
-        propertyId,
-        documentId,
-        documentTypeId,
-      })
-      await loadData()
-      router.refresh()
-      if (!result.ok) {
-        setFeedbackByDocType((prev) => ({
-          ...prev,
-          [documentTypeId]: result.error ?? "Kon actieve documentversie niet wijzigen.",
-        }))
-      }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Kon actieve documentversie niet wijzigen."
-      setFeedbackByDocType((prev) => ({ ...prev, [documentTypeId]: msg }))
-    } finally {
-      setActivatingDocument(null)
     }
   }
 
@@ -598,8 +564,6 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
             analysisRun.result_json &&
             !isAnalysisErrorPayload(analysisRun.result_json)
           const usedGroqFallback = Boolean(analysisRun?.model_name?.startsWith("groq:"))
-          const activeDocumentId = document?.id ?? versions.find((d) => d.is_active !== false)?.id ?? versions[0]?.id ?? ""
-
           return (
             <div
               key={docType.id}
@@ -700,39 +664,13 @@ export default function DocumentTable({ propertyId, wrapInCard = true }: Documen
               )}
 
               {versions.length > 1 && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-3 text-sm">
-                  <label
-                    htmlFor={`active-doc-${docType.id}`}
-                    className="block text-xs font-semibold uppercase tracking-wide text-blue-800"
-                  >
-                    Actieve documentversie
-                  </label>
-                  <select
-                    id={`active-doc-${docType.id}`}
-                    value={activeDocumentId}
-                    disabled={Boolean(activatingDocument)}
-                    onChange={(event) => {
-                      void handleChooseActiveDocument(docType.id, event.target.value)
-                    }}
-                    className="mt-1 w-full rounded-md border border-blue-200 bg-white px-2 py-1.5 text-sm text-blue-950 shadow-sm disabled:opacity-60"
-                  >
-                    {versions.map((version) => {
-                      const date = version.created_at
-                        ? new Date(version.created_at).toLocaleString("nl-BE", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })
-                        : "Onbekende datum"
-                      const statusLabel = version.is_active === false ? "uitgesloten" : "actief"
-                      return (
-                        <option key={version.id} value={version.id}>
-                          {date} · {statusLabel} · {version.id.slice(0, 8)}
-                        </option>
-                      )
-                    })}
-                  </select>
+                <div className="rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-3 text-sm text-blue-900">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">
+                    Nieuwste versie wordt gebruikt
+                  </p>
                   <p className="mt-1 text-xs text-blue-700">
-                    Alleen de actieve versie telt mee voor status, export en samenvattingen.
+                    SmartDoc gebruikt automatisch de laatste upload voor status, export en samenvattingen.
+                    {versions.length - 1} oudere versie{versions.length - 1 === 1 ? "" : "s"} blijven alleen beschikbaar via de opslaggeschiedenis.
                   </p>
                 </div>
               )}

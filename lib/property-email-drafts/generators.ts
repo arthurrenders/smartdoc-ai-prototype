@@ -31,7 +31,7 @@ async function loadOrThrow(propertyId: string): Promise<PropertyDetailData> {
 async function runKind(
   propertyId: string,
   kind: PropertyEmailDraftKind,
-  language: PropertyEmailDraftLanguage = "en"
+  language: PropertyEmailDraftLanguage = "nl"
 ) {
   const detail = await loadOrThrow(propertyId)
   const facts = formatPropertyFactsForEmailDraft(detail)
@@ -41,7 +41,7 @@ async function runKind(
 /** Draft email requesting missing required documents. Requires at least one missing required type. */
 export async function generateMissingDocsEmail(
   propertyId: string,
-  language: PropertyEmailDraftLanguage = "en"
+  language: PropertyEmailDraftLanguage = "nl"
 ): Promise<PropertyEmailDraft> {
   const detail = await loadOrThrow(propertyId)
   if (detail.missingRequiredDocumentNames.length === 0) {
@@ -57,7 +57,7 @@ export async function generateMissingDocsEmail(
 /** Draft email about analysis flags (warnings / issues). Requires at least one non-green flag. */
 export async function generateRedFlagsEmail(
   propertyId: string,
-  language: PropertyEmailDraftLanguage = "en"
+  language: PropertyEmailDraftLanguage = "nl"
 ): Promise<PropertyEmailDraft> {
   const detail = await loadOrThrow(propertyId)
   const concerns = concernFlags(detail)
@@ -70,7 +70,7 @@ export async function generateRedFlagsEmail(
 /** Draft email about possible wrong document type upload. Requires a wrong-document signal in flags. */
 export async function generateDocumentMismatchEmail(
   propertyId: string,
-  language: PropertyEmailDraftLanguage = "en"
+  language: PropertyEmailDraftLanguage = "nl"
 ): Promise<PropertyEmailDraft> {
   const detail = await loadOrThrow(propertyId)
   if (!isWrongDocumentFlag(detail)) {
@@ -86,7 +86,7 @@ export async function generateDocumentMismatchEmail(
 /** General follow-up combining suggested actions and status (always allowed if property exists). */
 export async function generateFollowUpEmail(
   propertyId: string,
-  language: PropertyEmailDraftLanguage = "en"
+  language: PropertyEmailDraftLanguage = "nl"
 ): Promise<PropertyEmailDraft> {
   return runKind(propertyId, "follow_up", language)
 }

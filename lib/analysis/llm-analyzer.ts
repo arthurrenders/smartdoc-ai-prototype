@@ -75,6 +75,12 @@ export async function analyzeWithLLM(
     const response = await generateContentWithRetry({
       model: GEMINI_MODEL,
       contents: prompt,
+    }, {
+      validateText: (text) => {
+        const parsed = parseJsonFromModelOutput(text)
+        if (parsed === null) throw new Error("Model returned invalid JSON")
+        LLMAnalysisResultSchema.parse(parsed)
+      },
     })
     modelName = `${response.provider}:${response.model}`
     const content = getTextFromGeminiResponse(response)

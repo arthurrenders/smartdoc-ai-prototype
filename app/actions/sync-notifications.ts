@@ -11,6 +11,7 @@ import {
 } from "@/lib/notifications/reminder-window"
 import { ruleAppliesToDateType } from "@/lib/notifications/supported-date-types"
 import { getOwnerUserId } from "@/lib/supabase/ownership"
+import { getCurrentDocumentsByType } from "@/lib/current-documents"
 
 const GRACE_DAYS_AFTER_DEADLINE = 14
 
@@ -55,6 +56,13 @@ type DateRow = {
   date_type: string
   date_on: string
   properties?: { user_id?: string; display_name?: string | null } | { user_id?: string; display_name?: string | null }[] | null
+}
+
+type DocumentRow = {
+  id: string
+  property_id: string
+  document_type_id: string | null
+  created_at?: string | null
 }
 
 function pickProperty(
@@ -103,8 +111,30 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
         date_type,
         date_on,
         properties!inner ( user_id, display_name ),
-        documents!inner ( is_active )
+        documents!inner ( id )
       `
+
+    const { data: docsData, error: docsError } = await supabase
+      .from("documents")
+      .select("id, property_id, document_type_id, created_at, properties!inner(user_id)")
+      .eq("properties.user_id", ownerUserId)
+
+    if (docsError) {
+      return { inserted: 0, error: docsError.message }
+    }
+
+    const docsByProperty = new Map<string, DocumentRow[]>()
+    for (const doc of (docsData as DocumentRow[] | null) ?? []) {
+      const list = docsByProperty.get(doc.property_id) ?? []
+      list.push(doc)
+      docsByProperty.set(doc.property_id, list)
+    }
+    const currentDocumentIds = new Set<string>()
+    for (const list of docsByProperty.values()) {
+      for (const doc of getCurrentDocumentsByType(list)) {
+        if (doc.id) currentDocumentIds.add(doc.id)
+      }
+    }
 
     const dates: DateRow[] = []
     for (let from = 0; ; from += DOCUMENT_DATES_PAGE_SIZE) {
@@ -113,7 +143,6 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
         .from("document_dates")
         .select(datesSelect)
         .eq("properties.user_id", ownerUserId)
-        .eq("documents.is_active", true)
         .gte("date_on", windowStart)
         .lte("date_on", windowEnd)
         .order("date_on", { ascending: true })
@@ -125,7 +154,7 @@ export async function syncNotificationsFromDocumentDates(): Promise<{
       }
 
       const chunk = (page as DateRow[]) || []
-      dates.push(...chunk)
+      dates.push(...chunk.filter((row) => currentDocumentIds.has(row.document_id)))
       if (chunk.length < DOCUMENT_DATES_PAGE_SIZE) break
     }
 

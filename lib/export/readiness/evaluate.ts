@@ -154,7 +154,7 @@ export function evaluateReadiness(
       reason: hit
         ? undefined
         : docReason.get(docType) ??
-          "Wordt nog niet automatisch geanalyseerd door SmartDoc — handmatig toevoegen op het portaal of bij de notaris.",
+          "Ontbreekt in SmartDoc of moet nog rechtstreeks op het portaal of bij de notaris worden toegevoegd.",
     })
   }
 

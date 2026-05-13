@@ -11,6 +11,8 @@ import {
   type MatchOrCreatePropertyResult,
 } from "@/lib/intake/match-or-create-property-from-document"
 
+const MAX_INTAKE_ROWS_PER_CALL = 3
+
 function humanReviewMessage(result: Extract<MatchOrCreatePropertyResult, { outcome: "needs_manual_review" }>): string {
   switch (result.reason) {
     case "ambiguous_match":
@@ -77,6 +79,8 @@ function buildIntakePatch(
 export async function processIntakeUploads(uploadIds: string[]): Promise<{
   ok: boolean
   error?: string
+  processedCount?: number
+  remainingCount?: number
 }> {
   try {
     const supabase = createServerClient()
@@ -103,18 +107,21 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
       .from("intake_uploads")
       .select("id")
       .eq("user_id", userId)
-      .in("processing_status", ["uploaded", "needs_review"])
+      .in("processing_status", ["uploaded", "processing"])
     if (pendingErr) {
       console.warn("[intake] process: pending row scan failed", pendingErr.message)
     }
     const pendingIds = (pendingRows ?? []).map((r) => r.id as string)
     const allIds = Array.from(new Set([...uploadIds, ...pendingIds]))
+    const idsForRun = allIds.slice(0, MAX_INTAKE_ROWS_PER_CALL)
+    const remainingCount = Math.max(0, allIds.length - idsForRun.length)
 
-    if (!allIds.length) {
-      return { ok: true }
+    if (!idsForRun.length) {
+      return { ok: true, processedCount: 0, remainingCount: 0 }
     }
 
-    for (const id of allIds) {
+    let processedCount = 0
+    for (const id of idsForRun) {
       const { data: row, error: fetchErr } = await supabase
         .from("intake_uploads")
         .select("id, user_id, processing_status, filename, source_relative_path, storage_path")
@@ -160,6 +167,7 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
         }
         revalidatePath(`/properties/${reconciled.propertyId}`)
         revalidatePath("/map")
+        processedCount++
         continue
       }
 
@@ -200,6 +208,7 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
           revalidatePath(`/properties/${result.propertyId}`)
           revalidatePath("/map")
         }
+        processedCount++
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unexpected error"
         console.error("[intake] process: uncaught error for upload", id, msg)
@@ -218,7 +227,7 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
     revalidatePath("/intake")
     revalidatePath("/")
     revalidatePath("/map")
-    return { ok: true }
+    return { ok: true, processedCount, remainingCount }
   } catch (e) {
     return {
       ok: false,

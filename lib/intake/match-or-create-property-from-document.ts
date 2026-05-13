@@ -2,9 +2,15 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { extractTextFromPDF } from "@/lib/pdf/extractor"
+import type { AnalysisResult } from "@/lib/analysis/detectors"
 import type { ExtractedPropertyAddress } from "@/lib/property-address/types"
 import { extractBelgianAddressFromPdfText } from "@/lib/property-address/extract-from-analysis"
 import { extractIntakePropertyAddressWithGemini } from "@/lib/intake/extract-address-with-gemini"
+import { syncPropertyMetadataFromAnalysis } from "@/lib/property-metadata/sync-from-analysis"
+import {
+  extractUrbanPlanningMetadata,
+  hasUrbanPlanningMetadata,
+} from "@/lib/property-metadata/urban-planning"
 import type { IntakeDetectedDocumentType } from "@/lib/intake/types"
 import {
   assertNoConflictingPropertyAddressMatch,
@@ -174,6 +180,68 @@ function detectIntakeDocumentType(text: string, filename = ""): IntakeDetectedDo
 
 function isUploadOnlyIntakeDocumentType(type: IntakeDetectedDocumentType): boolean {
   return type === "soil_certificate" || type === "urban_planning_info"
+}
+
+async function syncUrbanPlanningMetadataFromText(
+  supabase: SupabaseClient,
+  params: {
+    propertyId: string
+    text: string
+    logPrefix: string
+  }
+): Promise<void> {
+  if (!params.text.trim()) return
+
+  const metadata = extractUrbanPlanningMetadata(params.text)
+  if (!hasUrbanPlanningMetadata(metadata)) return
+
+  const result: AnalysisResult = {
+    status: "green",
+    summary: "Document opgeladen - pandgegevens uit stedenbouwkundige inlichtingen overgenomen.",
+    flags: [],
+    confidence: 1,
+    ...metadata,
+  }
+
+  try {
+    await syncPropertyMetadataFromAnalysis(supabase, {
+      propertyId: params.propertyId,
+      documentTypeName: "URBAN_PLANNING_INFO",
+      result,
+    })
+  } catch (e) {
+    console.warn(`${params.logPrefix} urban metadata sync failed`, e)
+  }
+}
+
+async function syncUrbanPlanningMetadataFromStoredPdf(
+  supabase: SupabaseClient,
+  params: {
+    propertyId: string
+    storagePath: string
+    detectedDocumentType: IntakeDetectedDocumentType
+    logPrefix: string
+  }
+): Promise<void> {
+  if (params.detectedDocumentType !== "urban_planning_info") return
+
+  const { data: pdfBlob, error } = await supabase.storage.from("documents").download(params.storagePath)
+  if (error || !pdfBlob) {
+    console.warn(`${params.logPrefix} urban metadata download failed`, error?.message)
+    return
+  }
+
+  try {
+    const buffer = Buffer.from(await pdfBlob.arrayBuffer())
+    const extracted = await extractTextFromPDF(buffer)
+    await syncUrbanPlanningMetadataFromText(supabase, {
+      propertyId: params.propertyId,
+      text: extracted.text || "",
+      logPrefix: params.logPrefix,
+    })
+  } catch (e) {
+    console.warn(`${params.logPrefix} urban metadata text extraction failed`, e)
+  }
 }
 
 function blankNormalizedAddress(): NormalizedAddressFields {
@@ -386,7 +454,7 @@ async function insertDocumentAndAnalysis(
     propertyId: pid,
     intakeDetectedType: params.intakeDetectedDocumentType ?? null,
     sourceFileName: params.sourceFileName ?? null,
-    uploadOnlyInlineComplete: true,
+    triggerAnalysis: true,
   })
   if (!attach.ok) {
     console.error("[intake] attachDocumentToProperty after insert:", attach.error)
@@ -611,6 +679,7 @@ async function commitIntakeToExistingProperty(
     normalized: NormalizedAddressFields
     extractedAddressRaw: string | null
     extractedTextLength: number
+    extractedText?: string | null
     matchTier: AddressMatchTier | null
     confidenceScore: number
     addressMatchPrefill?: {
@@ -653,6 +722,14 @@ async function commitIntakeToExistingProperty(
       extractedTextLength: params.extractedTextLength,
       detectedDocumentType: params.intakeDetectedDocumentType,
     }
+  }
+
+  if (params.intakeDetectedDocumentType === "urban_planning_info" && params.extractedText) {
+    await syncUrbanPlanningMetadataFromText(supabase, {
+      propertyId: params.propertyId,
+      text: params.extractedText,
+      logPrefix: "[intake] commit existing",
+    })
   }
 
   return {
@@ -713,7 +790,14 @@ export async function reconcileCommittedIntakeDocument(
     propertyId: doc.property_id,
     intakeDetectedType: detected,
     sourceFileName: params.filename,
-    uploadOnlyInlineComplete: true,
+    triggerAnalysis: true,
+  })
+
+  await syncUrbanPlanningMetadataFromStoredPdf(supabase, {
+    propertyId: doc.property_id,
+    storagePath: doc.storage_path,
+    detectedDocumentType: detected,
+    logPrefix: "[intake] reconcile",
   })
 
   const [{ data: run }, { data: addressRow }] = await Promise.all([
@@ -835,6 +919,7 @@ export async function matchOrCreatePropertyFromDocument(
           normalized: blankNormalizedAddress(),
           extractedAddressRaw: null,
           extractedTextLength,
+          extractedText: text,
           matchTier: sourceMatch.tier,
           confidenceScore: scoreForMatchTier(sourceMatch.tier),
         })
@@ -877,6 +962,7 @@ export async function matchOrCreatePropertyFromDocument(
         normalized: blankNormalizedAddress(),
         extractedAddressRaw: null,
         extractedTextLength,
+        extractedText: text,
         matchTier: sourceMatch.tier,
         confidenceScore: scoreForMatchTier(sourceMatch.tier),
       })
@@ -1097,6 +1183,14 @@ Confidence: ${debugConfidence}`)
       extractedTextLength,
       detectedDocumentType,
     }
+  }
+
+  if (detectedDocumentType === "urban_planning_info") {
+    await syncUrbanPlanningMetadataFromText(supabase, {
+      propertyId,
+      text,
+      logPrefix,
+    })
   }
 
   // Intentionally keep the intake blob in storage until processIntakeUploads has written the
@@ -1436,6 +1530,13 @@ export async function linkIntakeUploadToManualProperty(
   if (!commit.ok) {
     return { ok: false, error: commit.error }
   }
+
+  await syncUrbanPlanningMetadataFromStoredPdf(supabase, {
+    propertyId: propertyIdForCommit,
+    storagePath: commit.finalStoragePath,
+    detectedDocumentType: detected,
+    logPrefix: "[intake] manual link",
+  })
 
   const { error: upErr } = await supabase
     .from("intake_uploads")

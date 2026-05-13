@@ -58,3 +58,9 @@ export function parseJsonFromModelOutput(content: string): unknown | null {
     return null
   }
 }
+
+export function assertParseableJsonFromModelOutput(content: string): void {
+  if (parseJsonFromModelOutput(content) === null) {
+    throw new Error("Model returned invalid JSON")
+  }
+}

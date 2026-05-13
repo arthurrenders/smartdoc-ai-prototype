@@ -4,6 +4,7 @@ import { createServerClient } from "@/lib/supabase/server"
 import { labelForDocumentDateType } from "@/lib/document-dates/date-type-label"
 import { pickName, pickDocTypeName } from "@/lib/supabase-helpers"
 import { tryGetOwnerPropertyIds } from "@/lib/supabase/ownership"
+import { getCurrentDocumentsByType } from "@/lib/current-documents"
 
 export type UpcomingDeadlineRow = {
   id: string
@@ -26,30 +27,57 @@ export async function getUpcomingDeadlines(limit = 20): Promise<{
     if (propertyIds.length === 0) return { data: [], error: null }
     const today = new Date().toISOString().slice(0, 10)
 
-    const { data, error } = await supabase
-      .from("document_dates")
-      .select(
+    const [datesRes, docsRes] = await Promise.all([
+      supabase
+        .from("document_dates")
+        .select(
+          `
+          id,
+          property_id,
+          document_id,
+          date_type,
+          date_on,
+          properties ( display_name ),
+          documents!inner ( id, document_type_id, created_at, document_types ( name ) )
         `
-        id,
-        property_id,
-        document_id,
-        date_type,
-        date_on,
-        properties ( display_name ),
-        documents!inner ( is_active, document_types ( name ) )
-      `
-      )
-      .in("property_id", propertyIds)
-      .eq("documents.is_active", true)
-      .gte("date_on", today)
-      .order("date_on", { ascending: true })
-      .limit(limit)
+        )
+        .in("property_id", propertyIds)
+        .gte("date_on", today)
+        .order("date_on", { ascending: true }),
+      supabase
+        .from("documents")
+        .select("id, property_id, document_type_id, created_at")
+        .in("property_id", propertyIds),
+    ])
 
-    if (error) {
-      return { data: [], error: error.message }
+    if (datesRes.error) {
+      return { data: [], error: datesRes.error.message }
+    }
+    if (docsRes.error) {
+      return { data: [], error: docsRes.error.message }
     }
 
-    const rows = (data as unknown[]) || []
+    const docRows =
+      (docsRes.data as Array<{
+        id: string
+        property_id: string
+        document_type_id: string | null
+        created_at?: string | null
+      }> | null) ?? []
+    const docsByProperty = new Map<string, typeof docRows>()
+    for (const doc of docRows) {
+      const list = docsByProperty.get(doc.property_id) ?? []
+      list.push(doc)
+      docsByProperty.set(doc.property_id, list)
+    }
+    const currentDocIds = new Set<string>()
+    for (const list of docsByProperty.values()) {
+      for (const doc of getCurrentDocumentsByType(list)) {
+        currentDocIds.add(doc.id)
+      }
+    }
+
+    const rows = (datesRes.data as unknown[]) || []
     const out: UpcomingDeadlineRow[] = []
 
     for (const raw of rows) {
@@ -62,6 +90,7 @@ export async function getUpcomingDeadlines(limit = 20): Promise<{
         properties?: unknown
         documents?: unknown
       }
+      if (!currentDocIds.has(r.document_id)) continue
       out.push({
         id: r.id,
         property_id: r.property_id,
@@ -76,6 +105,7 @@ export async function getUpcomingDeadlines(limit = 20): Promise<{
         ),
         labelDisplay: labelForDocumentDateType(r.date_type),
       })
+      if (out.length >= limit) break
     }
 
     return { data: out, error: null }

@@ -4,6 +4,7 @@ import type { AnalysisResult } from "@/lib/analysis/detectors"
 
 const HEATING_VALUES = new Set(["gas", "oil", "electric", "heat_pump", "district", "other"])
 const PROPERTY_TYPE_VALUES = new Set(["house", "apartment", "land", "commercial", "other"])
+const URBAN_PLANNING_DOCUMENT_TYPE = "URBAN_PLANNING_INFO"
 
 function isWrongDocumentTypeResult(result: AnalysisResult): boolean {
   if (result.summary?.toLowerCase().includes("wrong document type")) return true
@@ -23,10 +24,20 @@ type Candidate = {
   living_area_m2: number | null
 }
 
+const URBAN_PLANNING_AUTHORITY_FIELDS = new Set<keyof Candidate>([
+  "construction_year",
+  "property_type",
+  "living_area_m2",
+])
+
 function extractCandidates(
   documentTypeName: string | null,
   result: AnalysisResult,
 ): Candidate {
+  const normalizedDocumentType = documentTypeName?.toUpperCase() ?? null
+  const isUrbanPlanningDocument = normalizedDocumentType === URBAN_PLANNING_DOCUMENT_TYPE
+  const isEpcDocument = normalizedDocumentType === "EPC"
+
   const r = result as AnalysisResult & {
     construction_year?: unknown
     heating_type?: unknown
@@ -57,29 +68,43 @@ function extractCandidates(
       ? areaRaw
       : null
 
-  // Asbestos only carries construction_year; explicitly null the rest.
-  if (documentTypeName?.toUpperCase() === "ASBESTOS") {
+  // Stedenbouwkundige inlichtingen / vastgoedinformatie are the authoritative source
+  // for property-level bouwjaar, pandtype and oppervlakte.
+  if (isUrbanPlanningDocument) {
     return {
       construction_year,
       heating_type: null,
+      property_type: dwelling,
+      living_area_m2,
+    }
+  }
+
+  // EPC remains useful for heating, but property-level size/type/year should come
+  // from the stedenbouwkundige file instead of certificate metadata.
+  if (isEpcDocument) {
+    return {
+      construction_year: null,
+      heating_type: heating,
       property_type: null,
       living_area_m2: null,
     }
   }
 
   return {
-    construction_year,
-    heating_type: heating,
-    property_type: dwelling,
-    living_area_m2,
+    construction_year: null,
+    heating_type: null,
+    property_type: null,
+    living_area_m2: null,
   }
 }
 
 /**
  * After a successful analysis run: fill any NULL property metadata columns from
- * values extracted by the analyzer. Existing (manually entered or previously
- * filled) values are NEVER overwritten. For each field actually patched, the
- * source is recorded in `properties.metadata_sources` as "document".
+ * values extracted by the analyzer. Manually entered values are never overwritten.
+ * Stedenbouwkundige inlichtingen may replace previous document-derived bouwjaar,
+ * pandtype and oppervlakte values because it is the preferred source for those
+ * property-level fields. For each field actually patched, the source is recorded
+ * in `properties.metadata_sources` as "document".
  *
  * Mirrors `lib/property-address/sync-from-analysis.ts` — soft-fail on errors.
  */
@@ -88,6 +113,9 @@ export async function syncPropertyMetadataFromAnalysis(
   params: { propertyId: string; documentTypeName: string | null; result: AnalysisResult },
 ): Promise<void> {
   const { propertyId, documentTypeName, result } = params
+  const normalizedDocumentType = documentTypeName?.toUpperCase() ?? null
+  const allowUrbanPlanningDocumentOverride =
+    normalizedDocumentType === URBAN_PLANNING_DOCUMENT_TYPE
 
   if (isWrongDocumentTypeResult(result)) return
 
@@ -126,19 +154,29 @@ export async function syncPropertyMetadataFromAnalysis(
     ...(existingTyped.metadata_sources ?? {}),
   }
 
-  if (existingTyped.construction_year === null && candidate.construction_year !== null) {
+  function shouldPatch(field: keyof Candidate, currentValue: unknown, candidateValue: unknown): boolean {
+    if (candidateValue === null || candidateValue === undefined) return false
+    if (currentValue === null || currentValue === undefined) return true
+    return (
+      allowUrbanPlanningDocumentOverride &&
+      URBAN_PLANNING_AUTHORITY_FIELDS.has(field) &&
+      nextSources[field] === "document"
+    )
+  }
+
+  if (shouldPatch("construction_year", existingTyped.construction_year, candidate.construction_year)) {
     patch.construction_year = candidate.construction_year
     nextSources.construction_year = "document"
   }
-  if (existingTyped.heating_type === null && candidate.heating_type !== null) {
+  if (shouldPatch("heating_type", existingTyped.heating_type, candidate.heating_type)) {
     patch.heating_type = candidate.heating_type
     nextSources.heating_type = "document"
   }
-  if (existingTyped.property_type === null && candidate.property_type !== null) {
+  if (shouldPatch("property_type", existingTyped.property_type, candidate.property_type)) {
     patch.property_type = candidate.property_type
     nextSources.property_type = "document"
   }
-  if (existingTyped.living_area_m2 === null && candidate.living_area_m2 !== null) {
+  if (shouldPatch("living_area_m2", existingTyped.living_area_m2, candidate.living_area_m2)) {
     patch.living_area_m2 = candidate.living_area_m2
     nextSources.living_area_m2 = "document"
   }

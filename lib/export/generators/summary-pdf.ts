@@ -81,7 +81,7 @@ export async function buildSummaryPdf(
     rule()
     draw("Manueel toe te voegen", { font: bold, size: 13, color: rgb(0.7, 0.45, 0.0) })
     draw(
-      "SmartDoc analyseert deze documenten nog niet automatisch — voeg ze rechtstreeks toe op het portaal.",
+      "Deze documenten ontbreken in het exportpakket of moeten rechtstreeks op het portaal worden toegevoegd.",
       { color: rgb(0.4, 0.4, 0.4), size: 9 },
     )
     for (const item of manualMissing) {

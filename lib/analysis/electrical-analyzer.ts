@@ -4,7 +4,11 @@ import { structuredAddressFromSchemaFields } from "@/lib/property-address/extrac
 import { ELECTRICAL_PROMPT } from "@/lib/ai/prompts/electrical"
 import { GEMINI_MODEL, generateContentWithRetry } from "@/lib/ai/gemini"
 import { userFacingAnalysisFailureFromError } from "@/lib/ai/gemini-errors"
-import { getTextFromGeminiResponse, parseJsonFromModelOutput } from "@/lib/ai/json-from-model"
+import {
+  assertParseableJsonFromModelOutput,
+  getTextFromGeminiResponse,
+  parseJsonFromModelOutput,
+} from "@/lib/ai/json-from-model"
 
 const PROMPT_VERSION = "1.0"
 const DEBUG_ANALYSIS_LOGS = process.env.DEBUG_ANALYSIS_LOGS === "1"
@@ -138,6 +142,8 @@ export async function analyzeElectricalWithAI(
     const response = await generateContentWithRetry({
       model: GEMINI_MODEL,
       contents: prompt,
+    }, {
+      validateText: assertParseableJsonFromModelOutput,
     })
     modelName = `${response.provider}:${response.model}`
     const content = getTextFromGeminiResponse(response)

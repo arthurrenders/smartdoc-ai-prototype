@@ -52,9 +52,8 @@ export function ReadinessPanel({ result, loading }: Props) {
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <p>
-            Sommige documenten worden nog niet automatisch geanalyseerd door SmartDoc
-            (bv. bodemattest, stedenbouwkundige inlichtingen). Deze blokkeren de export niet —
-            voeg ze rechtstreeks toe op het portaal of bij de notaris. SmartDoc voegt automatisch
+            Sommige documenten ontbreken nog in SmartDoc of moeten rechtstreeks op het portaal of
+            bij de notaris worden toegevoegd. Deze blokkeren de export niet; SmartDoc voegt automatisch
             een notitie (<code className="rounded bg-amber-100 px-1 py-0.5 text-[11px]">ACTION_REQUIRED.txt</code>) toe aan het ZIP-bestand.
           </p>
         </div>

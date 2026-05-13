@@ -11,6 +11,8 @@ import { analyzeWithLLM } from "@/lib/analysis/llm-analyzer"
 import { analyzeEPCWithAI } from "@/lib/analysis/epc-analyzer"
 import { analyzeElectricalWithAI } from "@/lib/analysis/electrical-analyzer"
 import { analyzeAsbestosWithAI } from "@/lib/analysis/asbestos-analyzer"
+import { analyzeSoilCertificateWithAI } from "@/lib/analysis/soil-certificate-analyzer"
+import { analyzeUrbanPlanningWithAI } from "@/lib/analysis/urban-planning-analyzer"
 import type { AnalysisResult } from "@/lib/analysis/detectors"
 import { extractDocumentDatesFromResult } from "@/lib/document-dates/extract-from-result"
 import { replaceDocumentDatesForDocument } from "@/lib/document-dates/persist"
@@ -129,6 +131,10 @@ function expectedSlotLabel(documentTypeName: string): string {
       return "electrical inspection"
     case "ASBESTOS":
       return "asbestos"
+    case "SOIL_CERTIFICATE":
+      return "soil certificate / bodemattest"
+    case "URBAN_PLANNING_INFO":
+      return "urban-planning information"
     default:
       return documentTypeName
   }
@@ -136,54 +142,22 @@ function expectedSlotLabel(documentTypeName: string): string {
 
 /** When keyword detection finds no EPC / electrical / asbestos cues in the PDF text. */
 function notRecognizedAsExpectedDocumentMessage(
-  expectedDbName: "EPC" | "ELECTRICAL" | "ASBESTOS"
+  expectedDbName: "EPC" | "ELECTRICAL" | "ASBESTOS" | "SOIL_CERTIFICATE" | "URBAN_PLANNING_INFO"
 ): { summary: string; details: string } {
   const expected =
     expectedDbName === "EPC"
       ? "an EPC"
       : expectedDbName === "ELECTRICAL"
         ? "an electrical inspection"
-        : "an asbestos"
+        : expectedDbName === "ASBESTOS"
+          ? "an asbestos"
+          : expectedDbName === "SOIL_CERTIFICATE"
+            ? "a soil certificate"
+            : "an urban-planning information"
   return {
     summary: `This document type was not recognized as ${expected} document.`,
     details: `The PDF text did not match the usual keywords for ${expectedSlotLabel(expectedDbName)}. Check that you uploaded the correct file, or try a text-based PDF export.`,
   }
-}
-
-function normalizeLooseText(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .replace(/\s+/g, " ")
-    .trim()
-}
-
-function extractUrbanPlanningMetadata(text: string): Partial<AnalysisResult> {
-  const normalized = normalizeLooseText(text)
-  const out: Partial<AnalysisResult> = {}
-
-  const areaMatch = normalized.match(
-    /\b(?:bewoonbare oppervlakte|woonoppervlakte|bruto vloeroppervlakte|netto vloeroppervlakte|vloeroppervlakte)\D{0,40}(\d{2,5}(?:[,.]\d+)?)\s*(?:m2|m²|vierkante meter)\b/i
-  )
-  if (areaMatch) {
-    const n = Number(areaMatch[1].replace(",", "."))
-    if (Number.isFinite(n) && n > 0 && n < 100_000) {
-      out.living_area_m2 = n
-    }
-  }
-
-  if (/\b(appartement|flat|studio)\b/.test(normalized)) {
-    out.dwelling_type = "apartment"
-  } else if (/\b(eengezinswoning|woning|huis|rijwoning|halfopen bebouwing|open bebouwing)\b/.test(normalized)) {
-    out.dwelling_type = "house"
-  } else if (/\b(bouwgrond|perceel grond|grond)\b/.test(normalized)) {
-    out.dwelling_type = "land"
-  } else if (/\b(handelspand|kantoor|winkel|commercieel)\b/.test(normalized)) {
-    out.dwelling_type = "commercial"
-  }
-
-  return out
 }
 
 export type ExecuteAnalysisRunResult =
@@ -447,24 +421,63 @@ export async function executeAnalysisRunPipeline(
           }
         }
       }
-    } else if (
-      documentTypeName === "SOIL_CERTIFICATE" ||
-      documentTypeName === "URBAN_PLANNING_INFO"
-    ) {
-      // Upload-only types: no AI analyzer exists for these. Persist a benign
-      // Dutch result so the UI shows "groen — opgeladen", and set confidence
-      // high enough to skip the LLM fallback below (saves Gemini tokens).
-      modelName = ANALYSIS_MODEL_RULE_BASED
-      const metadata =
-        documentTypeName === "URBAN_PLANNING_INFO"
-          ? extractUrbanPlanningMetadata(extractedText)
-          : {}
-      result = {
-        status: "green" as const,
-        summary: "Document opgeladen — geen automatische analyse beschikbaar.",
-        flags: [],
-        confidence: 1,
-        ...metadata,
+    } else if (documentTypeName === "SOIL_CERTIFICATE") {
+      if (detectedType === "unknown") {
+        modelName = ANALYSIS_MODEL_RULE_BASED
+        const { summary, details } = notRecognizedAsExpectedDocumentMessage("SOIL_CERTIFICATE")
+        result = {
+          status: "orange" as const,
+          summary,
+          flags: [{ severity: "orange" as const, title: "Document type not recognized", details }],
+        }
+      } else if (detectedType !== "soil_certificate") {
+        modelName = ANALYSIS_MODEL_RULE_BASED
+        const detectedHuman = humanLabelForDetectedType(detectedType)
+        result = {
+          status: "orange" as const,
+          summary: `Wrong document type: the PDF looks like ${detectedHuman}, but you uploaded it under ${expectedSlotLabel("SOIL_CERTIFICATE")}.`,
+          flags: [
+            {
+              severity: "orange" as const,
+              title: "Wrong document type",
+              details: `Based on the text in this file, it matches ${detectedHuman}. This upload slot is for ${expectedSlotLabel("SOIL_CERTIFICATE")}. Please upload the correct PDF in the matching row.`,
+            },
+          ],
+        }
+      } else {
+        const soilResult = await analyzeSoilCertificateWithAI(extractedText)
+        result = soilResult.result
+        modelName = soilResult.modelName
+        promptVersion = soilResult.promptVersion
+      }
+    } else if (documentTypeName === "URBAN_PLANNING_INFO") {
+      if (detectedType === "unknown") {
+        modelName = ANALYSIS_MODEL_RULE_BASED
+        const { summary, details } = notRecognizedAsExpectedDocumentMessage("URBAN_PLANNING_INFO")
+        result = {
+          status: "orange" as const,
+          summary,
+          flags: [{ severity: "orange" as const, title: "Document type not recognized", details }],
+        }
+      } else if (detectedType !== "urban_planning_info") {
+        modelName = ANALYSIS_MODEL_RULE_BASED
+        const detectedHuman = humanLabelForDetectedType(detectedType)
+        result = {
+          status: "orange" as const,
+          summary: `Wrong document type: the PDF looks like ${detectedHuman}, but you uploaded it under ${expectedSlotLabel("URBAN_PLANNING_INFO")}.`,
+          flags: [
+            {
+              severity: "orange" as const,
+              title: "Wrong document type",
+              details: `Based on the text in this file, it matches ${detectedHuman}. This upload slot is for ${expectedSlotLabel("URBAN_PLANNING_INFO")}. Please upload the correct PDF in the matching row.`,
+            },
+          ],
+        }
+      } else {
+        const urbanResult = await analyzeUrbanPlanningWithAI(extractedText)
+        result = urbanResult.result
+        modelName = urbanResult.modelName
+        promptVersion = urbanResult.promptVersion
       }
     } else {
       modelName = ANALYSIS_MODEL_RULE_BASED

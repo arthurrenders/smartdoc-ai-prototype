@@ -189,7 +189,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
     recoveryAttemptedRef.current = true
     void (async () => {
       try {
-        const res = await processIntakeUploads([])
+        const res = await drainIntakeQueue([])
         if (res.ok) router.refresh()
       } catch {
         /* silent — manual upload flow still works */
@@ -214,6 +214,25 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
       prev.map((row) => (keySet.has(row.key) ? { ...row, ...patch } : row))
     )
   }, [])
+
+  async function drainIntakeQueue(initialIds: string[]) {
+    let ids = initialIds
+    let lastResult: Awaited<ReturnType<typeof processIntakeUploads>> = {
+      ok: true,
+      processedCount: 0,
+      remainingCount: 0,
+    }
+    for (let guard = 0; guard < 40; guard++) {
+      lastResult = await processIntakeUploads(ids)
+      if (!lastResult.ok) return lastResult
+      if ((lastResult.remainingCount ?? 0) <= 0) return lastResult
+      ids = []
+    }
+    return {
+      ok: false,
+      error: "Intake queue is still not empty after multiple processing batches. Refresh and process again.",
+    }
+  }
 
   async function handleDeleteQueueRow(row: IntakeUploadRow) {
     const linked = Boolean(row.matched_property_id || row.created_property_id || row.processing_status === "processed")
@@ -304,7 +323,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
             if (!result.error && result.intakeId) okLocalKeys.push(local.key)
             updateLocalQueueRows([local.key], result.error
               ? { status: "failed", message: result.error }
-              : { status: "processing", message: "Matching property" }
+              : { status: "processing", message: "Matching and analyzing" }
             )
           })
           totalOk += okIds.length
@@ -314,7 +333,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           }
 
           if (okIds.length) {
-            const procRes = await processIntakeUploads(okIds)
+            const procRes = await drainIntakeQueue(okIds)
             if (!procRes.ok) {
               updateLocalQueueRows(okLocalKeys, { status: "failed", message: procRes.error ?? "Processing failed" })
               setMessage({
@@ -340,7 +359,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
         } else {
           setMessage({
             type: "ok",
-            text: `${totalOk} PDF(s) uploaded and processed through the intake pipeline (address extraction and property matching).${extra}`,
+            text: `${totalOk} PDF(s) uploaded, matched to properties and analyzed where possible.${extra}`,
           })
         }
 
@@ -400,7 +419,8 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
           <div>
             <h2 className="text-lg font-semibold text-brand-dark">Upload documents</h2>
             <p className="text-sm text-muted-foreground">
-              PDFs only — EPC, asbestos, electrical certificates. Files are stored and queued for processing.
+              PDFs only: EPC, asbestattest, elektrische keuring, bodemattest en stedenbouwkundige inlichtingen.
+              SmartDoc koppelt ze aan het juiste pand en start daarna de analyse.
             </p>
           </div>
           <button

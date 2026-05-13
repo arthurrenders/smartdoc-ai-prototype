@@ -28,14 +28,10 @@ export const VISIBLE_DOCUMENT_TYPE_NAMES = [
 ] as const
 
 /**
- * Visible doc types that we don't run AI analysis on — UI shows a
- * "Geen automatische analyse" hint and the analysis pipeline writes a
- * benign Dutch green result instead of calling Gemini.
+ * Visible doc types that should be treated as upload-only. Kept as an extension
+ * point, but all visible required document types currently support analysis.
  */
-export const NON_ANALYZED_DOCUMENT_TYPE_NAMES = [
-  "SOIL_CERTIFICATE",
-  "URBAN_PLANNING_INFO",
-] as const
+export const NON_ANALYZED_DOCUMENT_TYPE_NAMES: readonly string[] = []
 
 /** Minimal shape from an analysis result for status/expiry. Compatible with AnalysisResult. */
 export type DocumentAnalysisSummary = {

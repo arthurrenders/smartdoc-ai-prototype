@@ -5,6 +5,7 @@ import {
   BudgetExceededError,
   recordLlmCall,
 } from "@/lib/ai/usage-budget"
+import { getTextFromGeminiResponse } from "@/lib/ai/json-from-model"
 
 export { BudgetExceededError } from "@/lib/ai/usage-budget"
 
@@ -58,6 +59,21 @@ export type UnifiedGenerateContentResponse = {
   raw: unknown
 }
 
+type GenerateContentRetryOptions = {
+  /**
+   * Optional caller validation for responses that need a parseable schema.
+   * Throw from here to let the fallback provider attempt the same prompt.
+   */
+  validateText?: (text: string) => void
+}
+
+class ModelResponseValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "ModelResponseValidationError"
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -76,17 +92,9 @@ function isRateLimited(error: unknown): boolean {
   return msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")
 }
 
-function isServiceUnavailable(error: unknown): boolean {
-  if (error instanceof ApiError && error.status === 503) return true
-  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase()
-  return msg.includes("unavailable") || msg.includes("503")
-}
-
-function shouldFallbackToGroq(error: unknown): boolean {
-  // Only switch to Groq for transient capacity errors (429 / 503). Don't fall back on auth, schema,
-  // or quota-exhausted errors — those would burn Groq's free tier without solving the root cause.
+function shouldFallbackFromGemini(error: unknown): boolean {
   if (error === undefined || error === null) return false
-  return isRateLimited(error) || isServiceUnavailable(error)
+  return true
 }
 
 function buildUnifiedGeminiResponse(
@@ -171,15 +179,49 @@ async function generateWithGroq(prompt: string): Promise<UnifiedGenerateContentR
 
 const MAX_GEMINI_RETRY_WAIT_MS = 5_000
 
+async function validateUnifiedResponse(
+  response: UnifiedGenerateContentResponse,
+  options?: GenerateContentRetryOptions
+): Promise<void> {
+  const text = getTextFromGeminiResponse(response)
+  if (!text) {
+    throw new ModelResponseValidationError("Empty model response")
+  }
+  options?.validateText?.(text)
+}
+
+async function generateWithGeminiModel(
+  request: GenerateContentRequest,
+  model: string,
+  options?: GenerateContentRetryOptions
+): Promise<UnifiedGenerateContentResponse> {
+  await assertWithinDailyBudget("gemini")
+  const effectiveRequest =
+    typeof request.model === "string" && request.model === model
+      ? request
+      : ({
+          ...(request as unknown as Record<string, unknown>),
+          model,
+        } as GenerateContentRequest)
+  const res = await geminiClient.models.generateContent(effectiveRequest)
+  await recordLlmCall("gemini")
+  const unified = buildUnifiedGeminiResponse(res, model)
+  await validateUnifiedResponse(unified, options)
+  return unified
+}
+
 /**
- * One Gemini attempt. On 429/503 (or UNAVAILABLE), switch to Groq immediately when GROQ_API_KEY is set
- * — no long Retry-After sleeps. Without Groq, uses capped short waits + optional GEMINI_MODEL_FALLBACK.
+ * One Gemini attempt. If Gemini fails or returns unusable text, use the configured fallback provider
+ * before surfacing an analysis failure. Groq is preferred when GROQ_API_KEY is set; otherwise an
+ * alternate Gemini model is used when GEMINI_MODEL_FALLBACK is configured. Without either fallback,
+ * rate-limit retries are kept short so server actions do not hang.
  *
  * The daily budget cap (LLM_MAX_CALLS_PER_DAY, default 200) is enforced before any provider call.
- * If the cap is hit, throws `BudgetExceededError` whose `userMessage` is shown to the realtor in Dutch.
+ * If one provider hits its cap, the next configured fallback is tried.
  */
 export async function generateContentWithRetry(
-  request: GenerateContentRequest
+  request: GenerateContentRequest,
+  options?: GenerateContentRetryOptions
 ): Promise<UnifiedGenerateContentResponse> {
   const primaryModel =
     typeof request.model === "string" ? request.model : GEMINI_MODEL
@@ -187,46 +229,37 @@ export async function generateContentWithRetry(
   const prompt = promptFromGenerateContentRequest(request)
   let lastError: unknown
 
-  await assertWithinDailyBudget("gemini")
-
   try {
-    const res = await geminiClient.models.generateContent(request)
-    await recordLlmCall("gemini")
-    return buildUnifiedGeminiResponse(res, primaryModel)
+    return await generateWithGeminiModel(request, primaryModel, options)
   } catch (e) {
-    if (e instanceof BudgetExceededError) throw e
     lastError = e
   }
 
-  if (canUseGroq && prompt && shouldFallbackToGroq(lastError)) {
+  if (canUseGroq && prompt && shouldFallbackFromGemini(lastError)) {
     console.warn(
-      `[Gemini] Unavailable or rate-limited (${primaryModel}); using Groq immediately (${GROQ_MODEL})`
+      `[Gemini] Primary model failed (${primaryModel}); using Groq fallback (${GROQ_MODEL})`
     )
-    return await generateWithGroq(prompt)
+    try {
+      const groq = await generateWithGroq(prompt)
+      await validateUnifiedResponse(groq, options)
+      return groq
+    } catch (e) {
+      lastError = e
+      console.warn("[Groq] Fallback failed:", e instanceof Error ? e.message : e)
+    }
   }
 
   const fallback = GEMINI_MODEL_FALLBACK
-  if (
-    fallback &&
-    fallback !== primaryModel &&
-    lastError !== undefined &&
-    isRateLimited(lastError) &&
-    !canUseGroq
-  ) {
+  if (fallback && fallback !== primaryModel && shouldFallbackFromGemini(lastError)) {
     console.warn(`[Gemini] Trying alternate Gemini model: ${fallback}`)
     try {
-      const res = await geminiClient.models.generateContent({
-        ...(request as unknown as Record<string, unknown>),
-        model: fallback,
-      } as GenerateContentRequest)
-      await recordLlmCall("gemini")
-      return buildUnifiedGeminiResponse(res, fallback)
+      return await generateWithGeminiModel(request, fallback, options)
     } catch (e) {
       lastError = e
     }
   }
 
-  if (isRateLimited(lastError) && !canUseGroq) {
+  if (isRateLimited(lastError) && !canUseGroq && !fallback) {
     for (let attempt = 0; attempt < 2; attempt++) {
       const msg = lastError instanceof Error ? lastError.message : String(lastError)
       const fromApi = retryDelayMsFromMessage(msg)
@@ -236,9 +269,7 @@ export async function generateContentWithRetry(
       )
       await sleep(wait)
       try {
-        const res = await geminiClient.models.generateContent(request)
-        await recordLlmCall("gemini")
-        return buildUnifiedGeminiResponse(res, primaryModel)
+        return await generateWithGeminiModel(request, primaryModel, options)
       } catch (e) {
         lastError = e
         if (!isRateLimited(e)) break

@@ -58,7 +58,7 @@ function stripJsonFences(text: string): string {
 export async function generatePropertyEmailDraftWithGemini(
   kind: PropertyEmailDraftKind,
   factsBlock: string,
-  language: PropertyEmailDraftLanguage = "en"
+  language: PropertyEmailDraftLanguage = "nl"
 ): Promise<PropertyEmailDraft> {
   const prompt = `${baseRules(language)}
 
@@ -72,6 +72,11 @@ Return JSON: {"subject":"...","body":"..."}`
   const response = await generateContentWithRetry({
     model: GEMINI_MODEL,
     contents: prompt,
+  }, {
+    validateText: (text) => {
+      const parsed = JSON.parse(stripJsonFences(text))
+      EmailDraftSchema.parse(parsed)
+    },
   })
   const content = response.text
   if (!content) {

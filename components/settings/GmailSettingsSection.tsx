@@ -21,7 +21,7 @@ export function GmailSettingsSection({ initialStatus }: GmailSettingsSectionProp
     <section className="saas-card space-y-5">
       <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
         <Mail className="h-5 w-5 text-brand-light" />
-        Gmail Integration
+        Gmail-koppeling
       </h2>
       <div className="space-y-3">
         <div className="flex items-center gap-3">
@@ -30,25 +30,25 @@ export function GmailSettingsSection({ initialStatus }: GmailSettingsSectionProp
             aria-hidden
           />
           <span className="text-sm text-foreground">
-            {connected ? `Connected as ${gmailEmail}` : "Not connected"}
+            {connected ? `Verbonden als ${gmailEmail}` : "Niet verbonden"}
           </span>
         </div>
         {gmailParam === "connected" && (
-          <p className="text-sm font-medium text-emerald-600">Gmail connected successfully.</p>
+          <p className="text-sm font-medium text-emerald-600">Gmail is verbonden.</p>
         )}
         {gmailParam === "error" && (
           <p className="text-sm text-destructive">
-            {errorMsg ? decodeURIComponent(errorMsg) : "Gmail connection failed. Please try again."}
+            {errorMsg ? decodeURIComponent(errorMsg) : "Gmail koppelen is mislukt. Probeer opnieuw."}
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          Connect Gmail to send email drafts directly from the property page.
+          Koppel Gmail om e-mailconcepten rechtstreeks vanaf de pandpagina te verzenden.
         </p>
         <Link
           href="/api/auth/gmail/start"
           className="inline-flex items-center justify-center rounded-lg bg-brand-dark px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90"
         >
-          {connected ? "Reconnect Gmail" : "Connect Gmail"}
+          {connected ? "Gmail opnieuw koppelen" : "Gmail koppelen"}
         </Link>
       </div>
     </section>

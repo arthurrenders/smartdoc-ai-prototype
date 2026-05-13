@@ -20,7 +20,7 @@ const EMAIL_DRAFT_LANGUAGES = new Set<PropertyEmailDraftLanguage>(["en", "nl", "
 export async function generatePropertyEmailDraft(
   propertyId: string,
   kind: PropertyEmailDraftKind,
-  language: PropertyEmailDraftLanguage = "en"
+  language: PropertyEmailDraftLanguage = "nl"
 ): Promise<GeneratePropertyEmailDraftResult> {
   if (!EMAIL_DRAFT_LANGUAGES.has(language)) {
     return { ok: false, error: "Invalid language." }

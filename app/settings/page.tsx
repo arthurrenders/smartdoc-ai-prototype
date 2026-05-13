@@ -1,23 +1,31 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
-import { Save, User, SlidersHorizontal, KeyRound, Bell } from "lucide-react"
-
-export const metadata: Metadata = {
-  title: "Instellingen",
-  description: "Beheer uw account, Gmail-koppeling en applicatieinstellingen.",
-}
+import { AlertTriangle, BrainCircuit, CheckCircle2, User } from "lucide-react"
 import { createServerClient } from "@/lib/supabase/server"
 import { getGmailConnectionStatus } from "@/app/actions/gmail-connection"
 import { getDashboardNotifications } from "@/app/actions/get-dashboard-notifications"
 import { GmailSettingsSection } from "@/components/settings/GmailSettingsSection"
 import { getOwnerUserId } from "@/lib/supabase/ownership"
 import { AppShell } from "@/components/AppShell"
+import { getTodayLlmUsageSnapshot } from "@/lib/ai/usage-budget"
+
+export const metadata: Metadata = {
+  title: "Instellingen",
+  description: "Beheer uw account, Gmail-koppeling en applicatieinstellingen.",
+}
 
 export const dynamic = "force-dynamic"
 
 type SettingsAccount = {
   name: string
   email: string
+}
+
+type AiProviderStatus = {
+  geminiConfigured: boolean
+  groqConfigured: boolean
+  geminiFallbackModel: string | null
+  usage: Awaited<ReturnType<typeof getTodayLlmUsageSnapshot>>
 }
 
 async function getAccountInfo(): Promise<SettingsAccount> {
@@ -52,130 +60,118 @@ async function getAccountInfo(): Promise<SettingsAccount> {
   }
 }
 
+async function getAiProviderStatus(): Promise<AiProviderStatus> {
+  return {
+    geminiConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    groqConfigured: Boolean(process.env.GROQ_API_KEY?.trim()),
+    geminiFallbackModel: process.env.GEMINI_MODEL_FALLBACK?.trim() || null,
+    usage: await getTodayLlmUsageSnapshot(),
+  }
+}
+
 export default async function SettingsPage() {
-  const [account, gmailStatus, { data: notificationRows, error: notificationsError }] =
-    await Promise.all([getAccountInfo(), getGmailConnectionStatus(), getDashboardNotifications(12)])
+  const [account, aiStatus, gmailStatus, { data: notificationRows, error: notificationsError }] =
+    await Promise.all([
+      getAccountInfo(),
+      getAiProviderStatus(),
+      getGmailConnectionStatus(),
+      getDashboardNotifications(12),
+    ])
 
   return (
     <AppShell notifications={notificationRows} notificationsError={notificationsError}>
-    <div className="mx-auto max-w-3xl space-y-8 p-8">
-      <header className="space-y-2">
-        <h1 className="font-headline text-3xl font-bold tracking-tight text-brand-dark sm:text-4xl">
-          Instellingen
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Beheer accountgegevens en SmartDoc-voorkeuren.
-        </p>
-      </header>
+      <div className="mx-auto max-w-3xl space-y-8 p-8">
+        <header className="space-y-2">
+          <h1 className="font-headline text-3xl font-bold tracking-tight text-brand-dark sm:text-4xl">
+            Instellingen
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Beheer accountgegevens en werkende SmartDoc-koppelingen.
+          </p>
+        </header>
 
-      <Suspense
-        fallback={<section className="saas-card h-32 animate-pulse rounded-xl bg-muted/30" aria-hidden />}
-      >
-        <GmailSettingsSection initialStatus={gmailStatus} />
-      </Suspense>
+        <Suspense
+          fallback={<section className="saas-card h-32 animate-pulse rounded-xl bg-muted/30" aria-hidden />}
+        >
+          <GmailSettingsSection initialStatus={gmailStatus} />
+        </Suspense>
 
-      <form className="space-y-6">
         <section className="saas-card space-y-5">
           <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
             <User className="h-5 w-5 text-brand-light" />
             Accountinformatie
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Gebruikersnaam
-              </span>
-              <input
-                value={account.name}
-                readOnly
-                className="w-full rounded-lg border border-[hsl(var(--border))] bg-muted/30 px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                E-mailadres
-              </span>
-              <input
-                value={account.email}
-                readOnly
-                className="w-full rounded-lg border border-[hsl(var(--border))] bg-muted/30 px-3 py-2 text-sm"
-              />
-            </label>
+            <ReadOnlyField label="Gebruikersnaam" value={account.name} />
+            <ReadOnlyField label="E-mailadres" value={account.email} />
           </div>
           <p className="text-xs text-muted-foreground">
-            Accountvelden zijn momenteel alleen-lezen.
+            Accountvelden worden beheerd via de gekoppelde loginprovider.
           </p>
         </section>
 
         <section className="saas-card space-y-5">
           <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
-            <SlidersHorizontal className="h-5 w-5 text-brand-light" />
-            App-voorkeuren
+            <BrainCircuit className="h-5 w-5 text-brand-light" />
+            AI-analyse
           </h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Standaardland
-              </span>
-              <select
-                defaultValue="BE"
-                className="w-full rounded-lg border border-[hsl(var(--border))] bg-background px-3 py-2 text-sm"
-              >
-                <option value="BE">België</option>
-              </select>
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Taal
-              </span>
-              <select
-                defaultValue="nl"
-                className="w-full rounded-lg border border-[hsl(var(--border))] bg-background px-3 py-2 text-sm"
-              >
-                <option value="nl">Nederlands (NL)</option>
-                <option value="en">English (EN)</option>
-              </select>
-            </label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <StatusRow
+              label="Gemini"
+              ok={aiStatus.geminiConfigured}
+              text={aiStatus.geminiConfigured ? "Ingesteld" : "Niet ingesteld"}
+            />
+            <StatusRow
+              label="Fallback"
+              ok={aiStatus.groqConfigured || Boolean(aiStatus.geminiFallbackModel)}
+              text={
+                aiStatus.groqConfigured
+                  ? "Groq ingesteld"
+                  : aiStatus.geminiFallbackModel
+                    ? `Gemini fallback: ${aiStatus.geminiFallbackModel}`
+                    : "Niet ingesteld"
+              }
+            />
           </div>
-        </section>
-
-        <section className="saas-card space-y-5">
-          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-brand-dark">
-            <KeyRound className="h-5 w-5 text-brand-light" />
-            Toekomstbestendig
-          </h2>
-          <div className="space-y-4">
-            <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-muted/20 p-4">
-              <p className="text-sm font-medium text-foreground">API-sleutels</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Tijdelijk veld voor Google Maps en andere integratiesleutels.
-              </p>
-            </div>
-            <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-muted/20 p-4">
-              <p className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-                <Bell className="h-4 w-4 text-brand-light" />
-                Meldingsvoorkeuren
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Tijdelijk veld voor e-mail- en in-app meldingsinstellingen.
-              </p>
-            </div>
+          <div className="rounded-lg border border-[hsl(var(--border))] bg-muted/20 px-4 py-3 text-sm">
+            <p className="font-medium text-foreground">Dagelijks AI-verbruik ({aiStatus.usage.day})</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Gemini: {aiStatus.usage.geminiCalls}/{aiStatus.usage.cap} · Groq: {aiStatus.usage.groqCalls}/{aiStatus.usage.cap}
+            </p>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Als Gemini geen bruikbare analyse teruggeeft, probeert SmartDoc automatisch de fallbackprovider voordat een document handmatige review krijgt.
+          </p>
         </section>
-
-        <div className="flex justify-end">
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-dark px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0b3158]"
-          >
-            <Save className="h-4 w-4" />
-            Instellingen opslaan
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
     </AppShell>
   )
 }
 
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <label className="space-y-1">
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      <input
+        value={value}
+        readOnly
+        className="w-full rounded-lg border border-[hsl(var(--border))] bg-muted/30 px-3 py-2 text-sm"
+      />
+    </label>
+  )
+}
 
+function StatusRow({ label, ok, text }: { label: string; ok: boolean; text: string }) {
+  const Icon = ok ? CheckCircle2 : AlertTriangle
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border))] bg-white px-4 py-3">
+      <Icon className={`h-5 w-5 ${ok ? "text-emerald-600" : "text-amber-600"}`} aria-hidden />
+      <div>
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{text}</p>
+      </div>
+    </div>
+  )
+}
