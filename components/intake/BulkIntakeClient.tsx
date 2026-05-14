@@ -174,19 +174,27 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
   }, [])
 
   // Auto-recover queue rows stranded by a previous tab / timeout. processIntakeUploads([]) is
-  // a no-op when nothing is stuck, otherwise it resets >2-minute "processing" rows back to
-  // "uploaded" and drains the queue. Runs once per mount.
-  const recoveryAttemptedRef = useRef(false)
+  // a no-op when nothing is stuck, otherwise it resets stale "processing" rows back to "uploaded"
+  // and drains the queue. Re-runs whenever the set of stuck rows changes (e.g. after a router
+  // refresh surfaces new pending rows, or a previous drain timed out and left fresh "processing"
+  // rows behind). Gated by a stuck-id signature so we don't re-attempt the same failing set.
+  const lastRecoveryAttemptKeyRef = useRef<string | null>(null)
+  const stuckSignature = useMemo(() => {
+    const stuck = initialRows
+      .filter(
+        (r) =>
+          r.processing_status === "processing" ||
+          r.processing_status === "uploaded" ||
+          r.processing_status === "needs_review"
+      )
+      .map((r) => `${r.id}:${r.processing_status}`)
+      .sort()
+    return stuck.join("|")
+  }, [initialRows])
   useEffect(() => {
-    if (recoveryAttemptedRef.current) return
-    const hasStuck = initialRows.some(
-      (r) =>
-        r.processing_status === "processing" ||
-        r.processing_status === "uploaded" ||
-        r.processing_status === "needs_review"
-    )
-    if (!hasStuck) return
-    recoveryAttemptedRef.current = true
+    if (!stuckSignature) return
+    if (lastRecoveryAttemptKeyRef.current === stuckSignature) return
+    lastRecoveryAttemptKeyRef.current = stuckSignature
     void (async () => {
       try {
         const res = await drainIntakeQueue([])
@@ -195,7 +203,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
         /* silent — manual upload flow still works */
       }
     })()
-  }, [initialRows, router])
+  }, [stuckSignature, router])
 
   const queueRows = useMemo(() => {
     if (showFullHistory || !sessionCutoffIso) return initialRows
@@ -205,7 +213,23 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
   }, [initialRows, sessionCutoffIso, showFullHistory])
 
   const refresh = useCallback(() => {
-    router.refresh()
+    // Force a drain pass before refetching so any rows still showing "In wachtrij" or stuck on
+    // "Bezig" get a real retry — relying on router.refresh alone never re-triggers processing.
+    void (async () => {
+      try {
+        const res = await drainIntakeQueue([])
+        if (!res.ok) {
+          setMessage({ type: "err", text: res.error ?? "Vernieuwen mislukt." })
+        }
+      } catch {
+        /* fall through to router.refresh so UI at least re-fetches */
+      } finally {
+        // Reset signature so the recovery effect can take another pass after the refresh if rows
+        // remain stuck (e.g. due to a transient timeout during this drain call).
+        lastRecoveryAttemptKeyRef.current = null
+        router.refresh()
+      }
+    })()
   }, [router])
 
   const updateLocalQueueRows = useCallback((keys: string[], patch: Partial<LocalQueueRow>) => {
