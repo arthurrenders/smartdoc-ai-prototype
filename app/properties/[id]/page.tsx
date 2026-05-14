@@ -200,6 +200,18 @@ export default async function PropertyPage({
           </div>
         )}
 
+        {/* Bevindingen + Aanbevolen acties — prominent top placement */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <RedFlagsList
+            flags={data.flags}
+            className="rounded-xl border border-dashboard-outline-variant/10 bg-white shadow-sm lg:col-span-8"
+          />
+          <SuggestedActionsCard
+            actions={data.suggestedActions}
+            className="rounded-xl lg:col-span-4"
+          />
+        </div>
+
         {/* Documents + compact score/actions sidebar — sidebar is transparent, stretches to match doc height */}
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
           {/* Documents — primary content */}
@@ -241,10 +253,6 @@ export default async function PropertyPage({
             </div>
 
             <div className="mt-4">
-              <SuggestedActionsCard actions={data.suggestedActions} className="rounded-xl" />
-            </div>
-
-            <div className="mt-4">
               <GenerateEmailDraftCard
                 propertyId={id}
                 allowMissingDocs={allowMissingDocs}
@@ -280,9 +288,6 @@ export default async function PropertyPage({
             </div>
           </div>
         </div>
-
-        {/* Red flags */}
-        <RedFlagsList flags={data.flags} className="rounded-xl border border-dashboard-outline-variant/10 bg-white shadow-sm" />
 
         {/* Map */}
         <div className="relative isolate h-[320px] w-full overflow-hidden rounded-xl border border-dashboard-outline-variant/20 bg-dashboard-surface-low shadow-sm">
