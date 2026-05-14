@@ -1,7 +1,4 @@
-"use client"
-
-import { useState } from "react"
-import { CheckCircle2, ChevronDown, ChevronUp } from "lucide-react"
+import { CheckCircle2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { FlagItem } from "@/app/actions/get-property-detail"
 
@@ -96,8 +93,6 @@ function dutchFlagDetails(flag: FlagItem): string {
 }
 
 export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
-  const [expanded, setExpanded] = useState(true)
-
   if (flags.length === 0) {
     return (
       <div
@@ -130,42 +125,26 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
 
   return (
     <div className={cn(
-      "saas-card-hover-lift rounded-xl border border-[hsl(var(--card-border))] bg-white shadow-sm",
-      expanded ? "flex flex-col gap-4 p-5" : "p-4",
+      "saas-card-hover-lift flex flex-col gap-4 rounded-xl border border-[hsl(var(--card-border))] bg-white p-5 shadow-sm",
       className
     )}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="saas-section-heading text-xl sm:text-2xl">Bevindingen</h2>
-          <div className="flex items-center gap-1">
-            {redCount > 0 && (
-              <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
-                {redCount}
-              </span>
-            )}
-            {orangeCount > 0 && (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-                {orangeCount}
-              </span>
-            )}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          aria-expanded={expanded}
-        >
-          {expanded ? (
-            <><ChevronUp className="h-3.5 w-3.5" /> Inklappen</>
-          ) : (
-            <><ChevronDown className="h-3.5 w-3.5" /> Uitklappen</>
+      <div className="flex items-center gap-2">
+        <h2 className="saas-section-heading text-xl sm:text-2xl">Bevindingen</h2>
+        <div className="flex items-center gap-1">
+          {redCount > 0 && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+              {redCount}
+            </span>
           )}
-        </button>
+          {orangeCount > 0 && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+              {orangeCount}
+            </span>
+          )}
+        </div>
       </div>
 
-      {expanded && (
-        <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-5">
           {orderedTypes.map((docType) => {
             const items = byType.get(docType) ?? []
             return (
@@ -207,8 +186,7 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
               </div>
             )
           })}
-        </div>
-      )}
+      </div>
     </div>
   )
 }

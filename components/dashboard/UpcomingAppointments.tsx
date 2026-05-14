@@ -80,45 +80,66 @@ export function UpcomingAppointments({ rows, error, properties }: Props) {
         ) : (
           <div className="rounded-xl bg-dashboard-surface-low p-1.5">
             <ul className="space-y-2">
-              {visible.map((row) => (
-                <li key={row.id}>
-                  <div className="flex items-start gap-3 rounded-lg border border-dashboard-outline-variant/20 bg-dashboard-surface p-3 text-sm shadow-sm">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                      <CalendarDays className="h-4 w-4" aria-hidden />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <p className="font-semibold text-dashboard-on-surface">{row.title}</p>
-                      <p className="flex items-center gap-1 text-xs text-dashboard-on-surface-variant">
-                        <Clock className="h-3 w-3 shrink-0" aria-hidden />
-                        {formatDateNl(row.start_at)} · {formatTimeRange(row.start_at, row.end_at)}
-                      </p>
-                      {row.client_name && (
+              {visible.map((row) => {
+                const iso = row.start_at.slice(0, 10)
+                const openOnCalendar = () => {
+                  if (typeof window === "undefined") return
+                  window.dispatchEvent(
+                    new CustomEvent("smartdoc-calendar-select", {
+                      detail: { iso, appointmentId: row.id },
+                    })
+                  )
+                  document
+                    .getElementById("dashboard-calendar")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                return (
+                  <li key={row.id}>
+                    <button
+                      type="button"
+                      onClick={openOnCalendar}
+                      className="group flex w-full items-start gap-3 rounded-lg border border-dashboard-outline-variant/20 bg-dashboard-surface p-3 text-left text-sm shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-1"
+                      aria-label={`Open ${row.title} op de kalender`}
+                    >
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 transition-transform group-hover:scale-105">
+                        <CalendarDays className="h-4 w-4" aria-hidden />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <p className="font-semibold text-dashboard-on-surface">{row.title}</p>
                         <p className="flex items-center gap-1 text-xs text-dashboard-on-surface-variant">
-                          <User className="h-3 w-3 shrink-0" aria-hidden />
-                          {row.client_name}
+                          <Clock className="h-3 w-3 shrink-0" aria-hidden />
+                          {formatDateNl(row.start_at)} · {formatTimeRange(row.start_at, row.end_at)}
                         </p>
-                      )}
-                      {row.property_id && (
-                        <Link
-                          href={`/properties/${row.property_id}`}
-                          className="text-xs text-blue-600 underline-offset-2 hover:underline"
+                        {row.client_name && (
+                          <p className="flex items-center gap-1 text-xs text-dashboard-on-surface-variant">
+                            <User className="h-3 w-3 shrink-0" aria-hidden />
+                            {row.client_name}
+                          </p>
+                        )}
+                        {row.property_id && (
+                          <Link
+                            href={`/properties/${row.property_id}`}
+                            onClick={(ev) => ev.stopPropagation()}
+                            className="inline-block text-xs text-blue-600 underline-offset-2 hover:underline"
+                          >
+                            {row.propertyDisplayName ?? `Pand ${row.property_id.slice(0, 8)}…`}
+                          </Link>
+                        )}
+                        <a
+                          href={gcalLink(row)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(ev) => ev.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-xs text-slate-400 underline-offset-2 hover:text-blue-600 hover:underline"
                         >
-                          {row.propertyDisplayName ?? `Pand ${row.property_id.slice(0, 8)}…`}
-                        </Link>
-                      )}
-                      <a
-                        href={gcalLink(row)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-slate-400 underline-offset-2 hover:text-blue-600 hover:underline"
-                      >
-                        <ExternalLink className="h-3 w-3" aria-hidden />
-                        Toevoegen aan Google Calendar
-                      </a>
-                    </div>
-                  </div>
-                </li>
-              ))}
+                          <ExternalLink className="h-3 w-3" aria-hidden />
+                          Toevoegen aan Google Calendar
+                        </a>
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
 
             {hasMore && (

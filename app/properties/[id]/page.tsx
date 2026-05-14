@@ -144,8 +144,8 @@ export default async function PropertyPage({
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/15" />
 
-            {/* Status chip — top-right */}
-            <div className="absolute right-5 top-5">
+            {/* Top overlay: status pill + action buttons */}
+            <div className="absolute inset-x-0 top-0 flex flex-wrap items-center justify-between gap-2 p-4 md:p-5">
               {data.stats.status === "red" ? (
                 <span className="inline-flex items-center gap-2 rounded-full bg-white/95 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-red-700 shadow-sm backdrop-blur">
                   <span className="animate-pulse-dot h-2 w-2 rounded-full bg-red-500" aria-hidden />
@@ -162,6 +162,11 @@ export default async function PropertyPage({
                   In orde
                 </span>
               )}
+              <div className="flex flex-wrap items-center gap-2">
+                <EditPropertyMetadataButton propertyId={data.propertyId} />
+                <RenamePropertyButton propertyId={data.propertyId} currentDisplayName={data.propertyDisplayName} />
+                <DeletePropertyButton propertyId={data.propertyId} propertyName={data.propertyDisplayName} redirectToDashboard />
+              </div>
             </div>
 
             {/* Bottom overlay: title + address */}
@@ -182,13 +187,6 @@ export default async function PropertyPage({
               </div>
             </div>
           </section>
-
-          {/* Action toolbar — sits just below the hero */}
-          <div className="animate-fade-in-up anim-delay-1 -mt-2 flex flex-wrap items-center justify-end gap-2">
-            <EditPropertyMetadataButton propertyId={data.propertyId} />
-            <RenamePropertyButton propertyId={data.propertyId} currentDisplayName={data.propertyDisplayName} />
-            <DeletePropertyButton propertyId={data.propertyId} propertyName={data.propertyDisplayName} redirectToDashboard />
-          </div>
 
           {data.stats.pendingCount > 0 && (
             <div

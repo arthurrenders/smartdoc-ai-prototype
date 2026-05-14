@@ -180,12 +180,14 @@ export default async function DashboardPage({
                 Kalenderdatums konden niet geladen worden: {calendarError}
               </div>
             )}
-            <DocumentCalendar
-              entries={calendarEntries}
-              appointments={appointmentRows}
-              properties={propertyOptions}
-              mapHref="/map"
-            />
+            <div id="dashboard-calendar" className="scroll-mt-20">
+              <DocumentCalendar
+                entries={calendarEntries}
+                appointments={appointmentRows}
+                properties={propertyOptions}
+                mapHref="/map"
+              />
+            </div>
           </div>
         </section>
 

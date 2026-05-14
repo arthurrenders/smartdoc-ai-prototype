@@ -35,6 +35,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Playwright MCP artifacts (may contain secrets in network URLs)
+.playwright-mcp/
 
+# Local screenshot artifacts (not source)
+property-detail-*.png
 
-
+# Stray temp files from misrouted curl/tmp paths
+UsersArthu*.html

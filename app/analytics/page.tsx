@@ -219,10 +219,13 @@ export default async function AnalyticsPage() {
                     ["Rood", propertyStatusCounts.red, "bg-red-500"],
                     ["Nog te analyseren", propertyStatusCounts.pending, "bg-slate-400"],
                   ].map(([name, count, bg]) => (
-                    <div key={name} className="rounded-lg border border-dashboard-outline-variant/20 bg-dashboard-surface-low p-3 text-center">
-                      <div className={`mx-auto mb-2 h-2 w-10 rounded-full ${bg}`} />
-                      <p className="text-xs text-dashboard-on-surface-variant">{name}</p>
-                      <p className="text-xl font-bold text-dashboard-primary">{count}</p>
+                    <div
+                      key={name as string}
+                      className="flex h-full min-h-[7rem] flex-col items-center justify-center gap-2 rounded-lg border border-dashboard-outline-variant/20 bg-dashboard-surface-low px-3 py-4 text-center"
+                    >
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${bg}`} aria-hidden />
+                      <p className="text-2xl font-bold leading-none text-dashboard-primary">{count}</p>
+                      <p className="text-xs leading-tight text-dashboard-on-surface-variant">{name}</p>
                     </div>
                   ))}
                 </div>

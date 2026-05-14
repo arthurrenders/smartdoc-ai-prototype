@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -106,6 +106,25 @@ export function DocumentCalendar({ entries, appointments, properties, mapHref }:
   const [editTarget, setEditTarget] = useState<AppointmentEntry | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isPendingDelete, startDeleteTransition] = useTransition()
+
+  useEffect(() => {
+    function onSelect(ev: Event) {
+      const detail = (ev as CustomEvent<{ iso?: string }>).detail
+      const iso = detail?.iso
+      if (!iso || iso.length < 10) return
+      const [yStr, mStr] = iso.split("-")
+      const y = Number(yStr)
+      const m = Number(mStr) - 1
+      if (Number.isFinite(y) && Number.isFinite(m)) {
+        setViewYear(y)
+        setViewMonth(m)
+      }
+      setSelectedIso(iso)
+      setFilter("all")
+    }
+    window.addEventListener("smartdoc-calendar-select", onSelect as EventListener)
+    return () => window.removeEventListener("smartdoc-calendar-select", onSelect as EventListener)
+  }, [])
 
   const byDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>()
