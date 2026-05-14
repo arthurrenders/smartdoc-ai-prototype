@@ -455,12 +455,23 @@ async function insertDocumentAndAnalysis(
   const documentId = document.id as string
   const analysisRunId = analysisRunRow.id as string
 
+  // Upload-only types (bodemattest, stedenbouwkundige) skip the synchronous AI analysis during
+  // intake so the intake_uploads patch lands before the Vercel function timeout. Without this the
+  // PDF would be copied + the document row inserted, but the per-row update to "processed" would
+  // miss its window — leaving the queue badge stuck on the yellow "Bezig / Wacht op verwerking"
+  // state even though the document is already attached to the right property. The realtor still
+  // gets the "Gekoppeld" badge instantly and can run analysis from the property page on demand.
+  const detectedForAnalysis: IntakeDetectedDocumentType =
+    params.intakeDetectedDocumentType ?? "unknown"
+  const triggerAnalysis =
+    detectedForAnalysis !== "soil_certificate" && detectedForAnalysis !== "urban_planning_info"
+
   const attach = await attachDocumentToPropertyRecord(supabase, {
     documentId,
     propertyId: pid,
     intakeDetectedType: params.intakeDetectedDocumentType ?? null,
     sourceFileName: params.sourceFileName ?? null,
-    triggerAnalysis: true,
+    triggerAnalysis,
   })
   if (!attach.ok) {
     console.error("[intake] attachDocumentToProperty after insert:", attach.error)
@@ -791,12 +802,17 @@ export async function reconcileCommittedIntakeDocument(
       ? detectedFromType
       : detectIntakeDocumentType("", `${params.sourceRelativePath ?? ""}\n${params.filename}`)
 
+  // Same intake-side rule as insertDocumentAndAnalysis: skip the synchronous analyzer for upload-only
+  // types so reconcile finishes inside the function budget on follow-up drain calls.
+  const reconcileTriggerAnalysis =
+    detected !== "soil_certificate" && detected !== "urban_planning_info"
+
   await attachDocumentToPropertyRecord(supabase, {
     documentId: doc.id,
     propertyId: doc.property_id,
     intakeDetectedType: detected,
     sourceFileName: params.filename,
-    triggerAnalysis: true,
+    triggerAnalysis: reconcileTriggerAnalysis,
   })
 
   await syncUrbanPlanningMetadataFromStoredPdf(supabase, {
