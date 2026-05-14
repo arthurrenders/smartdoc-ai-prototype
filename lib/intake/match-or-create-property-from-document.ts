@@ -11,6 +11,7 @@ import {
   extractUrbanPlanningMetadata,
   hasUrbanPlanningMetadata,
 } from "@/lib/property-metadata/urban-planning"
+import { extractUrbanPlanningMetadataWithAI } from "@/lib/analysis/urban-planning-analyzer"
 import type { IntakeDetectedDocumentType } from "@/lib/intake/types"
 import {
   assertNoConflictingPropertyAddressMatch,
@@ -199,6 +200,26 @@ async function syncUrbanPlanningMetadataFromText(
   if (!params.text.trim()) return
 
   const metadata = extractUrbanPlanningMetadata(params.text)
+
+  // Regex misses several phrasings of "bewoonbare oppervlakte" (and similar) on stedenbouwkundige
+  // inlichtingen. When any of the three property-level fields the urban-planning document is
+  // authoritative for is still missing, ask Gemini to fill the gap. Gemini's values never overwrite
+  // a value the regex already found.
+  const missingArea = metadata.living_area_m2 == null
+  const missingYear = metadata.construction_year == null
+  const missingType = metadata.dwelling_type == null
+
+  if (missingArea || missingYear || missingType) {
+    try {
+      const ai = await extractUrbanPlanningMetadataWithAI(params.text)
+      if (missingArea && ai.living_area_m2 != null) metadata.living_area_m2 = ai.living_area_m2
+      if (missingYear && ai.construction_year != null) metadata.construction_year = ai.construction_year
+      if (missingType && ai.dwelling_type != null) metadata.dwelling_type = ai.dwelling_type
+    } catch (e) {
+      console.warn(`${params.logPrefix} urban metadata AI fallback failed`, e)
+    }
+  }
+
   if (!hasUrbanPlanningMetadata(metadata)) return
 
   const result: AnalysisResult = {
@@ -991,9 +1012,10 @@ export async function matchOrCreatePropertyFromDocument(
     }
   }
 
-  if (!heuristicCandidate && isUploadOnlyIntakeDocumentType(detectedDocumentType)) {
-    console.info(`${logPrefix} upload-only document has no reliable address; skipping Gemini address extraction`)
-  } else if (!heuristicCandidate) {
+  if (!heuristicCandidate) {
+    // Upload-only types (bodemattest, stedenbouwkundige) also fall through to Gemini here so a
+    // document whose address block isn't in the canonical Belgian "Street Number, 0000 Municipality"
+    // form can still be matched to an existing property or used to auto-create a new one.
     geminiResult = await extractIntakePropertyAddressWithGemini(text)
     candidate = geminiResult.address
   }

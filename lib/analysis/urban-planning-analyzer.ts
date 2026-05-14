@@ -28,7 +28,18 @@ type UrbanPlanningAIResponse = {
   property_postal_code?: string | null
   property_municipality?: string | null
   property_region?: string | null
+  construction_year?: number | null
+  living_area_m2?: number | null
+  dwelling_type?: "house" | "apartment" | "land" | "commercial" | "other" | null
 }
+
+const DWELLING_TYPE_VALUES = new Set<NonNullable<UrbanPlanningAIResponse["dwelling_type"]>>([
+  "house",
+  "apartment",
+  "land",
+  "commercial",
+  "other",
+])
 
 function normalizeText(text: string): string {
   return text.replace(/\s+/g, " ").trim()
@@ -57,6 +68,43 @@ function coerceFlags(raw: unknown): Flag[] {
   return out
 }
 
+function coerceArea(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0 && raw < 100_000) return raw
+  if (typeof raw === "string") {
+    const compact = raw.replace(/\s+/g, "")
+    const decimal =
+      compact.includes(",") && compact.includes(".")
+        ? compact.replace(/\./g, "").replace(",", ".")
+        : compact.replace(",", ".")
+    const n = Number(decimal)
+    if (Number.isFinite(n) && n > 0 && n < 100_000) return n
+  }
+  return null
+}
+
+function coerceConstructionYear(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    const rounded = Math.round(raw)
+    return rounded >= 1700 && rounded <= 2100 ? rounded : null
+  }
+  if (typeof raw === "string") {
+    const m = raw.match(/((?:17|18|19|20)\d{2})/)
+    if (m) {
+      const n = Number.parseInt(m[1], 10)
+      if (n >= 1700 && n <= 2100) return n
+    }
+  }
+  return null
+}
+
+function coerceDwellingType(raw: unknown): UrbanPlanningAIResponse["dwelling_type"] {
+  if (typeof raw !== "string") return null
+  const v = raw.trim().toLowerCase()
+  return DWELLING_TYPE_VALUES.has(v as NonNullable<UrbanPlanningAIResponse["dwelling_type"]>)
+    ? (v as NonNullable<UrbanPlanningAIResponse["dwelling_type"]>)
+    : null
+}
+
 function coerceUrbanData(parsed: unknown): UrbanPlanningAIResponse {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
   const o = parsed as Record<string, unknown>
@@ -75,6 +123,9 @@ function coerceUrbanData(parsed: unknown): UrbanPlanningAIResponse {
     property_postal_code: typeof o.property_postal_code === "string" ? o.property_postal_code : null,
     property_municipality: typeof o.property_municipality === "string" ? o.property_municipality : null,
     property_region: typeof o.property_region === "string" ? o.property_region : null,
+    construction_year: coerceConstructionYear(o.construction_year),
+    living_area_m2: coerceArea(o.living_area_m2),
+    dwelling_type: coerceDwellingType(o.dwelling_type),
   }
 }
 
@@ -133,13 +184,90 @@ function transformUrbanToAnalysisResult(data: UrbanPlanningAIResponse, text: str
   }
 
   const address = propertyAddressFromUrban(data)
+  // Rule-based regex wins when it found a value (more deterministic on canonical wording),
+  // Gemini fills any gap — most importantly `living_area_m2`, which earlier shipped as regex-only
+  // and silently dropped out of the property's pandgegevens when the stedenbouwkundige document
+  // phrased the habitable area in a format the regex didn't catch.
+  const mergedMetadata: Partial<AnalysisResult> = { ...metadata }
+  if (mergedMetadata.construction_year == null && data.construction_year != null) {
+    mergedMetadata.construction_year = data.construction_year
+  }
+  if (mergedMetadata.living_area_m2 == null && data.living_area_m2 != null) {
+    mergedMetadata.living_area_m2 = data.living_area_m2
+  }
+  if (mergedMetadata.dwelling_type == null && data.dwelling_type != null) {
+    mergedMetadata.dwelling_type = data.dwelling_type
+  }
   return {
     status,
     summary: summaryParts.join(" | "),
     flags,
     confidence: 0.82,
-    ...metadata,
+    ...mergedMetadata,
     ...(address ? { property_address: address } : {}),
+  }
+}
+
+export type UrbanPlanningMetadataAIResult = {
+  construction_year: number | null
+  living_area_m2: number | null
+  dwelling_type: NonNullable<UrbanPlanningAIResponse["dwelling_type"]> | null
+}
+
+/**
+ * Focused Gemini call that asks only for the property-metadata fields the regex sometimes misses
+ * (bewoonbare oppervlakte / bouwjaar / pandtype). Used at intake time so the pandgegevens get
+ * populated without running the full analyzer pipeline. Returns nulls on any failure — caller
+ * decides whether to fall back to regex-only values.
+ */
+export async function extractUrbanPlanningMetadataWithAI(
+  text: string
+): Promise<UrbanPlanningMetadataAIResult> {
+  const empty: UrbanPlanningMetadataAIResult = {
+    construction_year: null,
+    living_area_m2: null,
+    dwelling_type: null,
+  }
+  const normalized = normalizeText(text)
+  if (normalized.length < 40) return empty
+  const textToSend = normalized.substring(0, 14000)
+  const isTruncated = normalized.length > 14000
+
+  try {
+    const prompt = `You read a Belgian stedenbouwkundige inlichtingen / vastgoedinformatie / stedenbouwkundig uittreksel document and extract three property-level metadata fields. Return ONLY valid JSON, no prose.
+
+{
+  "construction_year": number | null,
+  "living_area_m2": number | null,
+  "dwelling_type": "house" | "apartment" | "land" | "commercial" | "other" | null
+}
+
+Rules:
+- "living_area_m2": habitable / usable floor area of the property in square meters. Accept Dutch labels: "bewoonbare oppervlakte", "woonoppervlakte", "netto vloeroppervlakte", "bruto vloeroppervlakte", "bruikbare vloeroppervlakte", "nuttige vloeroppervlakte". DO NOT use perceeloppervlakte, kadastrale oppervlakte, terreinoppervlakte, tuin, grondoppervlakte, bebouwde oppervlakte. Just the number.
+- "construction_year": bouwjaar / jaar van bouw / oprichtingsjaar (YYYY, 1700–2100).
+- "dwelling_type": eengezinswoning/woonhuis/rijwoning/villa/bungalow/halfopen/gesloten/open bebouwing → "house"; appartement/flat/studio/duplex/meergezinswoning → "apartment"; bouwgrond/landbouwgrond/onbebouwd perceel → "land"; handelspand/kantoor/winkel/horeca/bedrijfspand/industrieel → "commercial"; otherwise "other" or null.
+- Return null for any field the document does not state.
+
+Document text:
+${textToSend}${isTruncated ? "\n\n[Document truncated for length]" : ""}`
+
+    const response = await generateContentWithRetry(
+      { model: GEMINI_MODEL, contents: prompt },
+      { validateText: assertParseableJsonFromModelOutput }
+    )
+    const content = getTextFromGeminiResponse(response)
+    if (!content) return empty
+    const parsed = parseJsonFromModelOutput(content)
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return empty
+    const o = parsed as Record<string, unknown>
+    return {
+      construction_year: coerceConstructionYear(o.construction_year),
+      living_area_m2: coerceArea(o.living_area_m2),
+      dwelling_type: coerceDwellingType(o.dwelling_type) ?? null,
+    }
+  } catch (error) {
+    console.warn("[urban-planning] focused metadata Gemini call failed", error)
+    return empty
   }
 }
 
@@ -170,8 +298,17 @@ Return ONLY valid JSON with:
   "property_box": string | null,
   "property_postal_code": string | null,
   "property_municipality": string | null,
-  "property_region": string | null
+  "property_region": string | null,
+  "construction_year": number | null,
+  "living_area_m2": number | null,
+  "dwelling_type": "house" | "apartment" | "land" | "commercial" | "other" | null
 }
+
+Property metadata guidance:
+- "living_area_m2" must be the property's habitable / usable floor area in square meters. Accept Dutch labels such as "bewoonbare oppervlakte", "woonoppervlakte", "netto vloeroppervlakte", "bruto vloeroppervlakte", "bruikbare vloeroppervlakte", "nuttige vloeroppervlakte". NEVER use perceeloppervlakte, kadastrale oppervlakte, terreinoppervlakte, tuin, or grondoppervlakte. Return only the number, no unit.
+- "construction_year" is bouwjaar / jaar van bouw / oprichtingsjaar (YYYY between 1700 and 2100).
+- "dwelling_type": map "eengezinswoning/woonhuis/rijwoning/villa/bungalow/halfopen/gesloten/open bebouwing" → "house"; "appartement/flat/studio/duplex/meergezinswoning" → "apartment"; "bouwgrond/landbouwgrond/onbebouwd perceel" → "land"; "handelspand/kantoor/winkel/horeca/bedrijfspand/industrieel" → "commercial"; anything else → "other" or null.
+- Set the field to null when the document does not state the value.
 
 Severity guidance:
 - red: building violation, enforcement, unresolved permit conflict, demolition order, or illegal construction signal.

@@ -118,8 +118,11 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
     // Safety net: a previous server action run may have set rows to "processing" and then
     // hit the function timeout (especially on batches of SOIL_CERTIFICATE / URBAN_PLANNING_INFO,
     // which used to run the full analysis pipeline inline). Re-queue any of this user's rows that
-    // have been stuck on "processing" for over 2 minutes so this run picks them up again.
-    const stuckCutoffIso = new Date(Date.now() - 2 * 60_000).toISOString()
+    // have been stuck on "processing" for more than ~20s so this run picks them up again. The old
+    // 2-minute floor meant the queue badge stayed yellow ("Bezig / Wacht op verwerking") for two
+    // full minutes after the drain finished — even when the document was already attached to the
+    // correct property.
+    const stuckCutoffIso = new Date(Date.now() - 20_000).toISOString()
     const { error: resetErr } = await supabase
       .from("intake_uploads")
       .update({ processing_status: "uploaded", updated_at: new Date().toISOString() })
@@ -128,6 +131,50 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
       .lt("updated_at", stuckCutoffIso)
     if (resetErr) {
       console.warn("[intake] process: stuck row reset failed", resetErr.message)
+    }
+
+    // Eager reconcile sweep: any row whose document was already attached during a previous
+    // (timed-out) call can be marked "processed" without re-running matchOrCreate. Without this,
+    // rows had to wait their turn inside the per-call MAX-bounded loop, and a row outside that
+    // window stayed yellow even though the document existed on the right property.
+    const { data: stuckRowsForReconcile } = await supabase
+      .from("intake_uploads")
+      .select("id, filename, source_relative_path, storage_path")
+      .eq("user_id", userId)
+      .eq("processing_status", "processing")
+    for (const row of (stuckRowsForReconcile ?? []) as Array<{
+      id: string
+      filename: string
+      source_relative_path: string | null
+      storage_path: string
+    }>) {
+      try {
+        const rec = await reconcileCommittedIntakeDocument(supabase, {
+          userId,
+          intakeUploadId: row.id,
+          filename: row.filename,
+          sourceRelativePath: row.source_relative_path,
+        })
+        if (!rec) continue
+        const patch = {
+          ...buildIntakePatch(rec, row.storage_path),
+          updated_at: new Date().toISOString(),
+        }
+        const { error: upErr } = await supabase.from("intake_uploads").update(patch).eq("id", row.id)
+        if (upErr) {
+          console.error("[intake] process: eager reconcile patch failed", row.id, upErr.message)
+          continue
+        }
+        if (row.storage_path && row.storage_path !== rec.finalStoragePath) {
+          await supabase.storage
+            .from("documents")
+            .remove([row.storage_path])
+            .catch((err) => console.warn("[intake] process: eager reconcile blob cleanup", err))
+        }
+        revalidatePath(`/properties/${rec.propertyId}`)
+      } catch (e) {
+        console.warn("[intake] process: eager reconcile threw", row.id, e)
+      }
     }
 
     // Pick up any other rows that are still in "uploaded" state — e.g. ones we just reset above,
