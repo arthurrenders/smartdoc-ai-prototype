@@ -13,6 +13,32 @@ import {
 
 const MAX_INTAKE_ROWS_PER_CALL = 3
 
+/**
+ * Upload-only types (Bodemattest, Stedenbouwkundige inlichtingen) don't run Gemini
+ * address extraction in `matchOrCreatePropertyFromDocument` — they rely on either a
+ * Belgian-style address line in the PDF OR a source-context match against existing
+ * `property_addresses`. Processing them AFTER non-upload-only types in the same batch
+ * lets EPC/asbest/elektrisch create the property first, so source-context can find it.
+ */
+function isLikelyUploadOnlyByName(filename: string | null, sourceRelativePath: string | null): boolean {
+  const text = `${filename ?? ""} ${sourceRelativePath ?? ""}`.toLowerCase()
+  return (
+    text.includes("bodem") ||
+    text.includes("ovam") ||
+    text.includes("grondinformatie") ||
+    text.includes("grondeninformatie") ||
+    text.includes("stedenbouw") ||
+    text.includes("stedebouw") ||
+    text.includes("vastgoedinformatie") ||
+    text.includes("omgevingsinformatie") ||
+    text.includes("omgevingsvergunning")
+  )
+}
+
+function isUploadOnlyDetectedType(type: string | null | undefined): boolean {
+  return type === "soil_certificate" || type === "urban_planning_info"
+}
+
 function humanReviewMessage(result: Extract<MatchOrCreatePropertyResult, { outcome: "needs_manual_review" }>): string {
   switch (result.reason) {
     case "ambiguous_match":
@@ -103,16 +129,75 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
 
     // Pick up any other rows that are still in "uploaded" state — e.g. ones we just reset above,
     // or ones from a previous browser tab where the upload succeeded but processing was cut short.
+    // Upload-only types (bodemattest, stedenbouwkundige) that ended in `needs_review` because the
+    // property hadn't been created yet are also picked up so a later drain pass can source-match
+    // them once EPC/asbest/elektrisch have created the property in this batch.
     const { data: pendingRows, error: pendingErr } = await supabase
       .from("intake_uploads")
-      .select("id")
+      .select(
+        "id, filename, source_relative_path, detected_document_type, processing_status, updated_at"
+      )
       .eq("user_id", userId)
-      .in("processing_status", ["uploaded", "processing"])
+      .in("processing_status", ["uploaded", "processing", "needs_review"])
     if (pendingErr) {
       console.warn("[intake] process: pending row scan failed", pendingErr.message)
     }
-    const pendingIds = (pendingRows ?? []).map((r) => r.id as string)
+    // Cooldown so a single drain session retries each needs_review row at most once. Without this,
+    // a batch of files that all stay needs_review (e.g. only bodemattest uploads with no matching
+    // property folder) would loop until drainIntakeQueue's hard guard.
+    const needsReviewRetryCutoffMs = Date.now() - 30_000
+
+    type PendingMeta = {
+      id: string
+      filename: string | null
+      sourceRelativePath: string | null
+      detectedType: string | null
+      processingStatus: string | null
+      updatedAtMs: number | null
+      uploadOnly: boolean
+    }
+    const pendingMetaById = new Map<string, PendingMeta>()
+    for (const r of pendingRows ?? []) {
+      const filename = (r as { filename?: string | null }).filename ?? null
+      const sourceRelativePath = (r as { source_relative_path?: string | null }).source_relative_path ?? null
+      const detectedType = (r as { detected_document_type?: string | null }).detected_document_type ?? null
+      const processingStatus = (r as { processing_status?: string | null }).processing_status ?? null
+      const updatedAtRaw = (r as { updated_at?: string | null }).updated_at ?? null
+      const updatedAtMs = updatedAtRaw ? Date.parse(updatedAtRaw) : NaN
+      const uploadOnly =
+        isUploadOnlyDetectedType(detectedType) || isLikelyUploadOnlyByName(filename, sourceRelativePath)
+      pendingMetaById.set(r.id as string, {
+        id: r.id as string,
+        filename,
+        sourceRelativePath,
+        detectedType,
+        processingStatus,
+        updatedAtMs: Number.isFinite(updatedAtMs) ? updatedAtMs : null,
+        uploadOnly,
+      })
+    }
+
+    // Only re-pick `needs_review` rows when they're upload-only types whose previous attempt happened
+    // long enough ago that a subsequent file in the same drain session may have created the matching
+    // property. Ambiguous matches still require the user to disambiguate — retrying those endlessly
+    // would loop forever.
+    const pendingIds: string[] = []
+    for (const meta of pendingMetaById.values()) {
+      if (meta.processingStatus === "needs_review") {
+        if (!meta.uploadOnly) continue
+        if (meta.updatedAtMs != null && meta.updatedAtMs > needsReviewRetryCutoffMs) continue
+      }
+      pendingIds.push(meta.id)
+    }
+
     const allIds = Array.from(new Set([...uploadIds, ...pendingIds]))
+    // Process non-upload-only types first so the property exists by the time bodemattest / stedenbouw
+    // try to source-context match in a later batch slot (or a later drain iteration).
+    allIds.sort((a, b) => {
+      const ua = pendingMetaById.get(a)?.uploadOnly ? 1 : 0
+      const ub = pendingMetaById.get(b)?.uploadOnly ? 1 : 0
+      return ua - ub
+    })
     const idsForRun = allIds.slice(0, MAX_INTAKE_ROWS_PER_CALL)
     const remainingCount = Math.max(0, allIds.length - idsForRun.length)
 
@@ -124,7 +209,9 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
     for (const id of idsForRun) {
       const { data: row, error: fetchErr } = await supabase
         .from("intake_uploads")
-        .select("id, user_id, processing_status, filename, source_relative_path, storage_path")
+        .select(
+          "id, user_id, processing_status, filename, source_relative_path, storage_path, detected_document_type"
+        )
         .eq("id", id)
         .maybeSingle()
 
@@ -172,7 +259,18 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
       }
 
       if (row.processing_status === "needs_review") {
-        continue
+        // Retry only upload-only types (bodemattest / stedenbouw) whose match likely failed because
+        // the property hadn't been created yet by an earlier file in the batch. matchOrCreate will
+        // re-fetch property_addresses, so a new property added in this drain pass becomes visible.
+        // Ambiguous matches that need human disambiguation are not retried here because the row
+        // metadata reflects the same address state until the user intervenes.
+        const meta = pendingMetaById.get(id)
+        const detectedType = (row as { detected_document_type?: string | null }).detected_document_type ?? null
+        const uploadOnly =
+          meta?.uploadOnly ??
+          (isUploadOnlyDetectedType(detectedType) ||
+            isLikelyUploadOnlyByName(filename, sourceRelativePath))
+        if (!uploadOnly) continue
       }
 
       await supabase
