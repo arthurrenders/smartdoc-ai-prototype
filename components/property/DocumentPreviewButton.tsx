@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
+import { createPortal } from "react-dom"
 import { Eye, ExternalLink, X as XIcon } from "lucide-react"
 import { getDocumentPreviewUrl } from "@/app/actions/get-document-preview-url"
 
@@ -18,6 +19,11 @@ export function DocumentPreviewButton({
   const [filename, setFilename] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -63,7 +69,7 @@ export function DocumentPreviewButton({
         {isPending ? "Laden…" : "Bekijken"}
       </button>
 
-      {isOpen && (
+      {isOpen && mounted && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 py-8"
           role="dialog"
@@ -132,7 +138,8 @@ export function DocumentPreviewButton({
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

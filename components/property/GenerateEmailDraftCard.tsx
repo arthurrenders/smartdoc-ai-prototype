@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
+import { createPortal } from "react-dom"
 import { Copy, Loader2, Mail, Send } from "lucide-react"
 import { generatePropertyEmailDraft } from "@/app/actions/generate-property-email-draft"
 import { sendPropertyEmailViaGmail } from "@/app/actions/send-property-email-gmail"
@@ -101,6 +102,11 @@ export function GenerateEmailDraftCard({
   const [sendStatus, setSendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle")
   const [sendError, setSendError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   function open() {
     setIsOpen(true)
@@ -198,7 +204,7 @@ export function GenerateEmailDraftCard({
         </div>
       </section>
 
-      {isOpen && (
+      {isOpen && mounted && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 py-8"
           role="dialog"
@@ -441,7 +447,8 @@ export function GenerateEmailDraftCard({
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )
