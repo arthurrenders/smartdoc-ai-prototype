@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition, type FormEvent } from "react"
+import { createPortal } from "react-dom"
 import { Pencil, X as XIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { renameProperty } from "@/app/actions/rename-property"
@@ -19,6 +20,11 @@ export function RenamePropertyButton({
   const [draftName, setDraftName] = useState(currentDisplayName)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -61,7 +67,7 @@ export function RenamePropertyButton({
         Hernoemen
       </button>
 
-      {isOpen && (
+      {isOpen && mounted && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 py-8"
           role="dialog"
@@ -139,7 +145,8 @@ export function RenamePropertyButton({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )

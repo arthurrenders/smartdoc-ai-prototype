@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition, type FormEvent } from "react"
+import { createPortal } from "react-dom"
 import { Building2, FileText, Shuffle, X as XIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import {
@@ -89,6 +90,11 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const [constructionYear, setConstructionYear] = useState<string>("")
   const [transactionType, setTransactionType] = useState<string>("")
@@ -164,7 +170,7 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
         Pandgegevens
       </button>
 
-      {isOpen && (
+      {isOpen && mounted && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4 py-8"
           role="dialog"
@@ -369,7 +375,8 @@ export function EditPropertyMetadataButton({ propertyId }: Props) {
               </form>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )
