@@ -12,6 +12,9 @@ import {
 } from "@/lib/intake/match-or-create-property-from-document"
 
 const MAX_INTAKE_ROWS_PER_CALL = 3
+/** Upper bound (incl. tail-extension for upload-only siblings) so we stay safely inside the Vercel
+ * function timeout even if a folder contains many bodemattest / stedenbouwkundige PDFs. */
+const MAX_INTAKE_ROWS_HARD_CAP = 8
 
 /**
  * Upload-only types (Bodemattest, Stedenbouwkundige inlichtingen) don't run Gemini
@@ -192,13 +195,48 @@ export async function processIntakeUploads(uploadIds: string[]): Promise<{
 
     const allIds = Array.from(new Set([...uploadIds, ...pendingIds]))
     // Process non-upload-only types first so the property exists by the time bodemattest / stedenbouw
-    // try to source-context match in a later batch slot (or a later drain iteration).
+    // try to source-context match in a later batch slot (or this same call's tail).
     allIds.sort((a, b) => {
       const ua = pendingMetaById.get(a)?.uploadOnly ? 1 : 0
       const ub = pendingMetaById.get(b)?.uploadOnly ? 1 : 0
       return ua - ub
     })
-    const idsForRun = allIds.slice(0, MAX_INTAKE_ROWS_PER_CALL)
+
+    function folderKeyForMeta(meta: PendingMeta | undefined): string | null {
+      if (!meta) return null
+      const src = meta.sourceRelativePath?.trim()
+      if (!src) return null
+      const lastSlash = src.lastIndexOf("/")
+      if (lastSlash <= 0) return null
+      return src.slice(0, lastSlash).toLowerCase()
+    }
+
+    // Tail-extend idsForRun with upload-only siblings (same source folder) of any non-upload-only
+    // row already in the batch. The bodemattest / stedenbouwkundige then gets processed in the same
+    // server round-trip as the EPC that creates their property — so its badge jumps straight from
+    // "In wachtrij" to "Gekoppeld" instead of sitting blue while drainIntakeQueue makes another hop.
+    const baseSlice = allIds.slice(0, MAX_INTAKE_ROWS_PER_CALL)
+    const inBatchFolders = new Set<string>()
+    for (const id of baseSlice) {
+      const folder = folderKeyForMeta(pendingMetaById.get(id))
+      if (folder && !pendingMetaById.get(id)?.uploadOnly) {
+        inBatchFolders.add(folder)
+      }
+    }
+    const baseSliceSet = new Set(baseSlice)
+    const folderSiblingIds: string[] = []
+    const siblingBudget = Math.max(0, MAX_INTAKE_ROWS_HARD_CAP - baseSlice.length)
+    for (const meta of pendingMetaById.values()) {
+      if (folderSiblingIds.length >= siblingBudget) break
+      if (baseSliceSet.has(meta.id)) continue
+      if (!meta.uploadOnly) continue
+      if (meta.processingStatus !== "uploaded" && meta.processingStatus !== "processing") continue
+      const folder = folderKeyForMeta(meta)
+      if (folder && inBatchFolders.has(folder)) {
+        folderSiblingIds.push(meta.id)
+      }
+    }
+    const idsForRun = [...baseSlice, ...folderSiblingIds]
     const remainingCount = Math.max(0, allIds.length - idsForRun.length)
 
     if (!idsForRun.length) {
