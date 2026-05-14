@@ -55,7 +55,7 @@ export function RenamePropertyButton({
         type="button"
         onClick={open}
         disabled={isPending}
-        className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary shadow-sm transition-colors hover:bg-primary/20 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg border border-white/40 bg-white px-3 py-2 text-sm font-medium text-primary shadow-sm transition-colors hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
       >
         <Pencil className="h-4 w-4" aria-hidden />
         Hernoemen
