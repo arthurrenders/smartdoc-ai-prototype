@@ -208,6 +208,18 @@
   .saas-btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-foreground shadow-sm transition-all duration-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 dark:border-border dark:bg-card dark:hover:bg-muted/50;
   }
+
+  /* Consistent micro-interaction across detail-page cards */
+  .saas-card-hover-lift {
+    @apply transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  /* Subtle dot pattern background for the property detail page wrapper */
+  .property-detail-bg {
+    background-image: radial-gradient(circle, hsl(214 20% 86%) 1px, transparent 1px);
+    background-size: 22px 22px;
+    background-position: 0 0;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -218,11 +230,59 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  /* Animation utilities — used by property detail page */
+  .animate-fade-in-up {
+    animation: fadeInUp 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-pulse-dot {
+    animation: pulseDot 2s ease-in-out infinite;
+  }
+
+  .animate-grow-bar {
+    animation: growBar 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 150ms;
+  }
+
+  /* Stagger helpers for cascaded enter animations */
+  .anim-delay-1 { animation-delay: 60ms; }
+  .anim-delay-2 { animation-delay: 120ms; }
+  .anim-delay-3 { animation-delay: 180ms; }
+  .anim-delay-4 { animation-delay: 240ms; }
+  .anim-delay-5 { animation-delay: 300ms; }
+  .anim-delay-6 { animation-delay: 360ms; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(239 68 68 / 0.55); }
+  50%      { box-shadow: 0 0 0 6px rgb(239 68 68 / 0); }
+}
+
+@keyframes growBar {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
 }
 
 @keyframes shimmer {
   0% { background-position: 200% center; }
   100% { background-position: -200% center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .animate-pulse-dot,
+  .animate-grow-bar {
+    animation: none !important;
+  }
+  .saas-card-hover-lift {
+    transition: none !important;
+  }
 }
 
 /* /map — Leaflet divIcon: hide default white square behind coloured status dot */

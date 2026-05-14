@@ -100,15 +100,21 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
 
   if (flags.length === 0) {
     return (
-      <div className={cn("rounded-xl border border-[hsl(var(--card-border))] bg-white p-5 shadow-sm", className)}>
-        <h2 className="saas-section-heading text-xl sm:text-2xl">Bevindingen</h2>
-        <p className="saas-section-subheading">Geen bevindingen voor dit pand.</p>
-        <div className="mt-8 flex flex-col items-center justify-center rounded-xl border border-dashed border-[hsl(var(--card-border))] bg-muted/15 px-6 py-12 text-center">
-          <CheckCircle2
-            className="h-12 w-12 text-green-600/70 dark:text-green-400/80"
-            aria-hidden
-          />
-          <p className="mt-4 text-sm font-semibold text-foreground">Alles in orde &mdash; geen actie vereist.</p>
+      <div
+        className={cn(
+          "saas-card-hover-lift flex items-center gap-4 rounded-xl border border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-white to-white px-5 py-4 shadow-sm dark:border-emerald-900/40 dark:from-emerald-950/30",
+          className
+        )}
+        role="status"
+      >
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+          <CheckCircle2 className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground">Geen bevindingen</p>
+          <p className="text-xs text-muted-foreground">
+            Alle geanalyseerde documenten zijn in orde &mdash; geen actie vereist.
+          </p>
         </div>
       </div>
     )
@@ -124,7 +130,7 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
 
   return (
     <div className={cn(
-      "rounded-xl border border-[hsl(var(--card-border))] bg-white shadow-sm transition-shadow duration-200",
+      "saas-card-hover-lift rounded-xl border border-[hsl(var(--card-border))] bg-white shadow-sm",
       expanded ? "flex flex-col gap-4 p-5" : "p-4",
       className
     )}>
@@ -159,7 +165,7 @@ export function RedFlagsList({ flags, className = "" }: RedFlagsListProps) {
       </div>
 
       {expanded && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
           {orderedTypes.map((docType) => {
             const items = byType.get(docType) ?? []
             return (

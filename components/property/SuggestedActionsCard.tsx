@@ -17,13 +17,13 @@ export function SuggestedActionsCard({ actions, className = "" }: SuggestedActio
   return (
     <div
       className={cn(
-        "saas-card overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-brand-light/15 via-white to-slate-50/80 shadow-md transition-shadow duration-200 hover:shadow-lg dark:from-brand-dark/20 dark:via-card dark:to-card",
+        "saas-card saas-card-hover-lift overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-brand-light/15 via-white to-slate-50/80 shadow-md dark:from-brand-dark/20 dark:via-card dark:to-card",
         className
       )}
       role="region"
       aria-label="Aanbevolen vervolgacties"
     >
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm" aria-hidden>
             <Sparkles className="h-5 w-5" aria-hidden />
