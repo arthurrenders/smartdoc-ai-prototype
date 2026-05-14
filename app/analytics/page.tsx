@@ -20,6 +20,10 @@ import { createServerClient } from "@/lib/supabase/server"
 import { REQUIRED_DOCUMENT_TYPE_NAMES } from "@/lib/property-status"
 import { getCurrentDocumentsByType } from "@/lib/current-documents"
 import { pickLatestAnalysisRun } from "@/lib/pick-latest-analysis-run"
+import { DOC_DUTCH_LABELS } from "@/lib/export/readiness/evaluate"
+
+const dutchDocName = (n: string | null | undefined): string =>
+  (n && DOC_DUTCH_LABELS[n]) || n || "Onbekend"
 
 export const dynamic = "force-dynamic"
 
@@ -113,7 +117,7 @@ export default async function AnalyticsPage() {
 
   const documentsByType = new Map<string, number>()
   for (const d of currentDocs) {
-    const name = d.document_types?.name ?? "Onbekend"
+    const name = dutchDocName(d.document_types?.name)
     documentsByType.set(name, (documentsByType.get(name) ?? 0) + 1)
   }
   const docsByTypeRows = [...documentsByType.entries()]
@@ -129,14 +133,15 @@ export default async function AnalyticsPage() {
   )
   const missingByType = new Map<string, number>()
   for (const dt of documentTypes.filter((d) => requiredTypeIds.has(d.id))) {
-    missingByType.set(dt.name, 0)
+    missingByType.set(dutchDocName(dt.name), 0)
   }
   for (const p of properties) {
     const propCurrent = getCurrentDocumentsByType(docsByProperty.get(p.id) ?? [])
     const presentIds = new Set(propCurrent.map((d) => d.document_type_id).filter(Boolean))
     for (const dt of documentTypes.filter((d) => requiredTypeIds.has(d.id))) {
       if (!presentIds.has(dt.id)) {
-        missingByType.set(dt.name, (missingByType.get(dt.name) ?? 0) + 1)
+        const key = dutchDocName(dt.name)
+        missingByType.set(key, (missingByType.get(key) ?? 0) + 1)
       }
     }
   }
@@ -275,7 +280,7 @@ export default async function AnalyticsPage() {
                     recentDocuments.map((d) => (
                       <li key={d.id} className="flex items-center justify-between rounded-lg bg-dashboard-surface-low px-3 py-2 text-sm">
                         <span className="min-w-0 truncate font-medium text-foreground">
-                          {d.document_types?.name ?? "Onbekend"} · {propertyNameById.get(d.property_id) ?? "Pand"}
+                          {dutchDocName(d.document_types?.name)} · {propertyNameById.get(d.property_id) ?? "Pand"}
                         </span>
                         <span className="ml-3 shrink-0 text-xs text-dashboard-on-surface-variant">
                           {d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}

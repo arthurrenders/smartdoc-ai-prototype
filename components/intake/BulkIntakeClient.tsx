@@ -385,7 +385,15 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
       }))
       await handlePdfRows(mapped)
     } catch (e) {
-      setDriveFeedback(e instanceof Error ? e.message : "Google Drive import mislukt.")
+      const raw = e instanceof Error ? e.message : String(e)
+      const friendly = raw.includes("origin_mismatch")
+        ? "Google Drive-koppeling is nog niet ingesteld voor dit domein (origin_mismatch). Voeg de huidige URL toe als 'geautoriseerde JavaScript-origin' in de Google Cloud Console."
+        : raw.includes("popup_closed")
+        ? "Google Drive-venster gesloten zonder selectie."
+        : raw.includes("access_denied")
+        ? "Toegang geweigerd. Probeer opnieuw en sta de gevraagde rechten toe."
+        : `Google Drive import mislukt: ${raw}`
+      setDriveFeedback(friendly)
     } finally {
       setDriveImporting(false)
     }
@@ -580,7 +588,7 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <FolderOpen className="h-5 w-5 text-brand-light" />
-            <h2 className="text-lg font-semibold text-brand-dark">Intake queue</h2>
+            <h2 className="text-lg font-semibold text-brand-dark">Intake-wachtrij</h2>
           </div>
           <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
             <input
@@ -589,25 +597,25 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
               onChange={(e) => setShowFullHistory(e.target.checked)}
               className="rounded border-[hsl(var(--border))]"
             />
-            Show all uploads (history)
+            Toon alle uploads (historiek)
           </label>
         </div>
         {!showFullHistory && sessionCutoffIso && (
           <p className="text-xs text-muted-foreground">
-            Showing files from this browser tab session only. Enable &quot;Show all uploads&quot; to see older rows.
+            Alleen bestanden uit deze browsertab-sessie. Schakel &quot;Toon alle uploads&quot; in voor oudere rijen.
           </p>
         )}
 
         {localQueueRows.length > 0 && (
           <div className="rounded-xl border border-brand-light/30 bg-brand-light/5 p-3">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand-dark">Current upload</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-dark">Huidige upload</p>
               <button
                 type="button"
                 onClick={() => setLocalQueueRows((prev) => prev.filter((row) => row.status !== "processed"))}
                 className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-brand-dark hover:underline"
               >
-                Clear completed
+                Voltooide wissen
               </button>
             </div>
             <ul className="space-y-2">
@@ -651,36 +659,29 @@ export function BulkIntakeClient({ initialRows, loadError, propertyOptions }: Bu
         {initialRows.length === 0 && localQueueRows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[hsl(var(--border))] bg-muted/10 py-12 text-center text-sm text-muted-foreground">
             <FileText className="mx-auto h-10 w-10 opacity-40" />
-            <p className="mt-3">No uploads yet. Add PDFs above to see them listed here.</p>
+            <p className="mt-3">Nog geen uploads. Voeg hierboven PDF&apos;s toe om ze hier te zien.</p>
           </div>
         ) : queueRows.length === 0 && localQueueRows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[hsl(var(--border))] bg-muted/10 py-12 text-center text-sm text-muted-foreground">
             <FileText className="mx-auto h-10 w-10 opacity-40" />
-            <p className="mt-3">No uploads in this session yet.</p>
-            <button
-              type="button"
-              onClick={() => setShowFullHistory(true)}
-              className="mt-3 text-sm font-medium text-brand-light underline-offset-2 hover:underline"
-            >
-              Show all uploads
-            </button>
+            <p className="mt-3">Nog geen uploads in deze sessie. Schakel &quot;Toon alle uploads&quot; hierboven in voor de volledige historiek.</p>
           </div>
         ) : queueRows.length > 0 ? (
           <div className="overflow-x-auto rounded-xl border border-[hsl(var(--card-border))]">
             <table className="w-full min-w-[1480px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[hsl(var(--border))] bg-muted/30">
-                  <th className="px-4 py-3 font-semibold text-brand-dark">File</th>
-                  <th className="px-4 py-3 font-semibold text-brand-dark">Folder path</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Bestand</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Mappad</th>
                   <th className="px-4 py-3 font-semibold text-brand-dark">Status</th>
                   <th className="px-4 py-3 font-semibold text-brand-dark">Type</th>
-                  <th className="px-4 py-3 font-semibold text-brand-dark">Address (raw)</th>
-                  <th className="px-4 py-3 font-semibold text-brand-dark">Match result</th>
-                  <th className="px-4 py-3 font-semibold text-brand-dark">Confidence</th>
-                  <th className="px-4 py-3 font-semibold text-brand-dark">Property</th>
-                  <th className="min-w-[280px] px-4 py-3 font-semibold text-brand-dark">Review</th>
-                  <th className="px-4 py-3 font-semibold text-brand-dark">Size</th>
-                  <th className="px-4 py-3 font-semibold text-brand-dark">Actions</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Adres (ruw)</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Matchresultaat</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Vertrouwen</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Pand</th>
+                  <th className="min-w-[280px] px-4 py-3 font-semibold text-brand-dark">Beoordelen</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Grootte</th>
+                  <th className="px-4 py-3 font-semibold text-brand-dark">Acties</th>
                 </tr>
               </thead>
               <tbody>

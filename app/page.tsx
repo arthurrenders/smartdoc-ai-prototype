@@ -75,9 +75,9 @@ export default async function DashboardPage({
     0
   )
   const todayIso = new Date().toISOString().slice(0, 10)
-  const next30Iso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const next90Iso = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const totalExpiries = upcomingRows.filter(
-    (row) => row.date_on >= todayIso && row.date_on <= next30Iso
+    (row) => row.date_on >= todayIso && row.date_on <= next90Iso
   ).length
   const todayAppointments = appointmentRows.filter(
     (a) => a.start_at.slice(0, 10) === todayIso
@@ -137,7 +137,7 @@ export default async function DashboardPage({
             title="Verloopt binnenkort"
             value={totalExpiries}
             icon={<CalendarClock className="h-5 w-5" />}
-            trendLabel="Komende 30 dagen"
+            trendLabel="Komende 90 dagen"
             tone="info"
           />
         </section>

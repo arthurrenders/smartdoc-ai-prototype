@@ -97,17 +97,24 @@ export async function collectPdfFilesFromDataTransfer(dt: DataTransfer): Promise
     skippedNonPdf += 1
   }
 
+  // Snapshot synchronously: DataTransferItemList entries become invalid after the
+  // first await, so a single dropped file is all that would survive an in-loop await.
+  type Snap = { entry: FileSystemEntry | null; file: File | null }
+  const snapshot: Snap[] = []
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
     if (!item || item.kind !== "file") continue
-
     const entry = typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null
-    if (entry) {
-      await walkEntry(entry, "", acc, limits, onSkip)
+    const file = entry ? null : item.getAsFile()
+    snapshot.push({ entry, file })
+  }
+
+  for (const snap of snapshot) {
+    if (snap.entry) {
+      await walkEntry(snap.entry, "", acc, limits, onSkip)
       continue
     }
-
-    const f = item.getAsFile()
+    const f = snap.file
     if (!f) continue
     if (!isPdfFile(f)) {
       skippedNonPdf += 1

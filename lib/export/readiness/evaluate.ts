@@ -46,6 +46,26 @@ function hasDocument(ctx: PropertyExportContext, typeName: string): boolean {
 }
 
 /**
+ * True if the property has an asbestos certificate that exists but flags an
+ * unsafe score ("niet-asbestveilig") or a red analysis status. The certificate
+ * still satisfies the "is present" requirement, but readiness should warn the
+ * realtor rather than show a clean green check.
+ */
+function hasUnsafeAsbestos(ctx: PropertyExportContext): boolean {
+  const doc = ctx.documents.find(
+    (d) => d.document_type_name?.toUpperCase() === "ASBESTOS" && d.status !== "error",
+  )
+  if (!doc) return false
+  const result = doc.analysis_result
+  if (!result || typeof result !== "object") return false
+  const score = (result as { asbestos_score?: unknown }).asbestos_score
+  if (typeof score === "string" && /\bniet\s*-?\s*asbestveilig\b/i.test(score)) return true
+  const status = (result as { status?: unknown }).status
+  if (status === "red") return true
+  return false
+}
+
+/**
  * For PHOTO specifically: in v1 we satisfy this requirement with the satellite
  * snapshot already attached to every property when geocoded. So PHOTO is
  * "ok" if the property has either an uploaded PHOTO document OR address
@@ -135,11 +155,16 @@ export function evaluateReadiness(
   // Required docs
   for (const docType of requiredDocs) {
     const hit = docType === "PHOTO" ? hasPhoto(ctx) : hasDocument(ctx, docType)
+    const asbestosUnsafe = hit && docType === "ASBESTOS" && hasUnsafeAsbestos(ctx)
     items.push({
       key: `doc:${docType}`,
       label: docLabel(docType),
-      severity: hit ? "ok" : "blocker",
-      reason: hit ? undefined : docReason.get(docType) ?? "Document ontbreekt",
+      severity: hit ? (asbestosUnsafe ? "warning" : "ok") : "blocker",
+      reason: hit
+        ? asbestosUnsafe
+          ? "Aanwezig, maar attestscore vereist aandacht (niet-asbestveilig)."
+          : undefined
+        : docReason.get(docType) ?? "Document ontbreekt",
     })
   }
 

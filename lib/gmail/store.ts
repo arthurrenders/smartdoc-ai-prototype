@@ -73,7 +73,21 @@ export async function getValidAccessTokenForUser(
   }
 
   const refreshPlain = decryptTokenCiphertext(row.refresh_token_enc)
-  const refreshed = await refreshAccessToken(refreshPlain)
+  let refreshed: Awaited<ReturnType<typeof refreshAccessToken>>
+  try {
+    refreshed = await refreshAccessToken(refreshPlain)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes("invalid_grant")) {
+      // Refresh token was revoked or expired; drop the stale row so the UI
+      // reflects "niet verbonden" and the realtor can reconnect cleanly.
+      await supabase.from("realtor_gmail_tokens").delete().eq("user_id", userId)
+      throw new Error(
+        "Gmail-koppeling is verlopen of ingetrokken. Verbind Gmail opnieuw in Instellingen."
+      )
+    }
+    throw err
+  }
   const newAccess = refreshed.access_token
   const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString()
   const now = new Date().toISOString()

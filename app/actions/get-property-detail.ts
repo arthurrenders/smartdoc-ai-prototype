@@ -418,6 +418,8 @@ function buildSuggestedActions(
   }
   if (list.length === 0) {
     list.push("Alle documenten zijn in orde. Geen actie vereist.")
+  } else {
+    list.push("Bekijk het tabblad “Bevindingen” voor een gedetailleerde toelichting per document.")
   }
 
   const primary = list[0] ?? "Controleer de documentstatus."
